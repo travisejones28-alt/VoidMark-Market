@@ -30,10 +30,31 @@ function M:InitializeMinimapButton()
   highlight:SetBlendMode('ADD')
   highlight:SetAllPoints(b)
 
+  -- Position relative to the current minimap size, not a fixed 82px
+  -- radius (which leaves buttons in the center of enlarged square maps).
+  local lastWidth, lastHeight, lastShape
   local function position(angle)
+    local width, height = Minimap:GetWidth(), Minimap:GetHeight()
+    if not width or not height or width <= 0 or height <= 0 then return end
     local radians = math.rad(angle)
+    local dx, dy = math.cos(radians), math.sin(radians)
+    local shape = GetMinimapShape and GetMinimapShape() or 'ROUND'
+    local x, y
+    if shape == 'SQUARE' then
+      -- Ray from center to the perimeter of a rectangular/square minimap.
+      local multiplier = math.max(math.abs(dx) / (width / 2), math.abs(dy) / (height / 2))
+      if multiplier < 0.00001 then return end
+      x, y = dx / multiplier, dy / multiplier
+    else
+      -- Standard circular minimap; keep a little clearance outside the rim.
+      x, y = dx * (width / 2), dy * (height / 2)
+    end
+    local clearance = 9
+    x = x + (x > 0 and clearance or -clearance)
+    y = y + (y > 0 and clearance or -clearance)
     b:ClearAllPoints()
-    b:SetPoint('CENTER', Minimap, 'CENTER', math.cos(radians) * 82, math.sin(radians) * 82)
+    b:SetPoint('CENTER', Minimap, 'CENTER', x, y)
+    lastWidth, lastHeight, lastShape = width, height, shape
   end
   local function updatePosition()
     local x, y = GetCursorPosition()
@@ -41,17 +62,32 @@ function M:InitializeMinimapButton()
     if not scale or scale == 0 then return end
     x, y = x / scale, y / scale
     local cx, cy = Minimap:GetCenter()
+    if not cx or not cy then return end
     local angle = math.deg(math.atan2(y - cy, x - cx))
     saved.angle = angle
     position(angle)
   end
+  local sinceCheck = 0
+  b:SetScript('OnUpdate', function(_, elapsed)
+    if b.dragging then
+      updatePosition()
+      return
+    end
+    sinceCheck = sinceCheck + elapsed
+    if sinceCheck < 0.25 then return end
+    sinceCheck = 0
+    local w, h = Minimap:GetWidth(), Minimap:GetHeight()
+    local shape = GetMinimapShape and GetMinimapShape() or 'ROUND'
+    if w ~= lastWidth or h ~= lastHeight or shape ~= lastShape then
+      position(saved.angle)
+    end
+  end)
   b:SetScript('OnDragStart', function(self)
     self.dragging = true
-    self:SetScript('OnUpdate', updatePosition)
   end)
   b:SetScript('OnDragStop', function(self)
     self.dragging = false
-    self:SetScript('OnUpdate', nil)
+    updatePosition()
   end)
   b:SetScript('OnClick', function(_, mouseButton)
     if mouseButton == 'RightButton' then M:SetView('settings')
