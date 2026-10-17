@@ -48,7 +48,7 @@ function M:CheckRisk(m,e,exclude)
     check((m.confidenceScore or 0)>=s.minConfidence,'Minimum confidence')
     check((m.activityScore or 0)>=s.minLiquidity,'Minimum inferred liquidity')
     check((m.volatility or 0)<=s.riskTolerance,'Volatility exceeds risk tolerance')
-    check(time()-(m.lastSeen or 0)<=s.maxDataAge,'Market model is stale')
+    check(self:MarketFresh(m),'Market model is stale or has an invalid timestamp')
   else check((m.vendorPrice or 0)>0,'Vendor value unavailable') end
   return #why==0,why
 end

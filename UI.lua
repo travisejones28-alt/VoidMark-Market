@@ -19,7 +19,7 @@ function M:ToggleUI() if self.window:IsShown() then self.window:Hide() else self
 function M:InitializeUI()
   if self.window then return end
   local f=CreateFrame('Frame','VoidMarkMarketWindow',UIParent,'BackdropTemplate'); self.window=f
-  f:SetSize(1040,680); f:SetPoint('CENTER'); f:SetFrameStrata('HIGH'); f:SetMovable(true); f:EnableMouse(true)
+  f:SetSize(1040,680); f:SetPoint('CENTER'); f:SetFrameStrata('MEDIUM'); f:SetToplevel(true); f:SetMovable(true); f:EnableMouse(true)
   f:SetClampedToScreen(true); f:RegisterForDrag('LeftButton')
   f:SetScript('OnDragStart',function(w) w:StartMoving() end); f:SetScript('OnDragStop',function(w) w:StopMovingOrSizing() end)
   f:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Tooltips\\UI-Tooltip-Border',edgeSize=16,insets={left=4,right=4,top=4,bottom=4}})

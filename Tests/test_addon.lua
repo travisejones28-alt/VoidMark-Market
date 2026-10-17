@@ -457,4 +457,5 @@ check('Synchronous row-count change stops parsing without overwriting failure or
  assert(d.phase=='error' and not M.jobs.scan and M.db.latestScan==old)
  C_AuctionHouse.GetReplicateItemInfo=info
 end)
+assert(loadfile(addon..'Tests/hardening.lua'))(M,check,mk,jobs)
 print('ALL '..total..' TESTS PASSED')

@@ -20,7 +20,7 @@ PASS Owned listings excluded from execution
 PASS Commodity ownership reduces available quantity
 PASS Moving-average accounting excludes unknown basis
 PASS Invoices are observed, deduped and not auto-booked
-50k scan job ticks: 599; synthetic-budget elapsed ms: 1113
+50k scan job ticks: 598; synthetic-budget elapsed ms: 1113
 PASS 50,000 rows process across frames; malformed row isolated
 PASS Oversized price distribution retains history and blocks trading
 PASS UI builds and every terminal tab renders
@@ -57,4 +57,9 @@ PASS AH close during deferred-row retry cancels work and preserves last publishe
 PASS Cached deferred-row recovery does not create fresh history or resend full scan
 PASS Changing row count aborts parsing; varying event bursts retain bounded diagnostics
 PASS Synchronous row-count change stops parsing without overwriting failure or publishing
-ALL 58 TESTS PASSED
+PASS Malformed auction identities never compare equal or produce NaN table keys
+PASS Future market timestamps fail the resale risk freshness gate
+PASS Malformed invoice amounts cannot alter inventory basis or book profit
+PASS Unmodeled saved markets do not crash the selling inventory reader
+PASS Non-finite display amounts cannot crash financial panels
+ALL 63 TESTS PASSED

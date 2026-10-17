@@ -1,12 +1,21 @@
 local addonName, M = ...
 _G.VoidMarkMarket = M
-M.name, M.version = addonName or 'VoidMarkMarket', '1.0.2-beta'
+M.name, M.version = addonName or 'VoidMarkMarket', '1.0.3-beta'
 M.eventHandlers, M.runtimeLog, M.jobs = {}, {}, {}
 M.ahOpen, M.safeMode = false, true
 M.scanState = {running=false, phase='idle', status='No scan yet', progress=0}
 function M:Now() return time() end
+function M:Finite(v,lo,hi)
+ return type(v)=='number' and not (issecretvalue and issecretvalue(v)) and v==v and v>=lo and v<=hi
+end
+function M:MarketFresh(m)
+ local at=type(m)=='table' and m.lastSeen
+ return self:Finite(at,1,time()+300) and time()-at<=self.db.settings.maxDataAge
+end
 function M:Money(v)
-  v=math.floor(tonumber(v) or 0)
+  v=tonumber(v) or 0
+  if not self:Finite(v,-1e14,1e14) then return 'Unknown' end
+  v=math.floor(v)
   local sign=v<0 and '-' or ''; v=math.abs(v)
   return sign..string.format('%dg %ds %dc',math.floor(v/10000),math.floor(v/100)%100,v%100)
 end
@@ -69,8 +78,9 @@ function M:RunJobs()
   end
 end
 function M:Key(itemID,suffix,level,pet)
-  itemID=tonumber(itemID); if not itemID or itemID<=0 then return nil end
-  suffix=tonumber(suffix) or 0; level=tonumber(level) or 0; pet=tonumber(pet) or 0
+  itemID=tonumber(itemID);suffix=tonumber(suffix or 0);level=tonumber(level or 0);pet=tonumber(pet or 0)
+  if not self:Finite(itemID,1,1e9) or itemID%1~=0 or not self:Finite(suffix,-1e9,1e9)
+    or suffix%1~=0 or not self:Finite(level,0,1e6) or level%1~=0 or not self:Finite(pet,0,1e9) or pet%1~=0 then return nil end
   if level~=0 or pet~=0 then return tostring(itemID)..':s'..suffix..':l'..level..':p'..pet end
   return suffix~=0 and (tostring(itemID)..':s'..suffix) or itemID
 end
@@ -92,7 +102,9 @@ function M:RegularQuantity(info,itemID)
   return math.min(quantity,maxStack and maxStack>=1 and maxStack or 1)
 end
 function M:SameKey(a,b)
-  return type(a)=='table' and type(b)=='table' and self:Key(a.itemID,a.itemSuffix,a.itemLevel,a.battlePetSpeciesID)==self:Key(b.itemID,b.itemSuffix,b.itemLevel,b.battlePetSpeciesID)
+  if type(a)~='table' or type(b)~='table' then return false end
+  local key=self:Key(a.itemID,a.itemSuffix,a.itemLevel,a.battlePetSpeciesID)
+  return key~=nil and key==self:Key(b.itemID,b.itemSuffix,b.itemLevel,b.battlePetSpeciesID)
 end
 function M:Suffix(link)
   local s=type(link)=='string' and link:match('|Hitem:([^|]+)|h')

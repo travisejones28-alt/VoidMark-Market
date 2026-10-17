@@ -36,7 +36,8 @@ end
 function M:BookSale(entry)
   if not entry or entry.kind~='mail sale' or entry.booked or not entry.invoiceVerified or entry.character~=self.characterID then return false end
   local m=entry.marketKey and self.db.market[entry.marketKey]
-  if not m or not entry.quantity or entry.quantity<1 or not entry.gross or entry.gross<0 then return false end
+  if not m or not self:Finite(entry.quantity,1,1e9) or entry.quantity%1~=0
+    or not self:Finite(entry.gross,0,1e14) or not self:Finite(entry.fee,0,entry.gross) then return false end
   local key=self:InventoryKey(entry.marketKey); local lot=self.db.inventory[key]
   local qty=entry.quantity; local matched=lot and math.min(qty,lot.quantity) or 0
   local basis=matched>0 and lot.cost*matched/lot.quantity or 0

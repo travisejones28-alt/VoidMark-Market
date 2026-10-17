@@ -1,4 +1,7 @@
-# VoidMark Market 1.0.2-beta
+# VoidMark Market 1.0.3-beta
+
+Current hardening release: see [HARDENING.md](HARDENING.md) for confirmed fixes, validation and in-game checks. Download the rebuilt addon from `dist/`.
+
 
 A testable Forever auction terminal built from the supplied working prototype.
 **This build has automated mock validation, but has not run inside the Forever client.**
@@ -202,7 +205,7 @@ empty results, invalid counts, successful parsing and recovered late responses.
 This is a diagnostic fix validated with mocks; live beta response behavior still
 needs this test.
 
-## 1.0.2-beta item-data recovery
+## 1.0.3-beta item-data recovery
 
 The supplied live 1.0.1 report completed with 89,929 returned rows, 85,905 accepted
 rows, 2,603 markets and 200 listed candidates. Response time was 5.875 seconds;

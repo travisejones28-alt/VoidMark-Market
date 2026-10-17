@@ -14,7 +14,7 @@ function M:RefreshInventory()
           local suffix=self:Suffix(info.hyperlink)
           if suffix then
             local key=self:Key(info.itemID,suffix); local m=self.db.market[key]
-            if m and m.latest then
+            if m and type(m.latest)=='table' and self:Finite(m.fairValue,0,1e14) then
               local minimum=math.max(m.latest.meaningfulFloor or m.latest.q10 or 0,m.fairValue*0.85)
               -- Hold the price when a lone low auction is bait. Native UI handles deposit and posting.
               local price=math.floor(math.min(m.fairValue,minimum))
@@ -24,7 +24,7 @@ function M:RefreshInventory()
               rows[#rows+1]={marketKey=key,name=m.name,itemID=m.itemID,quantity=info.stackCount or 1,price=price,
                 fair=m.fairValue,floor=m.latest.floor,own=own,confidence=m.confidence,
                 reason=own and 'Hold own price; avoid self-undercutting' or 'Meaningful floor / fair value; ignores isolated bait',
-                stale=time()-(m.lastSeen or 0)>self.db.settings.maxDataAge}
+                stale=not self:MarketFresh(m)}
             end
           end
         end

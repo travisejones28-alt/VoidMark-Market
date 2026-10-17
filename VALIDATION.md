@@ -1,3 +1,7 @@
+# 1.0.3 hardening
+
+63 Lua 5.1 regression tests and shared-addon integration pass. Use `python Tests/run_tests.py` with `lupa==2.8`. See HARDENING.md for scope and required live checks. Historical validation follows.
+
 # Item-data recovery audit — 1.0.2-beta
 
 **58 automated checks passed**, including the 51 checks from 1.0.1.
