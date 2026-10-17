@@ -122,7 +122,7 @@ function M:InitializeUI()
   self.minimapToggle:SetScript('OnClick',function(c)
     self:SetMinimapIconVisible(c:GetChecked() and true or false)
   end)
-  label(self.settingsFrame,'Turning Safe Mode off enables purchase buttons. Each purchase still needs a real click.\nDeposit allowance is an estimate; set it conservatively. Pending orders remain reserved through reloads.\nLiquidity describes observed supply/depth, not proven sale speed. Cross-client sharing is deferred.',0,-387,970)
+  label(self.settingsFrame,'Turning Safe Mode off enables purchase buttons. Each purchase still needs a real click.\nDeposit allowance is an estimate; set it conservatively. Pending orders remain reserved through reloads.\nLiquidity describes observed supply/depth, not proven sale speed. Cross-client sharing is deferred.',0,-406,970)
   self.view='market'; self.page=1; self:RefreshUI(); f:Hide() -- Keep Market closed on login/reload until opened by the user.
 end
 function M:ShowReport()
