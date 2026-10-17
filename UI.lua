@@ -115,6 +115,13 @@ function M:InitializeUI()
     if self.safeMode and (self.execution.state=='quoted' or self.execution.state=='quoting') then self:InvalidateQuote('Safe Mode enabled') end
     self:RefreshUI()
   end)
+  self.minimapToggle=CreateFrame('CheckButton',nil,self.settingsFrame,'UICheckButtonTemplate')
+  self.minimapToggle:SetPoint('TOPLEFT',0,-363); self.minimapToggle:SetSize(28,28)
+  label(self.settingsFrame,'Show minimap icon',34,-371,240)
+  self.minimapToggle:SetChecked(not (self.root.settings.minimap and self.root.settings.minimap.hide))
+  self.minimapToggle:SetScript('OnClick',function(c)
+    self:SetMinimapIconVisible(c:GetChecked() and true or false)
+  end)
   label(self.settingsFrame,'Turning Safe Mode off enables purchase buttons. Each purchase still needs a real click.\nDeposit allowance is an estimate; set it conservatively. Pending orders remain reserved through reloads.\nLiquidity describes observed supply/depth, not proven sale speed. Cross-client sharing is deferred.',0,-387,970)
   self.view='market'; self.page=1; self:RefreshUI(); f:Hide() -- Keep Market closed on login/reload until opened by the user.
 end
@@ -137,7 +144,7 @@ function M:RenderUI()
   self.toolbar:Show(); self.tableFrame:Hide(); self.detail:Hide(); self.contentScroll:Hide(); self.settingsFrame:Hide(); self.action:Hide(); self.ledgerAction:Hide(); self.ownedRefresh:Hide()
   self.filter:SetShown(view=='opportunities'); self.sortButton:SetShown(view=='opportunities'); self.sortButton:SetText('SORT: '..s.sort:upper())
   self.scanButton:SetEnabled(self.ahOpen and not self.scanState.running); self.cachedButton:SetEnabled(self.ahOpen and not self.scanState.running)
-  if view=='settings' then self.settingsFrame:Show(); self.safe:SetChecked(s.safeMode); return end
+  if view=='settings' then self.settingsFrame:Show(); self.safe:SetChecked(s.safeMode); self.minimapToggle:SetChecked(not (s.minimap and s.minimap.hide)); return end
   local text
   if view=='execution' then
     self.action:Show(); local x=self.execution; local m=x.market
