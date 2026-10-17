@@ -132,7 +132,7 @@ M.eventFrame:SetScript('OnEvent',function(_,event,...)
   elseif event=='PLAYER_LOGIN' then
     if not M.db then M:InitializeDatabase() end
     M:RegisterHandler('AUCTION_HOUSE_DISABLED',function() end)
-    M:RunAPIProbe(); M:InitializeUI(); M:Print('v'..M.version..' loaded. /vmm | SAFE MODE ON')
+    M:RunAPIProbe(); M:InitializeUI(); M:InitializeMinimapButton(); M:Print('v'..M.version..' loaded. /vmm | SAFE MODE ON')
   end
   if event=='AUCTION_HOUSE_DISABLED' then event='AUCTION_HOUSE_CLOSED' end
   local args={...}
