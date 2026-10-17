@@ -19,3 +19,4 @@ Selling.lua
 Sync.lua
 Diagnostics.lua
 UI.lua
+Minimap.lua
