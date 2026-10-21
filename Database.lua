@@ -1,7 +1,7 @@
 local _,M=...
 M.defaults={safeMode=true,debug=false,maxTransaction=100000,maxItemSpend=500000,maxQuantity=20,
  maxExposure=2000000,minProfit=100,minROI=0.20,minConfidence=42,minLiquidity=15,
- riskTolerance=0.35,ahCut=0.05,depositReserve=100,maxDataAge=7200,historyDays=90,filter='',sort='score'}
+ riskTolerance=0.35,ahCut=0.05,depositReserve=100,maxDataAge=7200,historyDays=90,filter='',sort='score',minGoldReserve=0}
 function M:InitializeDatabase()
   if type(VoidMarkMarketDB)~='table' then VoidMarkMarketDB={} end
   local root=VoidMarkMarketDB
@@ -29,7 +29,7 @@ function M:InitializeDatabase()
   local db=root.economies[self.economyID]
   if type(db)~='table' then db={}; root.economies[self.economyID]=db end
   self.db=db; db.settings=root.settings
-  for _,k in ipairs({'market','scans','queries','ownedQueries','opportunities','ledger','inventory','mailSeen','pending','totals'}) do
+  for _,k in ipairs({'market','scans','queries','ownedQueries','opportunities','ledger','inventory','mailSeen','pending','totals','watchlist','banker'}) do
     if type(db[k])~='table' then db[k]={} end
   end
   db.scanSequence=tonumber(db.scanSequence) or 0; db.ledgerSequence=tonumber(db.ledgerSequence) or 0

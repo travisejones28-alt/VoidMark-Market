@@ -222,6 +222,52 @@ check('UI builds and every terminal tab renders',function()
  for _,v in ipairs({'market','opportunities','execution','selling','my auctions','ledger','settings','diagnostics'}) do M:SetView(v);jobs();M:RenderUI() end
  M:ShowReport();assert(M.reportEdit:GetText():find('VOIDMARK MARKET',1,true))
 end)
+
+check('Banker watch targets are fresh-only and remain economy-local',function()
+  local m=mk()
+  local ok=M:SetWatch(m.marketKey,1000);assert(ok)
+  local items=M:GetWatchRows();local seen
+  for _,row in ipairs(items) do if row.marketKey==m.marketKey then seen=row end end
+  assert(seen and seen.status=='TARGET')
+  local last=m.lastSeen;m.lastSeen=1
+  items=M:GetWatchRows()
+  for _,row in ipairs(items) do if row.marketKey==m.marketKey then assert(row.status=='STALE') end end
+  m.lastSeen=last
+  assert(M:RemoveWatch(m.marketKey))
+  assert(not M.db.watchlist[m.marketKey])
+end)
+check('Liquid reserve blocks spending without changing pending reservations',function()
+  local m=mk();local e=M:Economics(m,500,1,'resale')
+  local old=M.db.settings.minGoldReserve
+  M.db.settings.minGoldReserve=GetMoney()
+  local ok,why=M:CheckRisk(m,e)
+  assert(not ok)
+  assert(table.concat(why,' '):find('Liquid gold reserve',1,true))
+  M.db.settings.minGoldReserve=old
+end)
+check('Portfolio never marks missing or stale pricing as earned profit',function()
+  local m=mk();local key=M:InventoryKey(m.marketKey)
+  local prior=M.db.inventory[key]
+  M.db.inventory[key]={character=M.characterID,marketKey=m.marketKey,quantity=2,cost=1500}
+  local rows,totals=M:GetPortfolioRows();local found
+  for _,row in ipairs(rows) do if row.marketKey==m.marketKey then found=row end end
+  assert(found and found.status=='ESTIMATE' and found.unrealized~=nil)
+  m.lastSeen=1
+  rows,totals=M:GetPortfolioRows()
+  for _,row in ipairs(rows) do if row.marketKey==m.marketKey then assert(row.status=='UNPRICED' and row.unrealized==nil) end end
+  M.db.inventory[key]=prior;M.exposureDirty=true
+end)
+check('Banker scan differences ignore blocked candidates',function()
+  local previous=M.db.opportunities;local old=M.db.banker
+  M.db.banker={}
+  M.db.opportunities={{marketKey=1,name='One',score=50,floor=100,pass=true},
+    {marketKey=2,name='Blocked',score=99,floor=100,pass=false}}
+  M:RecordBankerScan({marketScanID=10})
+  assert(#M.db.banker.new==1 and M.db.banker.new[1].key=='1')
+  M:RecordBankerScan({marketScanID=11})
+  assert(#M.db.banker.new==0)
+  M.db.opportunities=previous;M.db.banker=old
+end)
 check('Protocol boundary rejects malformed or stale summaries',function()
  assert(not M.Sync:ValidateSummary({version=2,itemID=1,price=1,at=time(),economy='x'},time()))
  assert(M.Sync:ValidateSummary({version=1,itemID=1,price=1,at=time(),economy='x'},time()))

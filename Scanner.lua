@@ -226,6 +226,7 @@ function M:StartSnapshotProcessing(total,source,diagnostic)
         self:Log('FULL SCAN','Completed: '..summary.uniqueItems..' markets, '..#self.db.opportunities..' candidates')
       end
       self.db.latestScan=summary; self.db.scans[#self.db.scans+1]=summary
+       if source~='cached snapshot' then self:RecordBankerScan(summary) end
       if #self.db.scans>20 then table.remove(self.db.scans,1) end
       if source~='cached snapshot' then self.db.lastSuccessfulScanAt=time() end
       s.running=false; s.phase='done'; self:SetScanStatus(string.format('%d valid rows | %d markets | %d candidates | %d skipped',summary.auctionsProcessed,summary.uniqueItems,#self.db.opportunities,summary.skippedMarkets),1)
