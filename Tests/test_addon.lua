@@ -219,7 +219,7 @@ check('Oversized price distribution retains history and blocks trading',function
 end)
 check('UI builds and every terminal tab renders',function()
  M:InitializeUI()
- for _,v in ipairs({'market','browse','opportunities','shopping','selling','investments','banker','execution','my auctions','ledger','settings','diagnostics'}) do M:SetView(v);jobs();M:RenderUI() end
+ for _,v in ipairs({'market','browse','opportunities','shopping','selling','investments','banker','execution','my auctions','post review','ledger','settings','diagnostics'}) do M:SetView(v);jobs();M:RenderUI() end
  M:ShowReport();assert(M.reportEdit:GetText():find('VOIDMARK MARKET',1,true))
 end)
 
@@ -621,6 +621,34 @@ check('Owned repost remains a review signal only, never invokes cancel or post',
   assert(#calls==count)
   local good=M:AssessOwnedRepost(r,7300,80)
   assert(good.action=='HOLD')
+end)
+
+check('Post queue persists as intent without storing stale bag slots or posting',function()
+  local m=mk();local previous=M.db.postQueue;local count=#calls
+  M.db.postQueue={}
+  local plan=M:BuildSellPlan(m.marketKey,3);plan.itemID=m.itemID;plan.name=m.name
+  plan.bag=3;plan.slot=6
+  assert(M:QueuePostingReview(plan))
+  local entry=M.db.postQueue[M.characterID..'/'..tostring(m.marketKey)]
+  assert(entry and entry.marketKey==m.marketKey and entry.bag==nil and entry.slot==nil)
+  assert(entry.quantity==3 and #calls==count)
+  M.db.postQueue=previous
+end)
+check('Posting queue refuses other characters or missing bag stock',function()
+  local m=mk();local previous=M.db.postQueue;local oldRows=M.sellingRows
+  M.db.postQueue={[M.characterID..'/'..tostring(m.marketKey)]={
+    character=M.characterID,marketKey=m.marketKey,itemID=m.itemID,name=m.name,quantity=2,queuedAt=time()},
+    ['Alt|Elsewhere/2']={character='Alt|Elsewhere',marketKey=2,itemID=2,name='Alt'}}
+  M.sellingRows={}
+  local list=M:GetPostingReviewRows()
+  assert(#list==1 and list[1].status=='CHECK BAGS' and list[1].bag==nil)
+  M.sellingRows={{marketKey=m.marketKey,name=m.name,quantity=4,price=4444,fair=5000,
+    status='REVIEW',bag=0,slot=2}}
+  list=M:GetPostingReviewRows()
+  assert(#list==1 and list[1].status=='REVIEW' and list[1].slot==2)
+  assert(M:RemovePostingReview(m.marketKey))
+  assert(#M:GetPostingReviewRows()==0)
+  M.sellingRows=oldRows;M.db.postQueue=previous
 end)
 
 print('ALL '..total..' TESTS PASSED')

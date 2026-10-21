@@ -280,3 +280,7 @@ Purchase review queue: select an opportunity in SNIPER, choose SAVE TO QUEUE in 
 
 ### Cancel/repost advisory
 On MY AUCTIONS, click your listing to request a fresh complete search of competing prices. The recommendation is HOLD unless a material gap is verified, meaningful depth supports it and the native client returns the cancellation fee and the existing listing deposit. A REVIEW state provides cost impact only, never a cancellation command. An unknown fee, unmodeled competitor or stale market prevents cancel recommendations. Selling Settings now include a configurable known-cost minimum margin (0-200%).
+
+
+### Posting review queue (1.2.1 beta)
+Select an item in SELL, choose QUEUE POST to save a per-character/economy posting intent, then POST QUEUE to review it. Nothing is posted. Bag slots, live prices, deposits and stack ownership are NOT persisted as authority. Each revisit rescans available bags and recalculates conservative prices. Only advisory HOLD/NO PRICE/CHECK BAGS/REVIEW statuses are shown; actual posting remains a native Auction House user click.

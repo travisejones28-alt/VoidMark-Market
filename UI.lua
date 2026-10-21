@@ -14,7 +14,8 @@ local function edit(parent,x,y,w,text)
 end
 function M:SetView(view)
   self.view=view; self.page=1; if self.window then self.window:Show() end
-  if view=='selling' then self:RefreshInventory() elseif view=='browse' then self:BuildBrowseRows(self.db.settings.filter or '') end; self:RefreshUI()
+  if view=='selling' or view=='post review' then self:RefreshInventory()
+  elseif view=='browse' then self:BuildBrowseRows(self.db.settings.filter or '') end; self:RefreshUI()
 end
 function M:ToggleUI() if self.window:IsShown() then self.window:Hide() else self.window:Show(); self:RefreshUI() end end
 function M:InitializeUI()
@@ -146,7 +147,18 @@ function M:InitializeUI()
     self:Print(ok and 'Minimum updated; advisory prices recalculated' or why)
   end)
   button(self.sellAction,'REFRESH BAGS',612,0,144,function()self:RefreshInventory()end)
+  button(self.sellAction,'QUEUE POST',763,0,116,function()
+    local ok,why=self:QueuePostingReview(self.selectedRow)
+    self:Print(ok and 'Saved posting intent; current bag and price will be checked again' or why)
+  end)
+  button(self.sellAction,'POST QUEUE',885,0,111,function()self:SetView('post review')end)
   self.ownedRefresh=button(f,'REFRESH MY AUCTIONS',18,-628,210,function() self:RequestOwnedAuctionsDiagnostic() end)
+  self.postReviewRemove=button(f,'REMOVE POST INTENT',18,-628,200,function()
+    local row=self.selectedRow
+    if row and row.marketKey then self:RemovePostingReview(row.marketKey);self.selectedRow=nil
+    else self:Print('Select a posting queue entry first') end
+  end)
+  self.postReviewBack=button(f,'BACK TO SELL',226,-628,180,function() self:SetView('selling') end)
   self.reviewRemove=button(f,'REMOVE QUEUED ITEM',18,-628,200,function()
     if self.selectedRow and self.selectedRow.marketKey then
       if self:RemovePurchaseReview(self.selectedRow.marketKey) then self.selectedRow=nil end
@@ -217,7 +229,7 @@ function M:RenderUI()
   local view=self.view or 'market'; local s=self.db.settings
   self.modeLabel:SetText(s.safeMode and '|cff72e7aaSAFE MODE ON - no transactions|r' or '|cffffa250TRADING ENABLED - real clicks required|r')
   self.status:SetText('AH '..(self.ahOpen and 'OPEN' or 'CLOSED')..' | '..self.scanState.status..' | full scan cooldown '..self:FormatDuration(self:GetSecondsUntilFreshScanAllowed()))
-  self.toolbar:Show(); self.tableFrame:Hide(); self.detail:Hide(); self.contentScroll:Hide(); self.settingsFrame:Hide(); self.action:Hide(); self.ledgerAction:Hide(); self.ownedRefresh:Hide(); self.reviewRemove:Hide(); self.sellAction:Hide(); self.watchFrame:Hide(); self.statsFrame:Hide()
+  self.toolbar:Show(); self.tableFrame:Hide(); self.detail:Hide(); self.contentScroll:Hide(); self.settingsFrame:Hide(); self.action:Hide(); self.ledgerAction:Hide(); self.ownedRefresh:Hide(); self.reviewRemove:Hide(); self.postReviewRemove:Hide(); self.postReviewBack:Hide(); self.sellAction:Hide(); self.watchFrame:Hide(); self.statsFrame:Hide()
   self.filter:SetShown(view=='opportunities' or view=='browse'); self.sortButton:SetShown(view=='opportunities'); self.sortButton:SetText('SORT: '..s.sort:upper())
   self.scanButton:SetEnabled(self.ahOpen and not self.scanState.running); self.cachedButton:SetEnabled(self.ahOpen and not self.scanState.running)
   if view=='settings' then self.settingsFrame:Show(); self.safe:SetChecked(s.safeMode); self.minimapToggle:SetChecked(not (s.minimap and s.minimap.hide)); return end
@@ -303,6 +315,9 @@ function M:RenderUI()
     elseif view=='investments' then
       source=self:GetPortfolioRows();headers={'Owned investment','Quantity','Cost basis','Net est.','Unrealized','ROI','','State'}
     elseif view=='selling' then source=self.sellingRows; self.sellAction:Show();self.sellStrategyButton:SetText('MODE: '..(s.sellStrategy or 'competitive'):upper()); headers={'Inventory','Quantity','Suggest/unit','Fair','Basis/unit','Net est.','Confidence','State'}
+    elseif view=='post review' then
+      source=self:GetPostingReviewRows();self.postReviewRemove:Show();self.postReviewBack:Show()
+      headers={'Posting intent','In bag','Old quote','Current quote','Fair','','','State'}
     elseif view=='my auctions' then source=self.ownedRows; self.ownedRefresh:Show(); headers={'My listing','Quantity','My unit','Competitor','Time left','','',''}
     elseif view=='ledger' then
       self.ledgerAction:Show(); headers={'Event / item','Quantity','Cost','Revenue','State','ID','Evidence',''}
@@ -332,6 +347,8 @@ function M:RenderUI()
         elseif view=='investments' then cells={o.name,o.quantity,self:Money(o.cost),o.estimatedNet and self:Money(o.estimatedNet) or 'Unknown',
           o.unrealized and self:Money(o.unrealized) or 'Unknown',o.roi and self:PercentText(o.roi) or 'N/A','',o.status}
         elseif view=='selling' then cells={o.name,o.quantity,o.price and self:Money(o.price) or 'No quote',o.fair and self:Money(o.fair) or '--',o.basisUnit and self:Money(o.basisUnit) or 'Unknown',o.estimatedNet and self:Money(o.estimatedNet) or '--',o.confidence,o.status}
+        elseif view=='post review' then cells={o.name,o.quantity,o.snapshotUnit and self:Money(o.snapshotUnit) or '--',
+          o.price and self:Money(o.price) or '--',o.fair and self:Money(o.fair) or '--','','',o.status}
         elseif view=='my auctions' then cells={o.name,o.quantity,self:Money(o.unit),o.competition and self:Money(o.competition) or '?',
           tostring(o.timeLeft or '?'),o.action or 'INSPECT','',''}
         else cells={(o.kind or '')..': '..tostring(o.name or o.auctionID or ''),o.quantity or '',o.cost and self:Money(o.cost) or '',o.gross and self:Money(o.gross) or '',o.booked and 'booked' or o.status,o.id,o.evidence or '',''} end
@@ -349,6 +366,11 @@ function M:RenderUI()
       self.detail:SetText('Capital at known cost '..self:Money(p.cost)..' | modeled liquidation after estimated fees '..self:Money(p.estimatedNet)..
         '\nEstimated unrealized '..self:Money(p.unrealized)..' | not currently priceable '..self:Money(p.unvaluedCost)..
         '\nOnly purchases with tracked acquisition basis are included. Estimates are not confirmed sales.')
+    elseif view=='post review' then
+      self.detail:SetText(o and ('Posting intent only for '..tostring(o.name)..' | '..tostring(o.status)..
+        '\n'..tostring(o.reason or '')..
+        '\nNo bag slot is persisted; current stock and live posting prices must be checked again in the native Auction House.') or
+        'Choose an entry. Queue items are bookmarks only and cannot post themselves.')
     elseif view=='selling' then
       if o and o.bag~=nil then
         self.detail:SetText('Bag '..o.bag..' / slot '..o.slot..' | '..tostring(o.status)..' | '..tostring(o.strategy or 'No strategy')..

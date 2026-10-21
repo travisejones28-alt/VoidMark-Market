@@ -157,3 +157,56 @@ function M:AssessOwnedRepost(row,competitor,cancelCost)
     out.action=='REVIEW' and 'Review remaining time and demand before deciding in native AH.' or 'Price gap is modest; holding avoids needless churn.')
   return out
 end
+
+-- Posting intents are bookmarks, NOT executable bag slots or price commitments.
+-- Each visit re-reads current bags. This does not invoke native AH posting.
+function M:QueuePostingReview(plan)
+  if self.persistenceBlocked then return false,'Newer schema; queue disabled' end
+  if type(plan)~='table' or not plan.marketKey or not self.db.market[plan.marketKey] then
+    return false,'Select a market-matched bag item'
+  end
+  if not self:Finite(plan.quantity,1,1e6) then return false,'Invalid quantity' end
+  local index=self.characterID..'/'..tostring(plan.marketKey)
+  local count=0;for _ in pairs(self.db.postQueue) do count=count+1 end
+  if not self.db.postQueue[index] and count>=100 then return false,'Posting queue is full (100)' end
+  self.db.postQueue[index]={character=self.characterID,marketKey=plan.marketKey,
+    itemID=plan.itemID,name=plan.name,quantity=plan.quantity,queuedAt=time(),
+    snapshotUnit=plan.price,notes='No confirmed posting; advisory only'}
+  self:RefreshUI()
+  return true
+end
+function M:RemovePostingReview(key)
+  if self.persistenceBlocked then return false end
+  self.db.postQueue[self.characterID..'/'..tostring(key)]=nil
+  self:RefreshUI()
+  return true
+end
+function M:GetPostingReviewRows()
+  local present={}
+  for _,row in ipairs(self.sellingRows or {}) do
+    if row.marketKey and row.bag~=nil and row.slot~=nil then
+      local id=tostring(row.marketKey)
+      if not present[id] or (row.quantity or 0)>(present[id].quantity or 0) then present[id]=row end
+    end
+  end
+  local out={}
+  for _,entry in pairs(self.db.postQueue or {}) do
+    if type(entry)=='table' and entry.character==self.characterID and entry.marketKey then
+      local current=present[tostring(entry.marketKey)]
+      local status=not current and 'CHECK BAGS' or not current.price and 'NO PRICE' or
+        current.status=='HOLD' and 'HOLD' or 'REVIEW'
+      out[#out+1]={marketKey=entry.marketKey,itemID=entry.itemID,
+        name=current and current.name or entry.name or 'Unknown item',
+        quantity=current and current.quantity or 0,snapshotUnit=entry.snapshotUnit,
+        price=current and current.price or nil,
+        fair=current and current.fair or nil,status=status,queuedAt=entry.queuedAt or 0,
+        reason=current and current.reason or 'Item not observed in most recent bag scan; refresh inventory',
+        bag=current and current.bag,slot=current and current.slot}
+    end
+  end
+  table.sort(out,function(a,b)
+    if a.queuedAt~=b.queuedAt then return a.queuedAt>b.queuedAt end
+    return tostring(a.name)<tostring(b.name)
+  end)
+  return out
+end
