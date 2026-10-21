@@ -49,7 +49,7 @@ function M:InitializeUI()
   button(self.toolbar,'<',525,0,32,function() self.page=math.max(1,(self.page or 1)-1); self:RefreshUI() end)
   button(self.toolbar,'>',563,0,32,function() self.page=(self.page or 1)+1; self:RefreshUI() end)
   self.pageText=label(self.toolbar,'',604,-7,93)
-  button(self.toolbar,'BUY REVIEW',702,0,92,function() self:SetView('execution') end)
+  button(self.toolbar,'BUY QUEUE',702,0,92,function() self:SetView('review') end)
   button(self.toolbar,'MY AUCTIONS',798,0,115,function() self:SetView('my auctions') end)
   button(self.toolbar,'DIAG',919,0,78,function() self:SetView('diagnostics') end)
   self.tableFrame=CreateFrame('Frame',nil,f); self.tableFrame:SetPoint('TOPLEFT',18,-151); self.tableFrame:SetSize(1000,340)
@@ -64,6 +64,7 @@ function M:InitializeUI()
       if not row.data then return end
       self.selectedRow=row.data
       if self.view=='opportunities' then self:SelectOpportunity(row.data)
+      elseif self.view=='review' and row.data.opportunity then self:SelectOpportunity(row.data.opportunity)
       elseif self.view=='my auctions' then self:AnalyzeOwnedLive(row.data)
       else self:RefreshUI() end
     end)
@@ -117,6 +118,10 @@ function M:InitializeUI()
   self.cancelQuoteButton=button(self.action,'DISCARD QUOTE',619,0,150,function()
     if self.execution.state=='quoting' or self.execution.state=='quoted' then self:InvalidateQuote('Quote discarded') end
   end)
+  self.addReviewButton=button(self.action,'SAVE TO QUEUE',778,0,168,function()
+    local ok,why=self:QueuePurchaseReview(self.execution.opportunity)
+    self:Print(ok and 'Opportunity added to player review queue' or why)
+  end)
   self.ledgerAction=CreateFrame('Frame',nil,f); self.ledgerAction:SetPoint('BOTTOMLEFT',18,18); self.ledgerAction:SetSize(1000,28)
   button(self.ledgerAction,'BOOK REVIEWED SALE',0,0,190,function()
     if not self:BookSale(self.selectedRow) then self:Print('Select an unbooked verified invoice with one exact market match') end
@@ -124,6 +129,11 @@ function M:InitializeUI()
   button(self.ledgerAction,'MARK BUY CONFIRMED',200,0,200,function() self:ReviewPending(self.selectedRow,true) end)
   button(self.ledgerAction,'MARK BUY FAILED',410,0,170,function() self:ReviewPending(self.selectedRow,false) end)
   self.ownedRefresh=button(f,'REFRESH MY AUCTIONS',18,-628,210,function() self:RequestOwnedAuctionsDiagnostic() end)
+  self.reviewRemove=button(f,'REMOVE QUEUED ITEM',18,-628,200,function()
+    if self.selectedRow and self.selectedRow.marketKey then
+      if self:RemovePurchaseReview(self.selectedRow.marketKey) then self.selectedRow=nil end
+    else self:Print('Select a queue entry first') end
+  end)
   self.settingsFrame=CreateFrame('Frame',nil,f); self.settingsFrame:SetPoint('TOPLEFT',18,-151); self.settingsFrame:SetSize(998,460)
   local settings={
     {'maxTransaction','Maximum transaction (gold)',10000},{'maxItemSpend','Maximum per-item exposure (gold)',10000},
@@ -187,7 +197,7 @@ function M:RenderUI()
   local view=self.view or 'market'; local s=self.db.settings
   self.modeLabel:SetText(s.safeMode and '|cff72e7aaSAFE MODE ON - no transactions|r' or '|cffffa250TRADING ENABLED - real clicks required|r')
   self.status:SetText('AH '..(self.ahOpen and 'OPEN' or 'CLOSED')..' | '..self.scanState.status..' | full scan cooldown '..self:FormatDuration(self:GetSecondsUntilFreshScanAllowed()))
-  self.toolbar:Show(); self.tableFrame:Hide(); self.detail:Hide(); self.contentScroll:Hide(); self.settingsFrame:Hide(); self.action:Hide(); self.ledgerAction:Hide(); self.ownedRefresh:Hide(); self.watchFrame:Hide(); self.statsFrame:Hide()
+  self.toolbar:Show(); self.tableFrame:Hide(); self.detail:Hide(); self.contentScroll:Hide(); self.settingsFrame:Hide(); self.action:Hide(); self.ledgerAction:Hide(); self.ownedRefresh:Hide(); self.reviewRemove:Hide(); self.watchFrame:Hide(); self.statsFrame:Hide()
   self.filter:SetShown(view=='opportunities' or view=='browse'); self.sortButton:SetShown(view=='opportunities'); self.sortButton:SetText('SORT: '..s.sort:upper())
   self.scanButton:SetEnabled(self.ahOpen and not self.scanState.running); self.cachedButton:SetEnabled(self.ahOpen and not self.scanState.running)
   if view=='settings' then self.settingsFrame:Show(); self.safe:SetChecked(s.safeMode); self.minimapToggle:SetChecked(not (s.minimap and s.minimap.hide)); return end
@@ -225,6 +235,7 @@ function M:RenderUI()
     self.executeButton:SetEnabled(not self.persistenceBlocked and not s.safeMode and self.ahOpen and x.state=='ready' and not self:HasUnresolvedPurchase())
     self.confirmButton:SetEnabled(not s.safeMode and x.state=='quoted')
     self.cancelQuoteButton:SetEnabled(x.state=='quoted' or x.state=='quoting')
+    self.addReviewButton:SetEnabled(x.opportunity~=nil and not self.persistenceBlocked)
     text=table.concat(lines,'\n')
   elseif view=='diagnostics' then text=self:BuildTextReport()
   elseif view=='market' then
@@ -261,6 +272,9 @@ function M:RenderUI()
     if view=='opportunities' then
       source=self:GetSniperRows(s.filter,s.sort)
       headers={'Item / status','Ask','Fair','Net','ROI','Score','Confidence','Risk'}
+    elseif view=='review' then
+      source=self:GetPurchaseReviewRows();self.reviewRemove:Show()
+      headers={'Saved candidate','Old ask','Latest ask','Fair','ROI','','Confidence','State'}
     elseif view=='browse' then
       source=self.browseRows or {}; headers={'Cached item','Item ID','Ask/unit','Fair','Median 7d','Median 30d','Confidence','State'}
     elseif view=='shopping' then
@@ -290,6 +304,8 @@ function M:RenderUI()
         if view=='opportunities' then cells={(o.pass and '' or '|cffff9a9a[BLOCKED]|r ')..(o.kind=='vendor' and '|cff72e7aa[VENDOR]|r ' or '')..o.name,
           self:Money(o.floor),self:Money(o.fairValue),self:Money(o.economics.net),self:PercentText(o.economics.roi),
           o.score,o.confidence,o.risk}
+        elseif view=='review' then cells={o.name,self:Money(o.snapshotAsk),o.ask>0 and self:Money(o.ask) or 'Missing',
+          self:Money(o.fair),self:PercentText(o.roi),'',o.confidence,o.status}
         elseif view=='browse' then cells={o.name,o.itemID,o.floor>0 and self:Money(o.floor) or 'No local ask',
           self:Money(o.fair),o.median7 and self:Money(o.median7) or '--',o.median30 and self:Money(o.median30) or '--',o.confidence,o.status}
         elseif view=='shopping' then cells={o.name,o.itemID,self:Money(o.floor),self:Money(o.fair),o.target and self:Money(o.target) or 'Any','',o.confidence,o.status}
@@ -303,6 +319,8 @@ function M:RenderUI()
     end
     local o=self.selectedRow
     if view=='opportunities' then self.detail:SetText('Select a row to inspect economics and revalidate live prices. Vendor opportunities have a separate model.\nResale rankings weigh absolute profit, ROI, confidence, inferred liquidity, depth, volatility and capital exposure.\nA snapshot opportunity may fail current limits or disappear before you buy. Live prices expire after 10 seconds.')
+    elseif view=='review' then
+      self.detail:SetText('This is an advisory purchase REVIEW QUEUE, not a transaction queue.\nItems with REVALIDATE can be clicked to inspect, but the live purchase still needs complete search validation and a permitted user click.\nRECHECK items have stale/blocked/missing market data. They remain saved until you remove them.')
     elseif view=='shopping' then
       self.detail:SetText('Select an item to update or remove its target. Enter a base item ID and target in gold below.\nTargets only flag fresh cached asking prices; no automatic purchases.')
     elseif view=='investments' then

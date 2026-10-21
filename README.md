@@ -265,3 +265,5 @@ keep Safe Mode on for the first in-game checks.
 - This is a first integration of uploaded reference workflows, not a claim that all referenced features are implemented.
 
 Version 1.1.1-beta: tested advisory manual realm/faction transfer, 7/30-day rolling scan medians and expanded sniper metric sorting. Explicitly excludes derived sales, automatic purchasing and foreign or mismatched variants from trusted market history.
+
+Purchase review queue: select an opportunity in SNIPER, choose SAVE TO QUEUE in its execution review, and access BUY QUEUE in the top toolbar. The queue persists per economy but never quotes, bids, reserves funds, or completes a purchase. RECHECK entries must regain trusted fresh analysis before inspection. Each actual buy still requires live revalidation and a real click.

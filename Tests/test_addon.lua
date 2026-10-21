@@ -515,6 +515,20 @@ check('Independent 7 and 30 day median windows never manufacture sale evidence',
   local rows=M:GetSniperRows('ritual','confidence')
   assert(type(rows)=='table')
 end)
+check('Purchase review queue is advisory, persistent and cannot unlock stale execution',function()
+  local m=mk()
+  local op=M:MakeOpportunity(m);assert(op)
+  local saved=M.db.reviewQueue;M.db.reviewQueue={}
+  assert(M:QueuePurchaseReview(op))
+  local rows=M:GetPurchaseReviewRows();assert(#rows==1 and rows[1].status=='REVALIDATE')
+  local stamp=m.lastSeen;m.lastSeen=1
+  rows=M:GetPurchaseReviewRows()
+  assert(#rows==1 and rows[1].status=='RECHECK' and rows[1].opportunity==nil)
+  m.lastSeen=stamp
+  assert(M:RemovePurchaseReview(m.marketKey))
+  assert(#M:GetPurchaseReviewRows()==0)
+  M.db.reviewQueue=saved
+end)
 check('Manual cross-account transfer keeps history, orders and prices isolated',function()
   local m=mk();M:RebuildIndexes();jobs()
   local before=#m.history;local baseline=m.fairValue

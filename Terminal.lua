@@ -187,3 +187,52 @@ function M:GetSniperRows(filter,sort)
   end)
   return out
 end
+
+-- Player-reviewed shortlist. Queue entries NEVER imply a valid quote, a reserved
+-- transaction, or a completed purchase; every row must be revalidated live.
+function M:QueuePurchaseReview(opportunity)
+  if self.persistenceBlocked then return false,'Newer database schema; queue disabled' end
+  if type(opportunity)~='table' or not opportunity.marketKey then return false,'Select an opportunity first' end
+  local m=self.db.market[opportunity.marketKey]
+  if not m then return false,'Market unavailable' end
+  local list=self.db.reviewQueue
+  local count=0;for _ in pairs(list) do count=count+1 end
+  if not list[opportunity.marketKey] and count>=100 then return false,'Review queue limited to 100 items' end
+  list[opportunity.marketKey]={marketKey=opportunity.marketKey,itemID=m.itemID,
+    name=m.name,queuedAt=time(),snapshotAsk=opportunity.floor,
+    snapshotROI=opportunity.economics and opportunity.economics.roi or 0}
+  self:RefreshUI()
+  return true
+end
+function M:RemovePurchaseReview(key)
+  if self.persistenceBlocked or key==nil then return false end
+  self.db.reviewQueue[key]=nil
+  self:RefreshUI()
+  return true
+end
+function M:GetPurchaseReviewRows()
+  local out,opps={},{}
+  for _,o in ipairs(self.db.opportunities or {}) do
+    if type(o)=='table' and o.marketKey then opps[tostring(o.marketKey)]=o end
+  end
+  for key,item in pairs(self.db.reviewQueue or {}) do
+    if type(item)=='table' and item.marketKey then
+      local m=self.db.market[item.marketKey]
+      local o=opps[tostring(item.marketKey)]
+      local fresh=m and not m.analysisIncomplete and self:MarketFresh(m)
+      local valid=fresh and o and o.pass
+      out[#out+1]={marketKey=item.marketKey,itemID=item.itemID,
+        name=m and m.name or item.name or ('Item '..tostring(item.itemID)),
+        snapshotAsk=item.snapshotAsk or 0,ask=o and o.floor or 0,
+        roi=o and o.economics and o.economics.roi or item.snapshotROI or 0,
+        fair=m and m.fairValue or 0,confidence=o and o.confidence or 'Unknown',
+        status=valid and 'REVALIDATE' or 'RECHECK',opportunity=valid and o or nil,
+        queuedAt=item.queuedAt or 0}
+    end
+  end
+  table.sort(out,function(x,y)
+    if x.queuedAt~=y.queuedAt then return x.queuedAt>y.queuedAt end
+    return tostring(x.name)<tostring(y.name)
+  end)
+  return out
+end
