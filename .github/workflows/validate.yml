@@ -1,15 +1,28 @@
 name: Validate Market
 on: [push, pull_request]
 permissions:
-  contents: read
+  contents: write
 jobs:
   regression:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - run: python -m pip install lupa==2.8
       - run: python Tests/run_tests.py
+      - run: python tools/package.py
       - run: python tools/package.py --check
+      - name: Publish current installable ZIP to main
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          if ! git diff --quiet -- dist/VoidMarkMarket.zip; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add dist/VoidMarkMarket.zip
+            git commit -m 'build: refresh installable Market ZIP'
+            git push origin HEAD:main
+          fi
