@@ -30,7 +30,7 @@ function M:ExportMarketTransfer()
   end
   for key in pairs(self.db.watchlist or {}) do add(self.db.market[key]) end
   for _,o in ipairs(self.db.opportunities or {}) do add(self.db.market[o.marketKey]) end
-  for _,key in ipairs(self.marketIndex or {}) do if #rows>=100 then break end; add(self.db.market[key]) end end
+  for _,key in ipairs(self.marketIndex or {}) do if #rows>=100 then break end; add(self.db.market[key]) end
   local header=table.concat({'VMMX1',realm,faction,time(),#rows},'\t')
   table.insert(rows,1,header)
   return table.concat(rows,'\n')
