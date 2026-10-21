@@ -160,7 +160,8 @@ function M:InitializeUI()
     {'minConfidence','Minimum confidence (0-100)',1},{'minLiquidity','Minimum inferred liquidity (0-100)',1},
     {'riskTolerance','Maximum volatility (%)',0.01},{'depositReserve','Resale deposit allowance/unit (silver)',100},
     {'ahCut','AH cut (%) - verify current AH',0.01},{'maxDataAge','Maximum model age (minutes)',60},
-    {'minGoldReserve','Minimum liquid gold reserve (gold)',10000}}
+    {'minGoldReserve','Minimum liquid gold reserve (gold)',10000},
+    {'sellMinMargin','Known-cost minimum margin (%)',0.01}}
   self.settingFields={}
   for i,s in ipairs(settings) do
     local col=(i-1)%2; local row=math.floor((i-1)/2); local x=col*495
@@ -176,6 +177,7 @@ function M:InitializeUI()
       values[s.key]=n*s.factor
     end
     if values.ahCut>0.30 or values.minConfidence>100 or values.minLiquidity>100 or values.riskTolerance>2 or values.maxDataAge>86400*7 then self:Print('One or more limits exceed supported ranges'); return end
+    if values.sellMinMargin>2 then self:Print('Sell margin must be 0%-200%');return end
     values.maxQuantity=math.floor(values.maxQuantity)
     for k,v in pairs(values) do self.db.settings[k]=v end
     if self.execution.state=='quoted' then self:InvalidateQuote('Limits changed; revalidate')
@@ -330,7 +332,8 @@ function M:RenderUI()
         elseif view=='investments' then cells={o.name,o.quantity,self:Money(o.cost),o.estimatedNet and self:Money(o.estimatedNet) or 'Unknown',
           o.unrealized and self:Money(o.unrealized) or 'Unknown',o.roi and self:PercentText(o.roi) or 'N/A','',o.status}
         elseif view=='selling' then cells={o.name,o.quantity,o.price and self:Money(o.price) or 'No quote',o.fair and self:Money(o.fair) or '--',o.basisUnit and self:Money(o.basisUnit) or 'Unknown',o.estimatedNet and self:Money(o.estimatedNet) or '--',o.confidence,o.status}
-        elseif view=='my auctions' then cells={o.name,o.quantity,self:Money(o.unit),o.competition and self:Money(o.competition) or '?',tostring(o.timeLeft or '?'),'','',''}
+        elseif view=='my auctions' then cells={o.name,o.quantity,self:Money(o.unit),o.competition and self:Money(o.competition) or '?',
+          tostring(o.timeLeft or '?'),o.action or 'INSPECT','',''}
         else cells={(o.kind or '')..': '..tostring(o.name or o.auctionID or ''),o.quantity or '',o.cost and self:Money(o.cost) or '',o.gross and self:Money(o.gross) or '',o.booked and 'booked' or o.status,o.id,o.evidence or '',''} end
         for j,c in ipairs(cells) do row.cols[j]:SetText(tostring(c)) end
       end
@@ -353,6 +356,12 @@ function M:RenderUI()
           '\n'..(o.profit and ('Estimated net profit '..self:Money(o.profit)..' | ROI '..self:PercentText(o.roi or 0)) or 'Profit unavailable: basis is not fully known')..
           '\n'..tostring(o.reason or '')..'\nAdvisory only. Confirm the current listing, posting deposit and duration in the native AH.')
       else self.detail:SetText('Select a bag item for its price, cost basis and risk. No post is made by this panel.') end
+    elseif view=='my auctions' then
+      self.detail:SetText(o and ('Own auction #'..tostring(o.auctionID)..' | '..tostring(o.action or 'INSPECT')..
+        '\n'..tostring(o.reason or 'Select a row to fetch live competition.')..
+        '\n'..(o.repriceDifference and ('Gross reduction on reprice '..self:Money(o.repriceDifference)) or 'No repricing economics available')..
+        '\nCancel/repost is advisory only; confirm native AH deposit, fees, time remaining and live sale demand.') or
+        'Select an auction to inspect the live competitors. No cancel/post action is automatic.')
     elseif view=='browse' then
       self.detail:SetText('Search cached market history by name. '..tostring(#source)..' cached results shown (maximum 300).'..
         '\nThe 7/30-day medians are scan medians, not verified sales. SHARED* prices are advisory only.\nSelect a local item, then SHOPPING to set a target. Cached prices are not live quotes.')

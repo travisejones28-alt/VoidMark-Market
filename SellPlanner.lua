@@ -118,3 +118,42 @@ function M:BuildSellPlan(key,quantity)
   if p.reason=='' then p.reason='Snapshot-based suggestion; verify live prices and native AH deposit before posting' end
   return p
 end
+
+-- Repricing is always a review signal. No cancellation or native post is made.
+function M:AssessOwnedRepost(row,competitor,cancelCost)
+  local out={action='HOLD',reason='Insufficient information to justify cancel/repost'}
+  if type(row)~='table' or not self:Finite(row.unit,1,1e12)
+    or not self:Finite(row.quantity,1,1e6) then return out end
+  if not self:Finite(competitor,1,1e12) then
+    out.reason='No eligible competing supply in complete live search; keep the listing'
+    return out
+  end
+  if competitor>=row.unit then
+    out.reason='Your listing remains competitive; hold it rather than pay another deposit'
+    return out
+  end
+  local market=self.db.market[row.marketKey]
+  if not market or market.analysisIncomplete or not self:MarketFresh(market) then
+    out.reason='Market model missing/stale; cannot justify cancellation'
+    return out
+  end
+  local anchor=market.latest and (market.latest.meaningfulFloor or market.latest.q10)
+  if self:Finite(anchor,1,1e12) and competitor<anchor*0.75 then
+    out.reason='Undercut appears far below meaningful market depth; possible bait, hold'
+    return out
+  end
+  local reducedUnit=math.max(1,math.floor(competitor-1))
+  local revenueDecrease=math.ceil((row.unit-reducedUnit)*row.quantity)
+  out.proposedUnit=reducedUnit;out.revenueDecrease=revenueDecrease
+  if not self:Finite(cancelCost,0,1e12) or not self:Finite(row.deposit,0,1e12) then
+    out.reason='Undercut observed, but actual cancellation cost/deposit is unknown; do not cancel on estimates'
+    return out
+  end
+  local totalFriction=cancelCost+row.deposit
+  local gap=(row.unit-competitor)/row.unit
+  out.action=gap>=0.15 and 'REVIEW' or 'HOLD'
+  out.reason=string.format('Live competitor %.1f%% below your unit price. Repricing near %s reduces gross by %s; known cancellation fee %s plus listed deposit at risk %s. %s',
+    gap*100,self:Money(reducedUnit),self:Money(revenueDecrease),self:Money(cancelCost),self:Money(row.deposit),
+    out.action=='REVIEW' and 'Review remaining time and demand before deciding in native AH.' or 'Price gap is modest; holding avoids needless churn.')
+  return out
+end

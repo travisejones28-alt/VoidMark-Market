@@ -67,7 +67,7 @@ function M:CaptureOwnedAuctions()
         local m=self.db.market[key]; local qty=tonumber(info.quantity) or 1
         local unit=tonumber(info.unitPrice) or (tonumber(info.buyoutAmount) or 0)/math.max(1,qty)
         rows[#rows+1]={auctionID=info.auctionID,marketKey=key,name=m and m.name or ('Item '..info.itemKey.itemID),quantity=qty,
-          unit=unit,timeLeft=info.timeLeftSeconds or info.timeLeft,status=info.status,deposit=info.depositAmount,
+          unit=unit,timeLeft=info.timeLeftSeconds or info.timeLeft,status=info.status,action='INSPECT',deposit=info.depositAmount,
           floor=m and m.latest and m.latest.meaningfulFloor,reason='Snapshot comparison only; refresh item before deciding'}
       end
       if debugprofilestop()-start>=4 then return false end
@@ -75,22 +75,30 @@ function M:CaptureOwnedAuctions()
   end,function() self.ownedRows=rows; self:RefreshInventory(); self:RefreshUI() end)
 end
 function M:AnalyzeOwnedLive(row)
-  local m=self.db.market[row.marketKey]; if not m then return end
-  self:Search(m,60,function(result)
+  local market=row and self.db.market[row.marketKey]
+  if not market or not row.auctionID then
+    if row then row.action='HOLD';row.reason='Cannot safely identify this auction or its variant' end
+    self:RefreshUI();return
+  end
+  row.action='CHECKING';row.reason='Waiting for complete live search results'
+  self:Search(market,60,function(result)
+    -- ReadSearch already removes own commodity quantity and ignores own regular listings.
     local competitor=result.rows[1] and result.rows[1].unit
-    row.liveAt=time(); row.competition=competitor
-    if not competitor then row.reason='No competing supply; hold your auction'
-    elseif competitor>=row.unit then row.reason='Your price is competitive; hold'
-    else
-      local reduction=(row.unit-competitor)*row.quantity
-      local A=C_AuctionHouse; local cost
-      if A.GetCancelCost then local ok,v=pcall(A.GetCancelCost,row.auctionID); if ok then cost=tonumber(v) end end
-      row.cancelCost=cost
-      row.reason=string.format('Undercut %.1f%%; repricing reduces revenue by %s. %s',100*(row.unit-competitor)/math.max(1,row.unit),self:Money(reduction),
-        cost and ('Cancel fee '..self:Money(cost)..'; deposit loss '..(row.deposit and self:Money(row.deposit) or 'unknown')..'. Review demand before churn.') or 'Cancel/deposit cost unknown; hold until verified.')
+    local A=C_AuctionHouse;local cost=nil
+    if type(A.GetCancelCost)=='function' then
+      local ok,value=pcall(A.GetCancelCost,row.auctionID)
+      if ok and self:Finite(value,0,1e12) then cost=value end
     end
+    row.liveAt=time();row.competition=competitor
+    row.cancelCost=cost
+    local outcome=self:AssessOwnedRepost(row,competitor,cost)
+    row.action=outcome.action;row.reason=outcome.reason
+    row.proposedUnit=outcome.proposedUnit;row.repriceDifference=outcome.revenueDecrease
     self:RefreshUI()
-  end,function(e) row.reason=e; self:RefreshUI() end)
+  end,function(e)
+    row.action='HOLD';row.reason='Live competitor search failed: '..tostring(e)
+    self:RefreshUI()
+  end)
 end
 M:RegisterHandler('BAG_UPDATE_DELAYED',function(self) self.bagsDirty=true end)
 M:RegisterHandler('GET_ITEM_INFO_RECEIVED',function(self) self.bagsDirty=true end)

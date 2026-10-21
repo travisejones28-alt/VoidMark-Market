@@ -67,3 +67,7 @@ First implemented increment: 1.1.0-beta. Reference addon ZIP comparison is **pen
 12. Retest under `_forever_` when released; **do not** assume `_classic_beta_` interface/API behavior is identical.
 
 No automation, simulated click or unattended trading has been added.
+
+
+## 1.2.0 selling safeguards (2026-10-21)
+Four price strategies, persistent per-item floors, optional known-cost margin, explicit stale/unknown basis states, and conservative self-undercut protection now feed the SELL advisory. MY AUCTIONS adds fresh competitor validation and HOLD/REVIEW repost assessments, requiring known cancellation/deposit observations. There are no client posting or cancellation calls in this change. Mock tests cover missing/partial cost, isolated low-price bait, missing cancellation costs and the absence of write actions. Actual live Forever cancellation fees and pricing remain unverified.

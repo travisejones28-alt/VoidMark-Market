@@ -601,4 +601,26 @@ check('Sell inventory includes unpriced and priced items without unintended post
  C_Container=old
 end)
 
+check('Owned auction repricing rejects isolated low-price bait',function()
+  local m=mk()
+  local r={marketKey=m.marketKey,quantity=1,unit=5000,deposit=100,auctionID=29}
+  local out=M:AssessOwnedRepost(r,200,100)
+  assert(out.action=='HOLD' and out.reason:find('bait',1,true))
+end)
+check('Owned repost cannot be recommended without known cancellation costs',function()
+  local m=mk()
+  local r={marketKey=m.marketKey,quantity=3,unit=7000,deposit=nil,auctionID=29}
+  local out=M:AssessOwnedRepost(r,4500,nil)
+  assert(out.action=='HOLD' and out.reason:find('unknown',1,true))
+end)
+check('Owned repost remains a review signal only, never invokes cancel or post',function()
+  local m=mk();local count=#calls
+  local r={marketKey=m.marketKey,quantity=2,unit=7000,deposit=40,auctionID=29}
+  local o=M:AssessOwnedRepost(r,4500,80)
+  assert(o.action=='REVIEW' and o.proposedUnit==4499 and o.revenueDecrease>0)
+  assert(#calls==count)
+  local good=M:AssessOwnedRepost(r,7300,80)
+  assert(good.action=='HOLD')
+end)
+
 print('ALL '..total..' TESTS PASSED')

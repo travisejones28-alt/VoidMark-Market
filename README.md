@@ -276,3 +276,7 @@ Purchase review queue: select an opportunity in SNIPER, choose SAVE TO QUEUE in 
 - The economic quote includes per-unit known acquisition basis from this character's purchase ledger, user-specified minimum, modeled AH cut and a deliberately conservative deposit allowance. When a stack is only partly costed, profit is UNAVAILABLE; do not treat gathered/mailed items as costed.
 - Pricing holds/reviews excessively high minimums, suspicious low auction floors, poor confidence and volatility. No posting or cancellation APIs are called here. The native AH remains the only posting interface.
 - Real Forever deposit quotes, stack splitting, and posting lifecycle remain subject to live API verification.
+
+
+### Cancel/repost advisory
+On MY AUCTIONS, click your listing to request a fresh complete search of competing prices. The recommendation is HOLD unless a material gap is verified, meaningful depth supports it and the native client returns the cancellation fee and the existing listing deposit. A REVIEW state provides cost impact only, never a cancellation command. An unknown fee, unmodeled competitor or stale market prevents cancel recommendations. Selling Settings now include a configurable known-cost minimum margin (0-200%).
