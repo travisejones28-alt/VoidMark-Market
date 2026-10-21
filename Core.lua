@@ -1,6 +1,6 @@
 local addonName, M = ...
 _G.VoidMarkMarket = M
-M.name, M.version = addonName or 'VoidMarkMarket', '1.1.1-beta'
+M.name, M.version = addonName or 'VoidMarkMarket', '1.2.0-beta'
 M.eventHandlers, M.runtimeLog, M.jobs = {}, {}, {}
 M.ahOpen, M.safeMode = false, true
 M.scanState = {running=false, phase='idle', status='No scan yet', progress=0}

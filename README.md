@@ -267,3 +267,12 @@ keep Safe Mode on for the first in-game checks.
 Version 1.1.1-beta: tested advisory manual realm/faction transfer, 7/30-day rolling scan medians and expanded sniper metric sorting. Explicitly excludes derived sales, automatic purchasing and foreign or mismatched variants from trusted market history.
 
 Purchase review queue: select an opportunity in SNIPER, choose SAVE TO QUEUE in its execution review, and access BUY QUEUE in the top toolbar. The queue persists per economy but never quotes, bids, reserves funds, or completes a purchase. RECHECK entries must regain trusted fresh analysis before inspection. Each actual buy still requires live revalidation and a real click.
+
+
+## Intelligent selling (1.2.0 beta)
+- SELL scans all unbound bag items, including those lacking historical prices, and labels unknown or stale variants instead of silently omitting them.
+- Strategy button cycles COMPETITIVE (meaningful lower-market floor, resisting isolated bait), QUICK (conservative discount), MEDIAN (model fair), and MARGIN (higher-ask approach).
+- Item-specific minimum prices are stored per realm/faction in copper and can be cleared by leaving the amount blank. This is a pricing FLOOR, never an unattended post.
+- The economic quote includes per-unit known acquisition basis from this character's purchase ledger, user-specified minimum, modeled AH cut and a deliberately conservative deposit allowance. When a stack is only partly costed, profit is UNAVAILABLE; do not treat gathered/mailed items as costed.
+- Pricing holds/reviews excessively high minimums, suspicious low auction floors, poor confidence and volatility. No posting or cancellation APIs are called here. The native AH remains the only posting interface.
+- Real Forever deposit quotes, stack splitting, and posting lifecycle remain subject to live API verification.

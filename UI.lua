@@ -128,6 +128,24 @@ function M:InitializeUI()
   end)
   button(self.ledgerAction,'MARK BUY CONFIRMED',200,0,200,function() self:ReviewPending(self.selectedRow,true) end)
   button(self.ledgerAction,'MARK BUY FAILED',410,0,170,function() self:ReviewPending(self.selectedRow,false) end)
+  self.sellAction=CreateFrame('Frame',nil,f);self.sellAction:SetPoint('BOTTOMLEFT',18,18);self.sellAction:SetSize(1000,28)
+  self.sellStrategyButton=button(self.sellAction,'STRATEGY',0,0,180,function()
+    local strategies=self:GetSellStrategies();local current=self.db.settings.sellStrategy;local idx=1
+    for i,v in ipairs(strategies) do if v==current then idx=i%#strategies+1;break end end
+    self:SetSellStrategy(strategies[idx])
+  end)
+  label(self.sellAction,'Minimum gold/unit:',195,-7,130)
+  self.sellFloorEdit=edit(self.sellAction,330,-1,110,'')
+  button(self.sellAction,'SAVE MINIMUM',455,0,145,function()
+    local r=self.selectedRow
+    if not r or not r.marketKey then self:Print('Select a bag item with market data');return end
+    local raw=self.sellFloorEdit:GetText()
+    local g=tonumber(raw)
+    if raw~='' and (not g or g<=0 or g>1e8) then self:Print('Minimum must be positive gold (blank to clear)');return end
+    local ok,why=self:SetSellFloor(r.marketKey,raw~='' and math.floor(g*10000+0.5) or nil)
+    self:Print(ok and 'Minimum updated; advisory prices recalculated' or why)
+  end)
+  button(self.sellAction,'REFRESH BAGS',612,0,144,function()self:RefreshInventory()end)
   self.ownedRefresh=button(f,'REFRESH MY AUCTIONS',18,-628,210,function() self:RequestOwnedAuctionsDiagnostic() end)
   self.reviewRemove=button(f,'REMOVE QUEUED ITEM',18,-628,200,function()
     if self.selectedRow and self.selectedRow.marketKey then
@@ -197,7 +215,7 @@ function M:RenderUI()
   local view=self.view or 'market'; local s=self.db.settings
   self.modeLabel:SetText(s.safeMode and '|cff72e7aaSAFE MODE ON - no transactions|r' or '|cffffa250TRADING ENABLED - real clicks required|r')
   self.status:SetText('AH '..(self.ahOpen and 'OPEN' or 'CLOSED')..' | '..self.scanState.status..' | full scan cooldown '..self:FormatDuration(self:GetSecondsUntilFreshScanAllowed()))
-  self.toolbar:Show(); self.tableFrame:Hide(); self.detail:Hide(); self.contentScroll:Hide(); self.settingsFrame:Hide(); self.action:Hide(); self.ledgerAction:Hide(); self.ownedRefresh:Hide(); self.reviewRemove:Hide(); self.watchFrame:Hide(); self.statsFrame:Hide()
+  self.toolbar:Show(); self.tableFrame:Hide(); self.detail:Hide(); self.contentScroll:Hide(); self.settingsFrame:Hide(); self.action:Hide(); self.ledgerAction:Hide(); self.ownedRefresh:Hide(); self.reviewRemove:Hide(); self.sellAction:Hide(); self.watchFrame:Hide(); self.statsFrame:Hide()
   self.filter:SetShown(view=='opportunities' or view=='browse'); self.sortButton:SetShown(view=='opportunities'); self.sortButton:SetText('SORT: '..s.sort:upper())
   self.scanButton:SetEnabled(self.ahOpen and not self.scanState.running); self.cachedButton:SetEnabled(self.ahOpen and not self.scanState.running)
   if view=='settings' then self.settingsFrame:Show(); self.safe:SetChecked(s.safeMode); self.minimapToggle:SetChecked(not (s.minimap and s.minimap.hide)); return end
@@ -282,7 +300,7 @@ function M:RenderUI()
       self.watchFrame:Show()
     elseif view=='investments' then
       source=self:GetPortfolioRows();headers={'Owned investment','Quantity','Cost basis','Net est.','Unrealized','ROI','','State'}
-    elseif view=='selling' then source=self.sellingRows; headers={'Inventory','Quantity','Suggest/unit','Fair','Floor','','Confidence','Status'}
+    elseif view=='selling' then source=self.sellingRows; self.sellAction:Show();self.sellStrategyButton:SetText('MODE: '..(s.sellStrategy or 'competitive'):upper()); headers={'Inventory','Quantity','Suggest/unit','Fair','Basis/unit','Net est.','Confidence','State'}
     elseif view=='my auctions' then source=self.ownedRows; self.ownedRefresh:Show(); headers={'My listing','Quantity','My unit','Competitor','Time left','','',''}
     elseif view=='ledger' then
       self.ledgerAction:Show(); headers={'Event / item','Quantity','Cost','Revenue','State','ID','Evidence',''}
@@ -311,7 +329,7 @@ function M:RenderUI()
         elseif view=='shopping' then cells={o.name,o.itemID,self:Money(o.floor),self:Money(o.fair),o.target and self:Money(o.target) or 'Any','',o.confidence,o.status}
         elseif view=='investments' then cells={o.name,o.quantity,self:Money(o.cost),o.estimatedNet and self:Money(o.estimatedNet) or 'Unknown',
           o.unrealized and self:Money(o.unrealized) or 'Unknown',o.roi and self:PercentText(o.roi) or 'N/A','',o.status}
-        elseif view=='selling' then cells={o.name,o.quantity,self:Money(o.price),self:Money(o.fair),self:Money(o.floor),'',o.confidence,o.stale and 'STALE' or 'Estimate'}
+        elseif view=='selling' then cells={o.name,o.quantity,o.price and self:Money(o.price) or 'No quote',o.fair and self:Money(o.fair) or '--',o.basisUnit and self:Money(o.basisUnit) or 'Unknown',o.estimatedNet and self:Money(o.estimatedNet) or '--',o.confidence,o.status}
         elseif view=='my auctions' then cells={o.name,o.quantity,self:Money(o.unit),o.competition and self:Money(o.competition) or '?',tostring(o.timeLeft or '?'),'','',''}
         else cells={(o.kind or '')..': '..tostring(o.name or o.auctionID or ''),o.quantity or '',o.cost and self:Money(o.cost) or '',o.gross and self:Money(o.gross) or '',o.booked and 'booked' or o.status,o.id,o.evidence or '',''} end
         for j,c in ipairs(cells) do row.cols[j]:SetText(tostring(c)) end
@@ -328,6 +346,13 @@ function M:RenderUI()
       self.detail:SetText('Capital at known cost '..self:Money(p.cost)..' | modeled liquidation after estimated fees '..self:Money(p.estimatedNet)..
         '\nEstimated unrealized '..self:Money(p.unrealized)..' | not currently priceable '..self:Money(p.unvaluedCost)..
         '\nOnly purchases with tracked acquisition basis are included. Estimates are not confirmed sales.')
+    elseif view=='selling' then
+      if o and o.bag~=nil then
+        self.detail:SetText('Bag '..o.bag..' / slot '..o.slot..' | '..tostring(o.status)..' | '..tostring(o.strategy or 'No strategy')..
+          '\n'..(o.price and ('Price per unit '..self:Money(o.price)..' | Gross '..self:Money(o.gross)..' | estimated AH cut '..self:Money(o.estimatedCut)..' | deposit allowance '..self:Money(o.depositAllowance)) or 'No reliable pricing available')..
+          '\n'..(o.profit and ('Estimated net profit '..self:Money(o.profit)..' | ROI '..self:PercentText(o.roi or 0)) or 'Profit unavailable: basis is not fully known')..
+          '\n'..tostring(o.reason or '')..'\nAdvisory only. Confirm the current listing, posting deposit and duration in the native AH.')
+      else self.detail:SetText('Select a bag item for its price, cost basis and risk. No post is made by this panel.') end
     elseif view=='browse' then
       self.detail:SetText('Search cached market history by name. '..tostring(#source)..' cached results shown (maximum 300).'..
         '\nThe 7/30-day medians are scan medians, not verified sales. SHARED* prices are advisory only.\nSelect a local item, then SHOPPING to set a target. Cached prices are not live quotes.')

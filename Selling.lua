@@ -1,37 +1,51 @@
 local _,M=...
 M.sellingRows={}; M.ownedRows={}
 function M:RefreshInventory()
-  self.sellingRows={}; if not C_Container or not C_Container.GetContainerItemInfo then return end
+  self.sellingRows={}
+  if not C_Container or type(C_Container.GetContainerItemInfo)~='function'
+    or type(C_Container.GetContainerNumSlots)~='function' then return end
   local bag,slot=0,1; local rows={}
   self:AddJob('bags',function(start)
     for j=1,25 do
       if bag>4 then return true end
-      local n=C_Container.GetContainerNumSlots(bag) or 0
-      if slot>n then bag=bag+1; slot=1
+      local ok,count=pcall(C_Container.GetContainerNumSlots,bag)
+      if not ok or not self:Finite(count,0,200) then
+        -- Never present a partial inventory as a complete pricing result.
+        rows={};self:Log('SELL','Bag slot query unavailable; pricing cancelled');return true
+      end
+      if slot>count then bag=bag+1;slot=1
       else
-        local info=C_Container.GetContainerItemInfo(bag,slot); slot=slot+1
-        if type(info)=='table' and info.itemID and not info.isBound then
+        local currentBag,currentSlot=bag,slot;slot=slot+1
+        local success,info=pcall(C_Container.GetContainerItemInfo,currentBag,currentSlot)
+        if success and type(info)=='table' and info.itemID and not info.isBound then
           local suffix=self:Suffix(info.hyperlink)
-          if suffix then
-            local key=self:Key(info.itemID,suffix); local m=self.db.market[key]
-            if m and type(m.latest)=='table' and self:Finite(m.fairValue,0,1e14) then
-              local minimum=math.max(m.latest.meaningfulFloor or m.latest.q10 or 0,m.fairValue*0.85)
-              -- Hold the price when a lone low auction is bait. Native UI handles deposit and posting.
-              local price=math.floor(math.min(m.fairValue,minimum))
-              local own
-              for _,r in ipairs(self.ownedRows) do if r.marketKey==key then own=not own and r.unit or math.min(own,r.unit) end end
-              if own then price=math.max(price,own) end
-              rows[#rows+1]={marketKey=key,name=m.name,itemID=m.itemID,quantity=info.stackCount or 1,price=price,
-                fair=m.fairValue,floor=m.latest.floor,own=own,confidence=m.confidence,
-                reason=own and 'Hold own price; avoid self-undercutting' or 'Meaningful floor / fair value; ignores isolated bait',
-                stale=not self:MarketFresh(m)}
-            end
+          local key=suffix and self:Key(info.itemID,suffix) or nil
+          local qty=tonumber(info.stackCount) or 1
+          if self:Finite(qty,1,1e6) and qty%1==0 then
+            local plan=key and self:BuildSellPlan(key,qty) or
+              {marketKey=nil,quantity=qty,status='VARIANT UNKNOWN',
+               reason='Item hyperlink or variant unavailable; cannot select a safe price'}
+            local m=key and self.db.market[key]
+            plan.itemID=info.itemID
+            plan.name=m and m.name or info.itemName or (GetItemInfo and GetItemInfo(info.itemID)) or
+              ('Item '..tostring(info.itemID))
+            plan.quantity=qty;plan.bag=currentBag;plan.slot=currentSlot
+            plan.itemLink=info.hyperlink
+            plan.confidence=plan.confidence or 'Unknown'
+            plan.stale=not plan.price
+            rows[#rows+1]=plan
           end
         end
       end
       if debugprofilestop()-start>=4 then return false end
     end
-  end,function() self.sellingRows=rows; self:RefreshUI() end)
+  end,function()
+    table.sort(rows,function(a,b)
+      if (a.price~=nil)~=(b.price~=nil) then return a.price~=nil end
+      return tostring(a.name)<tostring(b.name)
+    end)
+    self.sellingRows=rows;self:RefreshUI()
+  end)
 end
 function M:RequestOwnedAuctionsDiagnostic()
   self:QueueRequest({id='owned',kind='owned',priority=30,done=function() M:CaptureOwnedAuctions() end,

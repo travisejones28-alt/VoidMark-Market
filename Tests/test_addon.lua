@@ -545,4 +545,60 @@ check('Manual cross-account transfer keeps history, orders and prices isolated',
   M.db.sharedPrices=original
 end)
 
+check('Sell strategy and minimums are validated and persistent',function()
+ local m=mk();local prev=M.db.settings.sellStrategy;local old=M.db.sellFloors
+ M.db.sellFloors={}
+ assert(not M:SetSellStrategy('unsafe'))
+ assert(M:SetSellStrategy('median'))
+ assert(M.db.settings.sellStrategy=='median')
+ assert(M:SetSellFloor(m.marketKey,5500))
+ assert(M.db.sellFloors[m.marketKey]==5500)
+ assert(not M:SetSellFloor(m.marketKey,-1))
+ assert(M:SetSellFloor(m.marketKey,nil) and not M.db.sellFloors[m.marketKey])
+ M.db.sellFloors=old;M.db.settings.sellStrategy=prev
+end)
+check('Sell plan never undercuts fully known basis including modeled fees',function()
+ local m=mk();local key=M:InventoryKey(m.marketKey)
+ local previous=M.db.inventory[key];local old=M.db.settings.sellStrategy
+ M.db.inventory[key]={character=M.characterID,marketKey=m.marketKey,quantity=10,cost=50000}
+ M.db.settings.sellStrategy='quick'
+ local p=M:BuildSellPlan(m.marketKey,4)
+ assert(p.basisKnown and p.price>=p.minimumBreakEven and p.profit>=0)
+ assert(p.estimatedCut and p.depositAllowance and p.depositEstimated)
+ M.db.inventory[key]=previous;M.db.settings.sellStrategy=old
+end)
+check('Partially priced acquired stacks do not manufacture profit',function()
+ local m=mk();local key=M:InventoryKey(m.marketKey);local old=M.db.inventory[key]
+ M.db.inventory[key]={character=M.characterID,marketKey=m.marketKey,quantity=2,cost=5000}
+ local p=M:BuildSellPlan(m.marketKey,7)
+ assert(p.price and not p.basisKnown and p.profit==nil)
+ assert(p.status=='REVIEW' or p.status=='HOLD')
+ M.db.inventory[key]=old
+end)
+check('Stale or unavailable sell prices remain unquoted',function()
+ local m=mk();local at=m.lastSeen;m.lastSeen=1
+ local p=M:BuildSellPlan(m.marketKey,1)
+ assert(p.status=='STALE' and p.price==nil)
+ m.lastSeen=at
+ local missing=M:BuildSellPlan(99999999,2)
+ assert(missing.status=='NO DATA' and missing.price==nil)
+end)
+check('Sell inventory includes unpriced and priced items without unintended posting',function()
+ local old=C_Container;local m=mk();local callsBefore=#calls
+ C_Container={
+   GetContainerNumSlots=function(bag) return bag==0 and 2 or 0 end,
+   GetContainerItemInfo=function(bag,slot)
+     if bag~=0 then return nil end
+     return slot==1 and {itemID=5001,hyperlink='|Hitem:5001:0:0:0:0:0:0:0|h[Gloves]|h',stackCount=1}
+       or {itemID=9999,hyperlink='|Hitem:9999:0:0:0:0:0:0:0|h[Unknown]|h',stackCount=2}
+   end
+ }
+ M:RefreshInventory();jobs()
+ assert(#M.sellingRows==2)
+ local noPrice=0
+ for _,r in ipairs(M.sellingRows) do if r.itemID==9999 then assert(r.status=='NO DATA' and r.price==nil);noPrice=noPrice+1 end end
+ assert(noPrice==1 and #calls==callsBefore)
+ C_Container=old
+end)
+
 print('ALL '..total..' TESTS PASSED')
