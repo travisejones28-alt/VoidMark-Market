@@ -219,7 +219,7 @@ check('Oversized price distribution retains history and blocks trading',function
 end)
 check('UI builds and every terminal tab renders',function()
  M:InitializeUI()
- for _,v in ipairs({'market','opportunities','execution','selling','my auctions','ledger','settings','diagnostics'}) do M:SetView(v);jobs();M:RenderUI() end
+ for _,v in ipairs({'market','browse','opportunities','shopping','selling','investments','banker','execution','my auctions','ledger','settings','diagnostics'}) do M:SetView(v);jobs();M:RenderUI() end
  M:ShowReport();assert(M.reportEdit:GetText():find('VOIDMARK MARKET',1,true))
 end)
 

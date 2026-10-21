@@ -73,7 +73,7 @@ function M:RebuildIndexes()
       end
       if debugprofilestop()-start>=4 then return false end
     end
-  end,function() self:RebuildOpportunities(); self:RefreshUI() end)
+  end,function() self:RebuildOpportunities(); if self.view=='browse' then self:BuildBrowseRows(self.db.settings.filter) end; self:RefreshUI() end)
 end
 function M:GetMarket(itemID)
   local keys=self.itemIndex[tonumber(itemID)] or {}; local best

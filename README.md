@@ -235,3 +235,24 @@ without another server request, but it still does not refresh existing history o
 increase confidence. We do not yet know how many of the live rejected rows were
 loading late versus legitimate bid-only/otherwise unusable listings; the next
 report now distinguishes those cases.
+
+## Workstation overhaul — 1.1.0 beta (first increment)
+
+New primary navigation: Overview, Browse, Sniper, Shopping, Sell, Investments,
+Banker, Ledger, Settings. BUY REVIEW, MY AUCTIONS and DIAG remain accessible
+from the upper toolbar. The market browser is a capped, incremental **cached**
+search; it does not query live AH prices. Shopping stores up to 200 price targets
+per realm/faction. Watch targets never trigger purchases. Banker highlights new
+**passing** opportunities since the previous *completed fresh* scan, not cached
+reanalysis. Portfolio net liquidation and unrealized results are **estimates**
+only for positions whose historical valuation is fresh, whereas ledger sales are
+tracked separately as confirmed/reviewed accounting. Liquid reserve is
+configurable in Settings (gold), defaults to zero for backward compatibility,
+and is enforced alongside pending reservations during live validation.
+
+Important limitations: no automated repeat scans, instant cross-account sync,
+posting/cancellation, proof of liquidity, guaranteed resale, or live client testing.
+Unknown historical acquisition costs cannot be treated as realized profit.
+Source references and API compatibility will be revisited after reference ZIPs
+are supplied. Update the repo-installed addon from the packaged ZIP before use;
+keep Safe Mode on for the first in-game checks.

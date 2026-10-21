@@ -102,3 +102,29 @@ function M:GetBankerSummary()
     portfolio=portfolio,portfolioRows=rows,scanner=self.db.banker,
     latestScan=self.db.latestScan}
 end
+
+-- Nonblocking search across the existing indexed snapshot; capped to avoid 20k-row UI allocations.
+function M:BuildBrowseRows(query)
+  self:CancelJob('browse')
+  local token=(self.browseToken or 0)+1;self.browseToken=token
+  local keys=self.marketIndex or {};local i=1;local out={}
+  local needle=tostring(query or ''):lower()
+  self.browseRows={}
+  self:AddJob('browse',function(start)
+    for j=1,80 do
+      if i>#keys or #out>=300 then return true end
+      local m=self.db.market[keys[i]];i=i+1
+      if m and type(m.name)=='string' and m.name:lower():find(needle,1,true) then
+        local fresh=m.latest and self:MarketFresh(m) and not m.analysisIncomplete
+        out[#out+1]={marketKey=m.marketKey,itemID=m.itemID,name=m.name,floor=m.latest and m.latest.floor or 0,
+          fair=m.fairValue or 0,quantity=m.latest and m.latest.quantity or 0,
+          confidence=m.confidence or 'Unknown',status=fresh and 'CACHED' or 'STALE'}
+      end
+      if debugprofilestop()-start>=4 then return false end
+    end
+  end,function()
+    if token~=self.browseToken then return end
+    table.sort(out,function(x,y)return tostring(x.name)<tostring(y.name) end)
+    self.browseRows=out;self:RefreshUI()
+  end)
+end
