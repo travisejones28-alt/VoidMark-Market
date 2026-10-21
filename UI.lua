@@ -27,7 +27,8 @@ function M:InitializeUI()
   f:SetBackdropColor(0.025,0.022,0.04,0.97); f:SetBackdropBorderColor(0.45,0.3,0.7,1)
   if UIParent.GetWidth then f:SetScale(math.min(1,(UIParent:GetWidth()-30)/1040,(UIParent:GetHeight()-30)/680)) end
   label(f,'VOIDMARK MARKET',18,-16,300,'GameFontNormalLarge')
-  self.modeLabel=label(f,'SAFE MODE ON',365,-19,580)
+  self.modeLabel=label(f,'SAFE MODE ON',365,-19,455)
+  button(f,'TRANSFER',860,-12,125,function() self:ShowTransferWindow() end)
   button(f,'X',995,-12,26,function() f:Hide() end)
   for i,v in ipairs(tabs) do local tab=v[2]; button(f,v[1],18+(i-1)*111,-48,108,function() self:SetView(tab) end) end
   self.status=label(f,'',18,-84,995)
@@ -41,7 +42,7 @@ function M:InitializeUI()
     self:RefreshUI()
   end)
   self.sortButton=button(self.toolbar,'SORT: SCORE',405,0,116,function()
-    local sorts={'score','profit','roi','name'}; local current=self.db.settings.sort
+    local sorts={'score','profit','roi','confidence','liquidity','discount','ask','name'}; local current=self.db.settings.sort
     for i,v in ipairs(sorts) do if v==current then self.db.settings.sort=sorts[i%#sorts+1]; break end end
     self:RefreshUI()
   end)
@@ -258,15 +259,10 @@ function M:RenderUI()
   else
     local source,headers={},{'Name','Ask','Fair','Net','ROI','Score','Confidence','Liquidity'}
     if view=='opportunities' then
-      for _,o in ipairs(self.db.opportunities) do if tostring(o.name):lower():find(s.filter:lower(),1,true) then source[#source+1]=o end end
-      table.sort(source,function(a,b)
-        if s.sort=='name' then return tostring(a.name)<tostring(b.name) end
-        local av=s.sort=='profit' and a.economics.net or s.sort=='roi' and a.economics.roi or a.score
-        local bv=s.sort=='profit' and b.economics.net or s.sort=='roi' and b.economics.roi or b.score
-        return av>bv
-      end)
+      source=self:GetSniperRows(s.filter,s.sort)
+      headers={'Item / status','Ask','Fair','Net','ROI','Score','Confidence','Risk'}
     elseif view=='browse' then
-      source=self.browseRows or {}; headers={'Cached item','Item ID','Ask/unit','Fair','Supply','','Confidence','State'}
+      source=self.browseRows or {}; headers={'Cached item','Item ID','Ask/unit','Fair','Median 7d','Median 30d','Confidence','State'}
     elseif view=='shopping' then
       source=self:GetWatchRows();headers={'Watched item','Item ID','Ask/unit','Fair','Target','','Confidence','State'}
       self.watchFrame:Show()
@@ -291,8 +287,11 @@ function M:RenderUI()
       local o=source[(self.page-1)*12+i]; row.data=o; row:SetShown(o~=nil)
       if o then
         local cells
-        if view=='opportunities' then cells={(o.kind=='vendor' and '|cff72e7aa[VENDOR]|r ' or '')..o.name,self:Money(o.floor),self:Money(o.fairValue),self:Money(o.economics.net),self:PercentText(o.economics.roi),o.score,o.confidence,o.activity}
-        elseif view=='browse' then cells={o.name,o.itemID,self:Money(o.floor),self:Money(o.fair),o.quantity,'',o.confidence,o.status}
+        if view=='opportunities' then cells={(o.pass and '' or '|cffff9a9a[BLOCKED]|r ')..(o.kind=='vendor' and '|cff72e7aa[VENDOR]|r ' or '')..o.name,
+          self:Money(o.floor),self:Money(o.fairValue),self:Money(o.economics.net),self:PercentText(o.economics.roi),
+          o.score,o.confidence,o.risk}
+        elseif view=='browse' then cells={o.name,o.itemID,o.floor>0 and self:Money(o.floor) or 'No local ask',
+          self:Money(o.fair),o.median7 and self:Money(o.median7) or '--',o.median30 and self:Money(o.median30) or '--',o.confidence,o.status}
         elseif view=='shopping' then cells={o.name,o.itemID,self:Money(o.floor),self:Money(o.fair),o.target and self:Money(o.target) or 'Any','',o.confidence,o.status}
         elseif view=='investments' then cells={o.name,o.quantity,self:Money(o.cost),o.estimatedNet and self:Money(o.estimatedNet) or 'Unknown',
           o.unrealized and self:Money(o.unrealized) or 'Unknown',o.roi and self:PercentText(o.roi) or 'N/A','',o.status}
@@ -313,7 +312,7 @@ function M:RenderUI()
         '\nOnly purchases with tracked acquisition basis are included. Estimates are not confirmed sales.')
     elseif view=='browse' then
       self.detail:SetText('Search cached market history by name. '..tostring(#source)..' cached results shown (maximum 300).'..
-        '\nSelect an item then open SHOPPING and SAVE TARGET to watch it. Cached prices are not live quotes.')
+        '\nThe 7/30-day medians are scan medians, not verified sales. SHARED* prices are advisory only.\nSelect a local item, then SHOPPING to set a target. Cached prices are not live quotes.')
     elseif view=='ledger' then
       local t=self:LedgerTotals()
       self.detail:SetText('Cost-matched realized '..self:Money(t.realized)..' | ROI '..self:PercentText(t.roi)..' | fees '..self:Money(t.fees)..' | uncosted revenue '..self:Money(t.uncostedRevenue)..'\n'..(o and (tostring(o.evidence)..'\n'..tostring(o.name or '')..' | market '..tostring(o.marketKey)..' | deposit refund '..self:Money(o.depositRefund)) or 'Select an invoice or unresolved order.')..'\nMailbox invoices are observed facts, but have no unique ID. Review identity before BOOK REVIEWED SALE.\nPurchase cost uses moving average. Unknown cost is excluded from realized profit; manually reported outcomes are labeled.')
@@ -321,4 +320,37 @@ function M:RenderUI()
     return
   end
   self.contentScroll:Show(); self.content:SetText(text or ''); self.content:SetHeight(math.max(450,self.content:GetStringHeight()+20))
+end
+
+function M:ShowTransferWindow()
+  if not self.transferWindow then
+    local f=CreateFrame('Frame',nil,UIParent,'BackdropTemplate');self.transferWindow=f
+    f:SetSize(850,580);f:SetPoint('CENTER');f:SetFrameStrata('DIALOG');f:SetMovable(true);f:EnableMouse(true)
+    f:RegisterForDrag('LeftButton')
+    f:SetScript('OnDragStart',function(w)w:StartMoving()end)
+    f:SetScript('OnDragStop',function(w)w:StopMovingOrSizing()end)
+    f:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Tooltips\\UI-Tooltip-Border',edgeSize=14})
+    f:SetBackdropColor(0.035,0.026,0.065,0.98);f:SetBackdropBorderColor(0.48,0.25,0.75,1)
+    label(f,'MANUAL TWO-ACCOUNT MARKET TRANSFER',18,-14,600,'GameFontNormalLarge')
+    button(f,'CLOSE',746,-11,87,function()f:Hide()end)
+    label(f,'EXPORT copies up to 100 fresh local observations. Paste via Ctrl+A / Ctrl+C on one account, Ctrl+V on the other.',18,-48,810)
+    label(f,'Matching realm and faction required. Imports are ADVISORY and never authorize buying or create historical observations.',18,-70,810)
+    local scroll=CreateFrame('ScrollFrame',nil,f,'UIPanelScrollFrameTemplate')
+    scroll:SetPoint('TOPLEFT',18,-108);scroll:SetSize(794,395)
+    local e=CreateFrame('EditBox',nil,scroll);e:SetMultiLine(true);e:SetFontObject('ChatFontNormal')
+    e:SetWidth(768);e:SetAutoFocus(false);e:SetScript('OnEscapePressed',function()f:Hide()end)
+    scroll:SetScrollChild(e);self.transferEdit=e
+    self.transferStatus=label(f,'No data transferred',18,-521,810)
+    button(f,'GENERATE EXPORT',18,-537,180,function()
+      local raw,err=self:ExportMarketTransfer()
+      if raw then e:SetText(raw);e:SetFocus();e:HighlightText();self.transferStatus:SetText('Export ready; Ctrl+C to copy')
+      else self.transferStatus:SetText(err or 'Export failed') end
+    end)
+    button(f,'IMPORT PASTED TEXT',211,-537,195,function()
+      local ok,msg=self:ImportMarketTransfer(e:GetText())
+      self.transferStatus:SetText((ok and '|cff72e7aa' or '|cffff7777')..tostring(msg)..'|r')
+    end)
+    button(f,'SELECT ALL',419,-537,125,function()e:SetFocus();e:HighlightText()end)
+  end
+  self.transferWindow:Show()
 end

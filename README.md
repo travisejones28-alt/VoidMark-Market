@@ -256,3 +256,10 @@ Unknown historical acquisition costs cannot be treated as realized profit.
 Source references and API compatibility will be revisited after reference ZIPs
 are supplied. Update the repo-installed addon from the packaged ZIP before use;
 keep Safe Mode on for the first in-game checks.
+
+
+### Reference-informed 1.1 beta increment
+- SNIPER supports profit, ROI, confidence, liquidity, discount, ask and name sorting, and visibly distinguishes blocked candidates.
+- BROWSE shows rolling 7-day / 30-day scan medians, with independent scan snapshots rather than listing counts as samples.
+- TRANSFER (top-right) provides opt-in manual price summaries for two accounts on the same realm and faction. It serializes only 100 validated recent advisory market observations. Import never creates trades, trusted historical scans, or executable opportunities. Imported entries show as SHARED* in BROWSE. No addon channel broadcasts or unattended trading.
+- This is a first integration of uploaded reference workflows, not a claim that all referenced features are implemented.

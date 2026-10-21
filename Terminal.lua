@@ -116,15 +116,74 @@ function M:BuildBrowseRows(query)
       local m=self.db.market[keys[i]];i=i+1
       if m and type(m.name)=='string' and m.name:lower():find(needle,1,true) then
         local fresh=m.latest and self:MarketFresh(m) and not m.analysisIncomplete
+        local week,month=self:MarketWindow(m,7),self:MarketWindow(m,30)
         out[#out+1]={marketKey=m.marketKey,itemID=m.itemID,name=m.name,floor=m.latest and m.latest.floor or 0,
           fair=m.fairValue or 0,quantity=m.latest and m.latest.quantity or 0,
+          median7=week and week.median,median30=month and month.median,
           confidence=m.confidence or 'Unknown',status=fresh and 'CACHED' or 'STALE'}
       end
       if debugprofilestop()-start>=4 then return false end
     end
   end,function()
     if token~=self.browseToken then return end
+    -- Imported observations are labeled separately and never become local market history.
+    for key,s in pairs(self.db.sharedPrices or {}) do
+      if #out>=300 then break end
+      if type(s)=='table' and not self.db.market[key] and
+        (needle=='' or tostring(s.id):find(needle,1,true)) then
+        local fresh=self:Finite(s.at,time()-(self.db.settings.maxDataAge or 7200),time()+300)
+        out[#out+1]={marketKey=key,itemID=s.id,name='Item '..tostring(s.id)..' (manual share)',
+          floor=0,fair=s.fair,quantity=s.quantity or 0,confidence=tostring(s.confidence)..' (shared)',
+          status=fresh and 'SHARED*' or 'SHARED OLD'}
+      end
+    end
     table.sort(out,function(x,y)return tostring(x.name)<tostring(y.name) end)
     self.browseRows=out;self:RefreshUI()
   end)
+end
+
+-- Each full scan is one sample; a 7/30-day median treats scans equally, not
+-- thousands of correlated listings as thousands of independent observations.
+function M:MarketWindow(m,days)
+  if type(m)~='table' or type(m.history)~='table' then return nil end
+  local values,now={},time()
+  for _,h in ipairs(m.history) do
+    if type(h)=='table' and self:Finite(h.at,now-days*86400,now+300)
+      and self:Finite(h.median,1,1e12) then
+      values[#values+1]=h.median
+    end
+  end
+  if #values==0 then return nil end
+  table.sort(values)
+  local n=#values
+  local med=n%2==1 and values[(n+1)/2] or (values[n/2]+values[n/2+1])/2
+  return {median=math.floor(med+0.5),samples=n,low=values[1],high=values[n]}
+end
+function M:GetSniperRows(filter,sort)
+  local out={}
+  local q=tostring(filter or ''):lower()
+  for _,o in ipairs(self.db.opportunities or {}) do
+    if type(o)=='table' and type(o.name)=='string' and o.name:lower():find(q,1,true) then
+      out[#out+1]=o
+    end
+  end
+  local function metric(o)
+    if sort=='profit' then return o.economics and o.economics.net or 0 end
+    if sort=='roi' then return o.economics and o.economics.roi or 0 end
+    if sort=='confidence' then return o.confidenceScore or 0 end
+    if sort=='liquidity' then return o.activityScore or 0 end
+    if sort=='discount' then return o.economics and o.economics.discount or 0 end
+    if sort=='ask' then return o.floor or 0 end
+    return o.score or 0
+  end
+  table.sort(out,function(a,b)
+    if sort=='name' then
+      if a.name~=b.name then return a.name<b.name end
+    else
+      local av,bv=metric(a),metric(b)
+      if av~=bv then return av>bv end
+    end
+    return tostring(a.marketKey)<tostring(b.marketKey)
+  end)
+  return out
 end

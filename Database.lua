@@ -29,7 +29,7 @@ function M:InitializeDatabase()
   local db=root.economies[self.economyID]
   if type(db)~='table' then db={}; root.economies[self.economyID]=db end
   self.db=db; db.settings=root.settings
-  for _,k in ipairs({'market','scans','queries','ownedQueries','opportunities','ledger','inventory','mailSeen','pending','totals','watchlist','banker'}) do
+  for _,k in ipairs({'market','scans','queries','ownedQueries','opportunities','ledger','inventory','mailSeen','pending','totals','watchlist','banker','sharedPrices'}) do
     if type(db[k])~='table' then db[k]={} end
   end
   db.scanSequence=tonumber(db.scanSequence) or 0; db.ledgerSequence=tonumber(db.ledgerSequence) or 0
