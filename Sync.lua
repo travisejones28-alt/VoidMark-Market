@@ -20,7 +20,7 @@ function M:ExportMarketTransfer()
     if #rows>=100 or type(m)~='table' or not m.marketKey or seen[tostring(m.marketKey)] then return end
     local id,suffix,level,pet=m.itemID,m.itemSuffix or 0,m.itemLevel or 0,m.battlePetSpeciesID or 0
     local fair,at,conf,qty=m.fairValue,m.lastSeen,m.confidenceScore,m.latest and m.latest.quantity
-    if not validWhole(self,id,1,1e9) or not validWhole(self,suffix,-1e9,1e9)
+    if self:Key(id,suffix,level,pet)~=m.marketKey or not validWhole(self,id,1,1e9) or not validWhole(self,suffix,-1e9,1e9)
       or not validWhole(self,level,0,1e6) or not validWhole(self,pet,0,1e9)
       or not validWhole(self,fair,1,1e12) or not validWhole(self,at,1,time()+300)
       or not validWhole(self,conf,0,100) or not validWhole(self,qty,0,1e9)

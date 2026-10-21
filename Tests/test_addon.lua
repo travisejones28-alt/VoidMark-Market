@@ -504,8 +504,6 @@ check('Synchronous row-count change stops parsing without overwriting failure or
  C_AuctionHouse.GetReplicateItemInfo=info
 end)
 assert(loadfile(addon..'Tests/hardening.lua'))(M,check,mk,jobs)
-print('ALL '..total..' TESTS PASSED')
-
 check('Independent 7 and 30 day median windows never manufacture sale evidence',function()
   local m=mk()
   local weekly=M:MarketWindow(m,7)
@@ -532,3 +530,5 @@ check('Manual cross-account transfer keeps history, orders and prices isolated',
   assert(not M:ImportMarketTransfer('VMMX1\tTestRealm\tHorde\t999999999999\t0'))
   M.db.sharedPrices=original
 end)
+
+print('ALL '..total..' TESTS PASSED')

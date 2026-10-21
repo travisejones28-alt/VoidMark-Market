@@ -263,3 +263,5 @@ keep Safe Mode on for the first in-game checks.
 - BROWSE shows rolling 7-day / 30-day scan medians, with independent scan snapshots rather than listing counts as samples.
 - TRANSFER (top-right) provides opt-in manual price summaries for two accounts on the same realm and faction. It serializes only 100 validated recent advisory market observations. Import never creates trades, trusted historical scans, or executable opportunities. Imported entries show as SHARED* in BROWSE. No addon channel broadcasts or unattended trading.
 - This is a first integration of uploaded reference workflows, not a claim that all referenced features are implemented.
+
+Version 1.1.1-beta: tested advisory manual realm/faction transfer, 7/30-day rolling scan medians and expanded sniper metric sorting. Explicitly excludes derived sales, automatic purchasing and foreign or mismatched variants from trusted market history.
