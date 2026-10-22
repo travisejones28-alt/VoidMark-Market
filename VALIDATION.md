@@ -1,3 +1,7 @@
+# 1.3.1-beta stress-test fixes
+
+97 local regression tests pass, including the supplied extreme Rough Arrow pricing scenario. See [RELEASE_1.3.1.md](RELEASE_1.3.1.md). No new live testing while servers are offline. Historical validation follows.
+
 # 1.3.0-beta validation
 
 91 local LuaJIT regression tests passed, including the 90,000-row scanner fixture. Package membership and bytes verified. See [RELEASE_1.3.md](RELEASE_1.3.md) for runtime limits and required live checks. Historical validation follows.

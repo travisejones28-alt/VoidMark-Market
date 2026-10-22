@@ -87,8 +87,7 @@ function M:GetPortfolioRows()
       local qty,cost=tonumber(lot.quantity) or 0,tonumber(lot.cost) or 0
       if self:Finite(qty,0,1e9) and self:Finite(cost,0,1e14) and qty>0 then
         local m=self.db.market[lot.marketKey]
-        local fresh=m and not m.analysisIncomplete and not m.cacheUntrusted and
-          self:MarketFresh(m) and self:Finite(m.fairValue,1,1e12)
+        local fresh=self:CanEstimateResale(m)
         local gross=fresh and math.floor(qty*m.fairValue) or nil
         local net=gross and math.max(0,gross-math.ceil(gross*cut)-math.ceil(qty*allowance)) or nil
         local unrealized=net and net-cost or nil
@@ -139,7 +138,8 @@ function M:BuildBrowseRows(query)
         out[#out+1]={marketKey=m.marketKey,itemID=m.itemID,name=m.name,floor=m.latest and m.latest.floor or 0,
           fair=m.fairValue or 0,quantity=m.latest and m.latest.quantity or 0,
           median7=week and week.median,median30=month and month.median,
-          confidence=m.confidence or 'Unknown',status=fresh and 'CACHED' or 'STALE'}
+          confidence=m.confidence or 'Unknown',modelReady=self:CanEstimateResale(m),
+          status=not fresh and 'STALE' or self:CanEstimateResale(m) and 'CACHED' or 'UNPROVEN'}
       end
       if debugprofilestop()-start>=4 then return false end
     end

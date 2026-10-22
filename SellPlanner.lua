@@ -32,7 +32,6 @@ function M:BuildSellPlan(key,quantity)
     basisKnown=false,depositEstimated=true}
   if not m or type(m.latest)~='table' then return p end
   p.itemID=m.itemID;p.name=m.name
-  p.fair=m.fairValue
   p.floor=m.latest.floor
   p.confidence=m.confidence or 'Unknown'
   if not self:Finite(quantity,1,1e6) or quantity%1~=0 then
@@ -43,6 +42,12 @@ function M:BuildSellPlan(key,quantity)
     p.status='STALE';p.reason='Untrusted, incomplete or outdated market valuation. Do not auto-price.'
     return p
   end
+  local supported,reason=self:CanEstimateResale(m)
+  if not supported then
+    p.status='UNPROVEN';p.reason=reason..'; asking prices remain visible in Browse. Verify live competition in the native AH.'
+    return p
+  end
+  p.fair=m.fairValue
   local fair=m.fairValue
   local depth=m.latest.meaningfulFloor or m.latest.q10 or fair
   if not self:Finite(depth,1,1e12) then depth=fair end
@@ -96,6 +101,11 @@ function M:BuildSellPlan(key,quantity)
   p.gross=price*quantity
   p.estimatedCut=math.ceil(p.gross*cut)
   p.estimatedNet=p.gross-p.estimatedCut-p.depositAllowance
+  if p.estimatedNet<=0 then
+    p.status='NO RETURN';p.reason='Estimated AH fees and deposit allowance consume the proceeds. Check the actual native deposit before posting.'
+    p.price=nil;p.estimatedNet=nil;p.gross=nil;p.estimatedCut=nil;p.depositAllowance=nil
+    return p
+  end
   p.profit=p.basisKnown and p.estimatedNet-basis*quantity or nil
   p.roi=p.profit and basis*quantity>0 and p.profit/(basis*quantity) or nil
   local risks={}
@@ -133,8 +143,8 @@ function M:AssessOwnedRepost(row,competitor,cancelCost)
     return out
   end
   local market=self.db.market[row.marketKey]
-  if not market or market.analysisIncomplete or not self:MarketFresh(market) then
-    out.reason='Market model missing/stale; cannot justify cancellation'
+  if not self:CanEstimateResale(market) then
+    out.reason='Market model missing, stale or unproven; cannot justify cancellation'
     return out
   end
   local anchor=market.latest and (market.latest.meaningfulFloor or market.latest.q10)

@@ -757,4 +757,70 @@ check('All expanded screens render after interactions without creating new row f
   local count=#frames;M:RenderUI();assert(#frames==count)
 end)
 
+check('Stress-test Rough Arrow price cannot become a sell quote in any strategy',function()
+  local id=2512;local old=M.db.market[id];local oldStrategy=M.db.settings.sellStrategy
+  local m={marketKey=id,itemID=id,name='Rough Arrow',lastSeen=time(),observations=1,
+    confidenceScore=30,confidence='New',volatility=0,fairValue=99999990100,
+    latest={floor=99999990100,meaningfulFloor=99999990100,quantity=224},history={}}
+  M.db.market[id]=m;local key=M:InventoryKey(id);local lot=M.db.inventory[key]
+  M.db.inventory[key]={marketKey=id,character=M.characterID,quantity=200,cost=100}
+  for _,strategy in ipairs(M:GetSellStrategies()) do
+    M.db.settings.sellStrategy=strategy
+    local plan=M:BuildSellPlan(id,200)
+    assert(plan.status=='UNPROVEN' and plan.price==nil and plan.estimatedNet==nil and plan.profit==nil and plan.fair==nil)
+  end
+  local rows=M:GetPortfolioRows()
+  for _,row in ipairs(rows) do if row.marketKey==id then assert(row.status=='UNPRICED' and row.estimatedNet==nil and row.unrealized==nil) end end
+  assert(m.fairValue==99999990100 and M.db.inventory[key].cost==100)
+  M.db.market[id]=old;M.db.inventory[key]=lot;M.db.settings.sellStrategy=oldStrategy
+end)
+check('Resale evidence gates require history, confidence and acceptable volatility',function()
+  local m=mk();assert(M:CanEstimateResale(m))
+  local obs,conf,vol=m.observations,m.confidenceScore,m.volatility
+  m.observations=2;assert(not M:CanEstimateResale(m))
+  m.observations=obs;m.confidenceScore=30;assert(not M:CanEstimateResale(m))
+  m.confidenceScore=conf;m.volatility=3;assert(not M:CanEstimateResale(m))
+  local plan=M:BuildSellPlan(m.marketKey,1);assert(plan.price==nil)
+  m.volatility=vol;assert(M:CanEstimateResale(m))
+  m.cacheUntrusted=true;assert(not M:CanEstimateResale(m));m.cacheUntrusted=nil
+end)
+check('Deposit allowance cannot produce a recommended nonpositive-return sale',function()
+  local m=mk();local deposit=M.db.settings.depositReserve
+  local lots=M.db.inventory;M.db.inventory={};M.db.settings.depositReserve=10000000
+  local p=M:BuildSellPlan(m.marketKey,2)
+  assert(p.status=='NO RETURN' and not p.price and not p.estimatedNet and not p.profit)
+  M.db.settings.depositReserve=deposit;M.db.inventory=lots
+end)
+check('Icon lookup supports modern, legacy metadata and bag-provided icons',function()
+  local old=C_Item;local oldIcon=GetItemIcon
+  C_Item={GetItemIconByID=function()return 12345 end};GetItemIcon=nil
+  assert(M:RowItemIcon({},2512)==12345)
+  assert(M:RowItemIcon({icon=777},2512)==777)
+  C_Item=nil;assert(M:RowItemIcon({},2512)==999)
+  C_Item={GetItemIconByID=function()error('not ready')end}
+  assert(M:RowItemIcon({},2512)==999)
+  C_Item=old;GetItemIcon=oldIcon
+end)
+check('Clipboard import accepts CRLF and trailing newline but rejects internal blank records',function()
+  local m=mk();M:RebuildIndexes();jobs()
+  local raw=assert(M:ExportMarketTransfer())
+  local history=#m.history;local ledger=#M.db.ledger
+  assert(M:ImportMarketTransfer(raw:gsub('\n','\r\n')..'\r\n'))
+  assert(not M:ImportMarketTransfer(raw:gsub('\n','\n\n',1)))
+  assert(#m.history==history and #M.db.ledger==ledger)
+end)
+check('Unproven models are explicitly labeled in Browse and hide sniper projections',function()
+  local m=mk();m.observations=1;m.confidenceScore=30
+  M:RebuildIndexes();jobs();M:BuildBrowseRows('5001');jobs()
+  local found=false
+  for _,r in ipairs(M.browseRows) do if r.marketKey==m.marketKey then assert(r.status=='UNPROVEN' and not r.modelReady);found=true end end
+  assert(found)
+  local old=M.db.opportunities;local filter=M.db.settings.filter
+  M.db.opportunities={{marketKey=m.marketKey,itemID=m.itemID,name=m.name,kind='resale',pass=false,
+    floor=40,fairValue=99999999999,economics={net=99999999999,roi=999999},score=99,confidence='New',risk='Moderate'}}
+  M.db.settings.filter='';M:SetView('opportunities');M:RenderUI()
+  assert(M.rows[1].cols[3]:GetText()=='Unproven' and M.rows[1].cols[4]:GetText()=='--' and M.rows[1].cols[5]:GetText()=='--')
+  M.db.opportunities=old;M.db.settings.filter=filter
+end)
+
 print('ALL '..total..' TESTS PASSED')

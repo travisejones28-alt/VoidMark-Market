@@ -1,6 +1,6 @@
 local addonName, M = ...
 _G.VoidMarkMarket = M
-M.name, M.version = addonName or 'VoidMarkMarket', '1.3.0-beta'
+M.name, M.version = addonName or 'VoidMarkMarket', '1.3.1-beta'
 M.eventHandlers, M.runtimeLog, M.jobs = {}, {}, {}
 M.ahOpen, M.safeMode = false, true
 M.scanState = {running=false, phase='idle', status='No scan yet', progress=0}
@@ -11,6 +11,16 @@ end
 function M:MarketFresh(m)
  local at=type(m)=='table' and m.lastSeen
  return self:Finite(at,1,time()+300) and time()-at<=self.db.settings.maxDataAge
+end
+-- A fresh asking-price snapshot alone is not evidence of resale value.
+function M:CanEstimateResale(m)
+  if type(m)~='table' or m.analysisIncomplete or m.cacheUntrusted or not self:MarketFresh(m)
+    or not self:Finite(m.fairValue,1,1e12) then return false,'Missing, stale or untrusted market data' end
+  if not self:Finite(m.observations,3,1e9) then return false,'Insufficient history: at least three independent scans required' end
+  local minimum=math.max(42,self.db.settings.minConfidence or 42)
+  if not self:Finite(m.confidenceScore,minimum,100) then return false,'Insufficient model confidence for a resale estimate' end
+  if not self:Finite(m.volatility,0,self.db.settings.riskTolerance or 0.35) then return false,'Volatility exceeds the configured risk limit' end
+  return true
 end
 function M:Money(v)
   v=tonumber(v) or 0

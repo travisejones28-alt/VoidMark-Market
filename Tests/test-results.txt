@@ -90,4 +90,10 @@ PASS Window layout persists valid geometry and rejects malformed saved anchors
 PASS Stack plans honor item limits and never post or split inventory
 PASS Watch movement compares fresh independent scans and respects target crossings
 PASS All expanded screens render after interactions without creating new row frames
-ALL 91 TESTS PASSED
+PASS Stress-test Rough Arrow price cannot become a sell quote in any strategy
+PASS Resale evidence gates require history, confidence and acceptable volatility
+PASS Deposit allowance cannot produce a recommended nonpositive-return sale
+PASS Icon lookup supports modern, legacy metadata and bag-provided icons
+PASS Clipboard import accepts CRLF and trailing newline but rejects internal blank records
+PASS Unproven models are explicitly labeled in Browse and hide sniper projections
+ALL 97 TESTS PASSED

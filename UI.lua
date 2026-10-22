@@ -323,7 +323,7 @@ function M:RenderUI()
     if scan and scan.deferredRows then text=text..string.format('Item data: %d deferred | %d recovered | %d unresolved\n\n',scan.deferredRows,scan.recoveredRows or 0,scan.unresolvedRows or 0) end
     text=text..self:FinancialSummaryText()..'\n\n'..self:BuildFullScanReport()..'\n\n'
     text=text..'Cost-matched realized '..self:Money(totals.realized)..' | verified net sale revenue '..self:Money(totals.revenue)..'\n'..
-      'Portfolio liquidation is an ESTIMATE for fresh, modeled positions only. Missing price history has no assumed value.\n'..
+      'Portfolio liquidation uses fresh models with sufficient history/confidence. Unproven positions remain unpriced.\n'..
       'Scan results are advisory. Select SNIPER for live revalidation; SELL uses the native Auction House for posting.\n'..
       'Use BANKER to review scan changes and SHOPPING for saved price targets. /vmm report opens diagnostics.'
   elseif view=='banker' then
@@ -354,18 +354,18 @@ function M:RenderUI()
     local source,headers={},{'Name','Ask','Fair','Net','ROI','Score','Confidence','Liquidity'}
     if view=='opportunities' then
       source=self:GetSniperRows(s.filter,s.sort)
-      headers={'Item / status','Ask','Fair','Net','ROI','Score','Confidence','Risk'}
+      headers={'Item / status','Ask','Model est.','Net est.','ROI','Score','Confidence','Risk'}
     elseif view=='review' then
       source=self:GetPurchaseReviewRows();self.reviewRemove:Show()
       headers={'Saved candidate','Old ask','Latest ask','Fair','ROI','','Confidence','State'}
     elseif view=='browse' then
-      self.browseAction:Show();source=self.browseRows or {}; headers={'Cached item','Item ID','Ask/unit','Fair','Median 7d','Median 30d','Confidence','State'}
+      self.browseAction:Show();source=self.browseRows or {}; headers={'Cached item','Item ID','Ask/unit','Model est.','Scan med 7d','Scan med 30d','Confidence','State'}
     elseif view=='shopping' then
       source=self:GetWatchRows();headers={'Watched item','Item ID','Ask/unit','Fair','Target','','Confidence','State'}
       self.watchFrame:Show()
     elseif view=='investments' then
       source=self:GetPortfolioRows();headers={'Owned investment','Quantity','Cost basis','Net est.','Unrealized','ROI','Age','State'}
-    elseif view=='selling' then source=self.sellingRows; self.sellAction:Show();self.sellStrategyButton:SetText('MODE: '..(s.sellStrategy or 'competitive'):upper()); headers={'Inventory','Quantity','Suggest/unit','Fair','Basis/unit','Net est.','Confidence','State'}
+    elseif view=='selling' then source=self.sellingRows; self.sellAction:Show();self.sellStrategyButton:SetText('MODE: '..(s.sellStrategy or 'competitive'):upper()); headers={'Inventory','Quantity','Suggest/unit','Model est.','Basis/unit','Net est.','Confidence','State'}
     elseif view=='post review' then
       source=self:GetPostingReviewRows();self.postReviewRemove:Show();self.postReviewBack:Show()
       headers={'Posting intent','In bag','Old quote','Current quote','Fair','','','State'}
@@ -380,6 +380,14 @@ function M:RenderUI()
       end
     end
     local pages=math.max(1,math.ceil(#source/12)); self.page=math.min(self.page or 1,pages)
+    if view=='selling' and self.selectedRow then
+      local selected=self.selectedRow;self.selectedRow=nil
+      for _,current in ipairs(source) do
+        if current.bag==selected.bag and current.slot==selected.slot and current.marketKey==selected.marketKey then
+          self.selectedRow=current;break
+        end
+      end
+    end
     self.pageText:SetText(self.page..' / '..pages..' ('..#source..')')
     self.tableFrame:Show(); self.detail:Show()
     for i,h in ipairs(headers) do self.headings[i]:SetText(h) end
@@ -388,16 +396,18 @@ function M:RenderUI()
       if o then
         row.selected:SetShown(self.selectedRow==o)
         local id=o.itemID or (o.marketKey and self.db.market[o.marketKey] and self.db.market[o.marketKey].itemID)
-        local icon=id and GetItemIcon and GetItemIcon(id)
+        local icon=self:RowItemIcon(o,id)
         row.icon:SetTexture(icon or 'Interface\\Icons\\INV_Misc_QuestionMark')
         local cells
         if view=='opportunities' then cells={(o.pass and '' or '|cffff9a9a[BLOCKED]|r ')..(o.kind=='vendor' and '|cff72e7aa[VENDOR]|r ' or '')..o.name,
-          self:Money(o.floor),self:Money(o.fairValue),self:Money(o.economics.net),self:PercentText(o.economics.roi),
+          self:Money(o.floor),(o.kind=='vendor' or self:CanEstimateResale(self.db.market[o.marketKey])) and self:Money(o.fairValue) or 'Unproven',
+          (o.kind=='vendor' or self:CanEstimateResale(self.db.market[o.marketKey])) and self:Money(o.economics.net) or '--',
+          (o.kind=='vendor' or self:CanEstimateResale(self.db.market[o.marketKey])) and self:PercentText(o.economics.roi) or '--',
           o.score,o.confidence,o.risk}
         elseif view=='review' then cells={o.name,self:Money(o.snapshotAsk),o.ask>0 and self:Money(o.ask) or 'Missing',
           self:Money(o.fair),self:PercentText(o.roi),'',o.confidence,o.status}
         elseif view=='browse' then cells={o.name,o.itemID,o.floor>0 and self:Money(o.floor) or 'No local ask',
-          self:Money(o.fair),o.median7 and self:Money(o.median7) or '--',o.median30 and self:Money(o.median30) or '--',o.confidence,o.status}
+          o.modelReady and self:Money(o.fair) or 'Unproven',o.median7 and self:Money(o.median7) or '--',o.median30 and self:Money(o.median30) or '--',o.confidence,o.status}
         elseif view=='shopping' then cells={o.name,o.itemID,self:Money(o.floor),self:Money(o.fair),o.target and self:Money(o.target) or 'Any','',o.confidence,o.status}
         elseif view=='investments' then cells={o.name,o.quantity,self:Money(o.cost),o.estimatedNet and self:Money(o.estimatedNet) or 'Unknown',
           o.unrealized and self:Money(o.unrealized) or 'Unknown',o.roi and self:PercentText(o.roi) or 'N/A',o.ageDays and (o.ageDays..'d') or 'Unknown age',o.status}
@@ -420,7 +430,7 @@ function M:RenderUI()
       local _,p=self:GetPortfolioRows()
       self.detail:SetText('Capital at known cost '..self:Money(p.cost)..' | modeled liquidation after estimated fees '..self:Money(p.estimatedNet)..
         '\nEstimated unrealized '..self:Money(p.unrealized)..' | not currently priceable '..self:Money(p.unvaluedCost)..
-        '\nOnly purchases with tracked acquisition basis are included. Estimates are not confirmed sales.')
+        '\nOnly known-cost purchases with sufficient pricing evidence are valued. Estimates are not confirmed sales.')
     elseif view=='post review' then
       self.detail:SetText(o and ('Posting intent only for '..tostring(o.name)..' | '..tostring(o.status)..
         '\n'..tostring(o.reason or '')..
@@ -441,7 +451,7 @@ function M:RenderUI()
         'Select an auction to inspect the live competitors. No cancel/post action is automatic.')
     elseif view=='browse' then
       self.detail:SetText((o and self:LiveMarketText(o.marketKey)..'\n' or '')..'Search cached market history by name or item ID. '..tostring(#source)..' cached results shown (maximum 300).'..
-        '\nThe 7/30-day medians are scan medians, not verified sales. SHARED* prices are advisory only.\nSelect a local item, then SHOPPING to set a target. Cached prices are not live quotes.')
+        '\nUNPROVEN models cannot suggest selling prices or value investments. Scan medians are asking prices, not sales. SHARED* prices are advisory only.\nSelect a local item, then SHOPPING to set a target. Cached prices are not live quotes.')
     elseif view=='ledger' then
       local t=self:LedgerTotals()
       self.detail:SetText('Cost-matched realized '..self:Money(t.realized)..' | ROI '..self:PercentText(t.roi)..' | fees '..self:Money(t.fees)..' | uncosted revenue '..self:Money(t.uncostedRevenue)..'\n'..(o and (tostring(o.evidence)..'\n'..tostring(o.name or '')..' | market '..tostring(o.marketKey)..' | deposit refund '..self:Money(o.depositRefund)) or 'Select an invoice or unresolved order.')..'\nMailbox invoices are observed facts, but have no unique ID. Review identity before BOOK REVIEWED SALE.\nPurchase cost uses moving average. Unknown cost is excluded from realized profit; manually reported outcomes are labeled.')

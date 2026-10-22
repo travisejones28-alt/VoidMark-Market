@@ -1,6 +1,6 @@
-# VoidMark Market 1.3.0-beta
+# VoidMark Market 1.3.1-beta
 
-Current release: [1.3.0 features, validation and live checks](RELEASE_1.3.md). Historical hardening release: see [HARDENING.md](HARDENING.md) for confirmed fixes, validation and in-game checks. Download the rebuilt addon from `dist/`.
+Current release: [1.3.1 stress-test pricing fixes and live checks](RELEASE_1.3.1.md). [1.3.0 features](RELEASE_1.3.md). Historical hardening release: see [HARDENING.md](HARDENING.md) for confirmed fixes, validation and in-game checks. Download the rebuilt addon from `dist/`.
 
 
 A testable Forever auction terminal built from the supplied working prototype.

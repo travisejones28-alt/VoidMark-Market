@@ -31,6 +31,7 @@ function M:RefreshInventory()
               ('Item '..tostring(info.itemID))
             plan.quantity=qty;plan.bag=currentBag;plan.slot=currentSlot
             plan.itemLink=info.hyperlink
+            plan.icon=info.iconFileID
             plan.confidence=plan.confidence or 'Unknown'
             plan.stale=not plan.price
             rows[#rows+1]=plan

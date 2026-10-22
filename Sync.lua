@@ -38,6 +38,8 @@ end
 function M:ImportMarketTransfer(raw)
   if self.persistenceBlocked then return false,'Newer database schema; imports disabled' end
   if type(raw)~='string' or #raw>14000 or #raw<10 then return false,'Invalid summary length' end
+  -- Clipboard transfers may contain Windows line endings and a final newline.
+  raw=raw:gsub('\r\n','\n'):gsub('\n+$','')
   local lines={}
   for line in (raw..'\n'):gmatch('(.-)\n') do lines[#lines+1]=line end
   if #lines<1 or #lines>101 then return false,'Too many rows' end

@@ -1,4 +1,16 @@
 local _,M=...
+function M:RowItemIcon(row,id)
+  if row.icon then return row.icon end
+  local fn=C_Item and C_Item.GetItemIconByID or GetItemIcon
+  if id and type(fn)=='function' then
+    local ok,icon=pcall(fn,id);if ok and icon then return icon end
+  end
+  if id and GetItemInfo then
+    local ok,_,_,_,_,_,_,_,_,_,icon=pcall(GetItemInfo,id)
+    if ok and icon then return icon end
+  end
+  return 'Interface\\Icons\\INV_Misc_QuestionMark'
+end
 function M:SortBrowseRows()
   local mode=self.db.settings.sort
   table.sort(self.browseRows or {},function(a,b)
