@@ -1,3 +1,7 @@
+# 1.3.0-beta validation
+
+91 local LuaJIT regression tests passed, including the 90,000-row scanner fixture. Package membership and bytes verified. See [RELEASE_1.3.md](RELEASE_1.3.md) for runtime limits and required live checks. Historical validation follows.
+
 # 1.0.3 hardening
 
 63 Lua 5.1 regression tests and shared-addon integration pass. Use `python Tests/run_tests.py` with `lupa==2.8`. See HARDENING.md for scope and required live checks. Historical validation follows.

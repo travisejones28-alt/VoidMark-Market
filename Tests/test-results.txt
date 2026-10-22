@@ -20,10 +20,14 @@ PASS Owned listings excluded from execution
 PASS Commodity ownership reduces available quantity
 PASS Moving-average accounting excludes unknown basis
 PASS Invoices are observed, deduped and not auto-booked
-50k scan job ticks: 598; synthetic-budget elapsed ms: 1113
-PASS 50,000 rows process across frames; malformed row isolated
+90k scan job ticks: 883; synthetic-budget elapsed ms: 1925
+PASS 90,000 rows process across frames; malformed row isolated
 PASS Oversized price distribution retains history and blocks trading
 PASS UI builds and every terminal tab renders
+PASS Banker watch targets are fresh-only and remain economy-local
+PASS Liquid reserve blocks spending without changing pending reservations
+PASS Portfolio never marks missing or stale pricing as earned profit
+PASS Banker scan differences ignore blocked candidates
 PASS Protocol boundary rejects malformed or stale summaries
 PASS Cached snapshot after cooldown cannot refresh model history
 PASS Bogus regular-auction quantities are capped to item stack size
@@ -62,4 +66,28 @@ PASS Future market timestamps fail the resale risk freshness gate
 PASS Malformed invoice amounts cannot alter inventory basis or book profit
 PASS Unmodeled saved markets do not crash the selling inventory reader
 PASS Non-finite display amounts cannot crash financial panels
-ALL 63 TESTS PASSED
+PASS Independent 7 and 30 day median windows never manufacture sale evidence
+PASS Purchase review queue is advisory, persistent and cannot unlock stale execution
+PASS Manual cross-account transfer keeps history, orders and prices isolated
+PASS Sell strategy and minimums are validated and persistent
+PASS Sell plan never undercuts fully known basis including modeled fees
+PASS Partially priced acquired stacks do not manufacture profit
+PASS Stale or unavailable sell prices remain unquoted
+PASS Sell inventory includes unpriced and priced items without unintended posting
+PASS Owned auction repricing rejects isolated low-price bait
+PASS Owned repost cannot be recommended without known cancellation costs
+PASS Owned repost remains a review signal only, never invokes cancel or post
+PASS Post queue persists as intent without storing stale bag slots or posting
+PASS Posting queue refuses other characters or missing bag stock
+PASS Financial periods use booking time, isolate uncosted revenue and reject double booking
+PASS Wealth snapshots are bounded, character isolated and never book balance changes
+PASS Price history excludes malformed points and shares; chart frames are reused
+PASS Live compare requires complete correlated results and cannot authorize a purchase
+PASS Live compare fails closed for incomplete results and closed AH
+PASS Sniper presets retain capital safeguards and invalidate prepared quotes
+PASS Browse searches item IDs, sorts unit prices and clears cross-view selections
+PASS Window layout persists valid geometry and rejects malformed saved anchors
+PASS Stack plans honor item limits and never post or split inventory
+PASS Watch movement compares fresh independent scans and respects target crossings
+PASS All expanded screens render after interactions without creating new row frames
+ALL 91 TESTS PASSED

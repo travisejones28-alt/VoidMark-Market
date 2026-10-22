@@ -1,6 +1,6 @@
 local addonName, M = ...
 _G.VoidMarkMarket = M
-M.name, M.version = addonName or 'VoidMarkMarket', '1.2.1-beta'
+M.name, M.version = addonName or 'VoidMarkMarket', '1.3.0-beta'
 M.eventHandlers, M.runtimeLog, M.jobs = {}, {}, {}
 M.ahOpen, M.safeMode = false, true
 M.scanState = {running=false, phase='idle', status='No scan yet', progress=0}
@@ -146,6 +146,9 @@ M.eventFrame:SetScript('OnUpdate',function(_,elapsed)
   M:RunJobs(); tick=tick+elapsed
   if tick<0.1 then return end; tick=0
   M:PumpQueue(); M:ExecutionTick()
+  if M.liveBrowse and M.liveBrowse.received and not M.liveBrowse.expired and GetTime()-M.liveBrowse.received>10 then
+    M.liveBrowse.expired=true;M:RefreshUI()
+  end
   if M.bagsDirty and M.view=='selling' then M.bagsDirty=false; M:RefreshInventory() end
   if M.uiDirty and M.RenderUI then M:RenderUI() end
 end)

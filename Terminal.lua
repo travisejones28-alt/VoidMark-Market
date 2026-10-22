@@ -20,6 +20,24 @@ function M:RecordBankerScan(summary)
   banker.latest={at=time(),scanID=summary.marketScanID or 0,items=found}
   banker.new=news -- capped by the 200-opportunity ranking
   banker.previousAt=prior.at
+  -- Compare only independent completed scans. Cached analyses do not call this path.
+  banker.movements={};banker.watchPrices=banker.watchPrices or {}
+  for key,watch in pairs(self.db.watchlist or {}) do
+    local m=self.db.market[key];local old=banker.watchPrices[key]
+    local price=m and m.latest and m.latest.floor
+    if type(watch)=='table' and m and not m.cacheUntrusted and not m.analysisIncomplete and self:MarketFresh(m) and self:Finite(price,1,1e12) then
+      if old and self:Finite(old.price,1,1e12) and old.scanID~=summary.marketScanID then
+        local change=price/old.price-1
+        local crossed=watch.target and old.price>watch.target and price<=watch.target
+        if math.abs(change)>=0.10 or crossed then
+          banker.movements[#banker.movements+1]={name=m.name or tostring(key),change=change,price=price,target=crossed}
+        end
+      end
+      banker.watchPrices[key]={price=price,scanID=summary.marketScanID}
+    end
+  end
+  for key in pairs(banker.watchPrices) do if not self.db.watchlist[key] then banker.watchPrices[key]=nil end end
+  table.sort(banker.movements,function(a,b) return math.abs(a.change)>math.abs(b.change) end)
   self:RefreshUI()
 end
 
@@ -84,7 +102,8 @@ function M:GetPortfolioRows()
         rows[#rows+1]={marketKey=lot.marketKey,name=m and m.name or ('Item '..tostring(lot.marketKey)),
           quantity=qty,cost=cost,basis=cost/qty,marketValue=gross,estimatedNet=net,
           unrealized=unrealized,roi=cost>0 and unrealized and unrealized/cost or nil,
-          status=fresh and 'ESTIMATE' or 'UNPRICED',firstSeen=lot.firstSeen}
+          status=fresh and 'ESTIMATE' or 'UNPRICED',firstSeen=lot.firstSeen,
+          ageDays=lot.firstSeen and math.max(0,math.floor((time()-lot.firstSeen)/86400)) or nil}
       end
     end
   end
@@ -114,7 +133,7 @@ function M:BuildBrowseRows(query)
     for j=1,80 do
       if i>#keys or #out>=300 then return true end
       local m=self.db.market[keys[i]];i=i+1
-      if m and type(m.name)=='string' and m.name:lower():find(needle,1,true) then
+      if m and type(m.name)=='string' and (m.name:lower():find(needle,1,true) or tostring(m.itemID)==needle) then
         local fresh=m.latest and self:MarketFresh(m) and not m.analysisIncomplete
         local week,month=self:MarketWindow(m,7),self:MarketWindow(m,30)
         out[#out+1]={marketKey=m.marketKey,itemID=m.itemID,name=m.name,floor=m.latest and m.latest.floor or 0,
@@ -138,7 +157,7 @@ function M:BuildBrowseRows(query)
       end
     end
     table.sort(out,function(x,y)return tostring(x.name)<tostring(y.name) end)
-    self.browseRows=out;self:RefreshUI()
+    self.browseRows=out;self:SortBrowseRows();self:RefreshUI()
   end)
 end
 

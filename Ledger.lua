@@ -19,6 +19,7 @@ function M:ResolvePurchase(p,status,evidence)
   if status=='confirmed' then
     local key=self:InventoryKey(p.marketKey); local lot=self.db.inventory[key]
     if not lot then lot={marketKey=p.marketKey,character=self.characterID,quantity=0,cost=0,purchasedQty=0,purchasedCost=0}; self.db.inventory[key]=lot end
+    lot.firstSeen=lot.firstSeen or p.resolvedAt or time()
     lot.quantity=lot.quantity+p.quantity; lot.cost=lot.cost+p.cost
     lot.purchasedQty=lot.purchasedQty+p.quantity; lot.purchasedCost=lot.purchasedCost+p.cost
     self.db.totals.purchaseCost=(self.db.totals.purchaseCost or 0)+p.cost
@@ -44,7 +45,8 @@ function M:BookSale(entry)
   if lot and matched>0 then lot.quantity=lot.quantity-matched; lot.cost=math.max(0,lot.cost-basis) end
   local net=entry.gross-entry.fee; local knownRevenue=net*matched/qty
   self.exposureDirty=true
-  entry.booked=true; entry.matchedQuantity=matched; entry.costBasis=basis
+  entry.booked=true; entry.bookedAt=time(); entry.matchedQuantity=matched; entry.costBasis=basis
+  self:RecordFinancialSale(entry,knownRevenue,basis)
   entry.realized=matched==qty and net-basis or nil
   entry.evidence='Invoice observed; duplicate identity and item mapping reviewed by user'
   m.bookedSales=m.bookedSales or {}

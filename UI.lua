@@ -13,6 +13,7 @@ local function edit(parent,x,y,w,text)
   e:SetText(text or ''); e:SetScript('OnEscapePressed',function(f) f:ClearFocus() end); return e
 end
 function M:SetView(view)
+  if self.view~=view and view~='shopping' then self.selectedRow=nil end
   self.view=view; self.page=1; if self.window then self.window:Show() end
   if view=='selling' or view=='post review' then self:RefreshInventory()
   elseif view=='browse' then self:BuildBrowseRows(self.db.settings.filter or '') end; self:RefreshUI()
@@ -23,10 +24,11 @@ function M:InitializeUI()
   local f=CreateFrame('Frame','VoidMarkMarketWindow',UIParent,'BackdropTemplate'); self.window=f
   f:SetSize(1040,680); f:SetPoint('CENTER'); f:SetFrameStrata('MEDIUM'); f:SetToplevel(true); f:SetMovable(true); f:EnableMouse(true)
   f:SetClampedToScreen(true); f:RegisterForDrag('LeftButton')
-  f:SetScript('OnDragStart',function(w) w:StartMoving() end); f:SetScript('OnDragStop',function(w) w:StopMovingOrSizing() end)
+  f:SetScript('OnDragStart',function(w) w:StartMoving() end); f:SetScript('OnDragStop',function(w) w:StopMovingOrSizing(); self:SaveWindowLayout() end)
   f:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Tooltips\\UI-Tooltip-Border',edgeSize=16,insets={left=4,right=4,top=4,bottom=4}})
   f:SetBackdropColor(0.025,0.022,0.04,0.97); f:SetBackdropBorderColor(0.45,0.3,0.7,1)
   if UIParent.GetWidth then f:SetScale(math.min(1,(UIParent:GetWidth()-30)/1040,(UIParent:GetHeight()-30)/680)) end
+  self:RestoreWindowLayout()
   label(f,'VOIDMARK MARKET',18,-16,300,'GameFontNormalLarge')
   self.modeLabel=label(f,'SAFE MODE ON',365,-19,455)
   button(f,'TRANSFER',860,-12,125,function() self:ShowTransferWindow() end)
@@ -43,8 +45,11 @@ function M:InitializeUI()
     self:RefreshUI()
   end)
   self.sortButton=button(self.toolbar,'SORT: SCORE',405,0,116,function()
-    local sorts={'score','profit','roi','confidence','liquidity','discount','ask','name'}; local current=self.db.settings.sort
+    local sorts=self.view=='browse' and {'name','ask','profit','roi'} or {'score','profit','roi','confidence','liquidity','discount','ask','name'}; local current=self.db.settings.sort
+    local known=false;for _,name in ipairs(sorts) do if name==current then known=true end end
+    if not known then current=sorts[#sorts] end
     for i,v in ipairs(sorts) do if v==current then self.db.settings.sort=sorts[i%#sorts+1]; break end end
+    if self.view=='browse' then self:SortBrowseRows() end
     self:RefreshUI()
   end)
   button(self.toolbar,'<',525,0,32,function() self.page=math.max(1,(self.page or 1)-1); self:RefreshUI() end)
@@ -55,12 +60,16 @@ function M:InitializeUI()
   button(self.toolbar,'DIAG',919,0,78,function() self:SetView('diagnostics') end)
   self.tableFrame=CreateFrame('Frame',nil,f); self.tableFrame:SetPoint('TOPLEFT',18,-151); self.tableFrame:SetSize(1000,340)
   self.headings={}; self.rows={}
-  local widths={270,105,105,110,75,55,110,120}; local x=0
+  local widths={250,105,105,110,95,90,120,125}; local x=0
   for i,w in ipairs(widths) do self.headings[i]=label(self.tableFrame,'',x,-2,w); x=x+w end
   for r=1,12 do
     local b=CreateFrame('Button',nil,self.tableFrame); self.rows[r]=b; b:SetPoint('TOPLEFT',0,-25-(r-1)*25); b:SetSize(1000,25)
     b:SetHighlightTexture('Interface\\QuestFrame\\UI-QuestTitleHighlight'); b.cols={}; local cx=0
-    for i,w in ipairs(widths) do b.cols[i]=label(b,'',cx,-6,w-5,'GameFontHighlightSmall'); cx=cx+w end
+    b.icon=b:CreateTexture(nil,'ARTWORK');b.icon:SetSize(20,20);b.icon:SetPoint('LEFT',2,0)
+    b.selected=b:CreateTexture(nil,'BACKGROUND');b.selected:SetAllPoints();b.selected:SetColorTexture(0.32,0.15,0.5,0.45)
+    b:SetScript('OnEnter',function(row) self:ShowRowTooltip(row) end)
+    b:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
+    for i,w in ipairs(widths) do b.cols[i]=label(b,'',cx+(i==1 and 26 or 0),-6,w-(i==1 and 31 or 5),'GameFontHighlightSmall'); cx=cx+w end
     b:SetScript('OnClick',function(row)
       if not row.data then return end
       self.selectedRow=row.data
@@ -70,6 +79,32 @@ function M:InitializeUI()
       else self:RefreshUI() end
     end)
   end
+  self.tableFrame:EnableMouseWheel(true)
+  self.tableFrame:SetScript('OnMouseWheel',function(_,delta) self.page=math.max(1,(self.page or 1)-(delta>0 and 1 or -1));self:RefreshUI() end)
+  self.historyAction=CreateFrame('Frame',nil,f);self.historyAction:SetPoint('BOTTOMLEFT',18,18);self.historyAction:SetSize(998,28)
+  button(self.historyAction,'PRICE HISTORY',0,0,160,function() self:ShowHistoryWindow(self.selectedRow) end)
+  button(self.historyAction,'GOLD HISTORY',170,0,160,function() self:ShowHistoryWindow(nil,true) end)
+  self.stackFrame=CreateFrame('Frame',nil,f);self.stackFrame:SetPoint('TOPLEFT',18,-590);self.stackFrame:SetSize(998,26)
+  label(self.stackFrame,'Preferred stack:',0,-6,110)
+  self.stackSize=edit(self.stackFrame,115,-1,80,'')
+  button(self.stackFrame,'SAVE STACK',205,0,125,function()
+    local row=self.selectedRow;local raw=self.stackSize:GetText();local value=tonumber(raw)
+    if raw~='' and not value then self:Print('Enter a whole stack size');return end
+    local ok,why=self:SetPreferredStack(row and row.marketKey,value)
+    self:Print(ok and 'Stack preference saved' or why)
+  end)
+  self.browseAction=CreateFrame('Frame',nil,f);self.browseAction:SetPoint('BOTTOMLEFT',18,18);self.browseAction:SetSize(998,28)
+  button(self.browseAction,'LIVE COMPARE',0,0,150,function() local ok,why=self:InspectLiveMarket(self.selectedRow);if not ok then self:Print(why or 'Search unavailable') end end)
+  button(self.browseAction,'PRICE HISTORY',160,0,150,function() self:ShowHistoryWindow(self.selectedRow) end)
+  button(self.browseAction,'REVIEW PURCHASE',320,0,165,function()
+    local m=self.selectedRow and self.db.market[self.selectedRow.marketKey]
+    local o=m and self:MakeOpportunity(m)
+    if o then self:SelectOpportunity(o) else self:Print('No local purchase model; scan first') end
+  end)
+  self.presetButton=button(f,'PRESET: BALANCED',18,-628,210,function()
+    local names={'balanced','conservative','exploratory'};local current=self.db.settings.sniperPreset or 'balanced'
+    for i,name in ipairs(names) do if name==current then self:ApplySniperPreset(names[i%3+1]);break end end
+  end)
   self.detail=label(f,'',18,-493,998,'GameFontHighlightSmall'); self.detail:SetHeight(125); self.detail:SetJustifyV('TOP')
   self.contentScroll=CreateFrame('ScrollFrame',nil,f,'UIPanelScrollFrameTemplate')
   self.contentScroll:SetPoint('TOPLEFT',18,-151); self.contentScroll:SetSize(976,465)
@@ -165,6 +200,9 @@ function M:InitializeUI()
     else self:Print('Select a queue entry first') end
   end)
   self.settingsFrame=CreateFrame('Frame',nil,f); self.settingsFrame:SetPoint('TOPLEFT',18,-151); self.settingsFrame:SetSize(998,460)
+  button(self.settingsFrame,'SCALE -',0,-425,100,function() self:ChangeWindowScale(-0.05) end)
+  button(self.settingsFrame,'SCALE +',108,-425,100,function() self:ChangeWindowScale(0.05) end)
+  button(self.settingsFrame,'RESET WINDOW',216,-425,150,function() self.db.settings.window=nil;self.window:ClearAllPoints();self.window:SetPoint('CENTER');self:ChangeWindowScale(0,true) end)
   local settings={
     {'maxTransaction','Maximum transaction (gold)',10000},{'maxItemSpend','Maximum per-item exposure (gold)',10000},
     {'maxExposure','Maximum portfolio exposure (gold)',10000},{'maxQuantity','Maximum quantity',1},
@@ -210,7 +248,7 @@ function M:InitializeUI()
   self.minimapToggle:SetScript('OnClick',function(c)
     self:SetMinimapIconVisible(c:GetChecked() and true or false)
   end)
-  label(self.settingsFrame,'Safe Mode always starts ON. Each purchase requires a click; reserve protects liquid gold.\nDeposits and liquidity are estimates, not proof of sales. Cross-client sharing remains disabled.',0,-424,970)
+  label(self.settingsFrame,'Safe Mode starts ON. Each purchase requires a click.\nDeposits and liquidity are estimates. Sharing uses manual transfer.',385,-424,590)
   self.view='market'; self.page=1; self:RefreshUI(); f:Hide() -- Keep Market closed on login/reload until opened by the user.
 end
 function M:ShowReport()
@@ -229,8 +267,16 @@ function M:RenderUI()
   local view=self.view or 'market'; local s=self.db.settings
   self.modeLabel:SetText(s.safeMode and '|cff72e7aaSAFE MODE ON - no transactions|r' or '|cffffa250TRADING ENABLED - real clicks required|r')
   self.status:SetText('AH '..(self.ahOpen and 'OPEN' or 'CLOSED')..' | '..self.scanState.status..' | full scan cooldown '..self:FormatDuration(self:GetSecondsUntilFreshScanAllowed()))
+  self.historyAction:SetShown(view=='investments' or view=='banker' or view=='market');self.stackFrame:SetShown(view=='selling')
+  self.browseAction:Hide();self.presetButton:SetShown(view=='opportunities')
+  self.presetButton:SetText('PRESET: '..(s.sniperPreset or 'balanced'):upper())
   self.toolbar:Show(); self.tableFrame:Hide(); self.detail:Hide(); self.contentScroll:Hide(); self.settingsFrame:Hide(); self.action:Hide(); self.ledgerAction:Hide(); self.ownedRefresh:Hide(); self.reviewRemove:Hide(); self.postReviewRemove:Hide(); self.postReviewBack:Hide(); self.sellAction:Hide(); self.watchFrame:Hide(); self.statsFrame:Hide()
-  self.filter:SetShown(view=='opportunities' or view=='browse'); self.sortButton:SetShown(view=='opportunities'); self.sortButton:SetText('SORT: '..s.sort:upper())
+  self.filter:SetShown(view=='opportunities' or view=='browse'); self.sortButton:SetShown(view=='opportunities' or view=='browse'); self.sortButton:SetText('SORT: '..s.sort:upper())
+  if view=='browse' then
+    local names={profit='SPREAD',roi='FAIR/ASK',ask='ASK',name='NAME'}
+    self.sortButton:SetText('SORT: '..(names[s.sort] or 'NAME'))
+  end
+  self.detail:SetHeight(view=='selling' and 90 or 125)
   self.scanButton:SetEnabled(self.ahOpen and not self.scanState.running); self.cachedButton:SetEnabled(self.ahOpen and not self.scanState.running)
   if view=='settings' then self.settingsFrame:Show(); self.safe:SetChecked(s.safeMode); self.minimapToggle:SetChecked(not (s.minimap and s.minimap.hide)); return end
   if view=='market' or view=='banker' then
@@ -275,7 +321,7 @@ function M:RenderUI()
     text='|cffffffffLOCAL MARKET TERMINAL|r\n\n'..#(self.marketIndex or {})..' markets | '..#self.db.opportunities..' ranked candidates\nEconomy: '..self.economyID..'\n\n'
     if scan then text=text..string.format('Last scan %s\nRows %d | valid %d | invalid %d | incomplete %d\nMarkets %d | total supply %d | elapsed %s ms | generation #%s\n\n',date('%Y-%m-%d %H:%M',scan.completedAt or time()),scan.rawRows or 0,scan.auctionsProcessed or 0,scan.invalidRecords or 0,scan.incompleteRecords or 0,scan.uniqueItems or 0,scan.totalQuantity or 0,tostring(scan.processingMS),tostring(scan.marketScanID)) end
     if scan and scan.deferredRows then text=text..string.format('Item data: %d deferred | %d recovered | %d unresolved\n\n',scan.deferredRows,scan.recoveredRows or 0,scan.unresolvedRows or 0) end
-    text=text..self:BuildFullScanReport()..'\n\n'
+    text=text..self:FinancialSummaryText()..'\n\n'..self:BuildFullScanReport()..'\n\n'
     text=text..'Cost-matched realized '..self:Money(totals.realized)..' | verified net sale revenue '..self:Money(totals.revenue)..'\n'..
       'Portfolio liquidation is an ESTIMATE for fresh, modeled positions only. Missing price history has no assumed value.\n'..
       'Scan results are advisory. Select SNIPER for live revalidation; SELL uses the native Auction House for posting.\n'..
@@ -296,6 +342,11 @@ function M:RenderUI()
       lines[#lines+1]=tostring(o.name)..' | rank '..tostring(o.score)
     end
     lines[#lines+1]=''
+    lines[#lines+1]='WATCH MOVEMENTS (10% change or target crossing)'
+    for i,a in ipairs(banker.movements or {}) do
+      if i>8 then break end
+      lines[#lines+1]=tostring(a.name)..' | '..self:PercentText(a.change)..' | '..self:Money(a.price)..(a.target and ' TARGET CROSSED' or '')
+    end
     lines[#lines+1]='Cached analyses do not create independent history or new opportunity alerts.'
     lines[#lines+1]='No unattended scans or transactions. Open AH and click FULL SCAN when cooldown permits.'
     text=table.concat(lines,'\n')
@@ -308,12 +359,12 @@ function M:RenderUI()
       source=self:GetPurchaseReviewRows();self.reviewRemove:Show()
       headers={'Saved candidate','Old ask','Latest ask','Fair','ROI','','Confidence','State'}
     elseif view=='browse' then
-      source=self.browseRows or {}; headers={'Cached item','Item ID','Ask/unit','Fair','Median 7d','Median 30d','Confidence','State'}
+      self.browseAction:Show();source=self.browseRows or {}; headers={'Cached item','Item ID','Ask/unit','Fair','Median 7d','Median 30d','Confidence','State'}
     elseif view=='shopping' then
       source=self:GetWatchRows();headers={'Watched item','Item ID','Ask/unit','Fair','Target','','Confidence','State'}
       self.watchFrame:Show()
     elseif view=='investments' then
-      source=self:GetPortfolioRows();headers={'Owned investment','Quantity','Cost basis','Net est.','Unrealized','ROI','','State'}
+      source=self:GetPortfolioRows();headers={'Owned investment','Quantity','Cost basis','Net est.','Unrealized','ROI','Age','State'}
     elseif view=='selling' then source=self.sellingRows; self.sellAction:Show();self.sellStrategyButton:SetText('MODE: '..(s.sellStrategy or 'competitive'):upper()); headers={'Inventory','Quantity','Suggest/unit','Fair','Basis/unit','Net est.','Confidence','State'}
     elseif view=='post review' then
       source=self:GetPostingReviewRows();self.postReviewRemove:Show();self.postReviewBack:Show()
@@ -335,6 +386,10 @@ function M:RenderUI()
     for i,row in ipairs(self.rows) do
       local o=source[(self.page-1)*12+i]; row.data=o; row:SetShown(o~=nil)
       if o then
+        row.selected:SetShown(self.selectedRow==o)
+        local id=o.itemID or (o.marketKey and self.db.market[o.marketKey] and self.db.market[o.marketKey].itemID)
+        local icon=id and GetItemIcon and GetItemIcon(id)
+        row.icon:SetTexture(icon or 'Interface\\Icons\\INV_Misc_QuestionMark')
         local cells
         if view=='opportunities' then cells={(o.pass and '' or '|cffff9a9a[BLOCKED]|r ')..(o.kind=='vendor' and '|cff72e7aa[VENDOR]|r ' or '')..o.name,
           self:Money(o.floor),self:Money(o.fairValue),self:Money(o.economics.net),self:PercentText(o.economics.roi),
@@ -345,7 +400,7 @@ function M:RenderUI()
           self:Money(o.fair),o.median7 and self:Money(o.median7) or '--',o.median30 and self:Money(o.median30) or '--',o.confidence,o.status}
         elseif view=='shopping' then cells={o.name,o.itemID,self:Money(o.floor),self:Money(o.fair),o.target and self:Money(o.target) or 'Any','',o.confidence,o.status}
         elseif view=='investments' then cells={o.name,o.quantity,self:Money(o.cost),o.estimatedNet and self:Money(o.estimatedNet) or 'Unknown',
-          o.unrealized and self:Money(o.unrealized) or 'Unknown',o.roi and self:PercentText(o.roi) or 'N/A','',o.status}
+          o.unrealized and self:Money(o.unrealized) or 'Unknown',o.roi and self:PercentText(o.roi) or 'N/A',o.ageDays and (o.ageDays..'d') or 'Unknown age',o.status}
         elseif view=='selling' then cells={o.name,o.quantity,o.price and self:Money(o.price) or 'No quote',o.fair and self:Money(o.fair) or '--',o.basisUnit and self:Money(o.basisUnit) or 'Unknown',o.estimatedNet and self:Money(o.estimatedNet) or '--',o.confidence,o.status}
         elseif view=='post review' then cells={o.name,o.quantity,o.snapshotUnit and self:Money(o.snapshotUnit) or '--',
           o.price and self:Money(o.price) or '--',o.fair and self:Money(o.fair) or '--','','',o.status}
@@ -376,7 +431,7 @@ function M:RenderUI()
         self.detail:SetText('Bag '..o.bag..' / slot '..o.slot..' | '..tostring(o.status)..' | '..tostring(o.strategy or 'No strategy')..
           '\n'..(o.price and ('Price per unit '..self:Money(o.price)..' | Gross '..self:Money(o.gross)..' | estimated AH cut '..self:Money(o.estimatedCut)..' | deposit allowance '..self:Money(o.depositAllowance)) or 'No reliable pricing available')..
           '\n'..(o.profit and ('Estimated net profit '..self:Money(o.profit)..' | ROI '..self:PercentText(o.roi or 0)) or 'Profit unavailable: basis is not fully known')..
-          '\n'..tostring(o.reason or '')..'\nAdvisory only. Confirm the current listing, posting deposit and duration in the native AH.')
+          '\n'..tostring(o.reason or '')..'\n'..self:StackPlanText(o)..'\nAdvisory only. Confirm live deposit and duration in the native AH.')
       else self.detail:SetText('Select a bag item for its price, cost basis and risk. No post is made by this panel.') end
     elseif view=='my auctions' then
       self.detail:SetText(o and ('Own auction #'..tostring(o.auctionID)..' | '..tostring(o.action or 'INSPECT')..
@@ -385,7 +440,7 @@ function M:RenderUI()
         '\nCancel/repost is advisory only; confirm native AH deposit, fees, time remaining and live sale demand.') or
         'Select an auction to inspect the live competitors. No cancel/post action is automatic.')
     elseif view=='browse' then
-      self.detail:SetText('Search cached market history by name. '..tostring(#source)..' cached results shown (maximum 300).'..
+      self.detail:SetText((o and self:LiveMarketText(o.marketKey)..'\n' or '')..'Search cached market history by name or item ID. '..tostring(#source)..' cached results shown (maximum 300).'..
         '\nThe 7/30-day medians are scan medians, not verified sales. SHARED* prices are advisory only.\nSelect a local item, then SHOPPING to set a target. Cached prices are not live quotes.')
     elseif view=='ledger' then
       local t=self:LedgerTotals()

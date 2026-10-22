@@ -36,6 +36,11 @@ function CreateFrame(kind,name,parent,template)
   local f=setmetatable({scripts={},events={},shown=true},{__index=methods}); frames[#frames+1]=f; return f
 end
 function methods:CreateFontString() return CreateFrame('FontString') end
+function methods:CreateTexture() return CreateFrame('Texture') end
+function methods:SetScale(v) self.scale=v end
+function methods:GetScale() return self.scale or 1 end
+function methods:SetPoint(...) self.point={...} end
+function methods:GetPoint() return unpack(self.point or {'CENTER',UIParent,'CENTER',0,0}) end
 UIParent=CreateFrame('Frame'); UIParent:SetSize(1600,900)
 local function spy(k) return function(...) calls[#calls+1]={k,...} end end
 local ready=true; local commodity=false; local searchRows={}; local full=true; local has=false; local replicateRows=0
@@ -206,12 +211,12 @@ check('Invoices are observed, deduped and not auto-booked',function()
  local e=M.db.ledger[n];assert(e.kind=='mail sale' and not e.booked and e.marketKey==5001)
  M:ObserveMail();jobs();assert(#M.db.ledger==n)
 end)
-check('50,000 rows process across frames; malformed row isolated',function()
- resetQueue();M.ahOpen=true;replicateRows=50000;M:StartSnapshotProcessing(50000,'fresh replicate request');local ticks=jobs()
+check('90,000 rows process across frames; malformed row isolated',function()
+ resetQueue();M.ahOpen=true;replicateRows=90000;M:StartSnapshotProcessing(90000,'fresh replicate request');local ticks=jobs()
  assert(ticks>350);assert(M.scanState.phase=='done');local s=M.db.latestScan
- assert(s.rawRows==50000 and s.auctionsProcessed==49999 and s.invalidRecords==1);assert(s.uniqueItems==1500)
+ assert(s.rawRows==90000 and s.auctionsProcessed==89999 and s.invalidRecords==1);assert(s.uniqueItems==1500)
  assert(M.db.market[5001],'absent market retained');assert(s.marketScanID and M.db.marketStats.storedMarkets>=1501)
- print('50k scan job ticks: '..ticks..'; synthetic-budget elapsed ms: '..s.processingMS)
+ print('90k scan job ticks: '..ticks..'; synthetic-budget elapsed ms: '..s.processingMS)
 end)
 check('Oversized price distribution retains history and blocks trading',function()
  local old=M.db.market[5001];M:FinalizeMarketScan({[5001]={analysisIncomplete=true}},{skippedMarkets=0,modelErrors=0},function()end);jobs()
@@ -649,6 +654,107 @@ check('Posting queue refuses other characters or missing bag stock',function()
   assert(M:RemovePostingReview(m.marketKey))
   assert(#M:GetPostingReviewRows()==0)
   M.sellingRows=oldRows;M.db.postQueue=previous
+end)
+
+check('Financial periods use booking time, isolate uncosted revenue and reject double booking',function()
+  local m=mk();local days=M.db.financialDays;local lots=M.db.inventory
+  M.db.financialDays={};M.db.inventory={}
+  M.db.inventory[M:InventoryKey(m.marketKey)]={marketKey=m.marketKey,character=M.characterID,quantity=2,cost=1000}
+  local sale={kind='mail sale',character=M.characterID,marketKey=m.marketKey,invoiceVerified=true,quantity=4,gross=4000,fee=200,at=time()-999999}
+  assert(M:BookSale(sale));assert(not M:BookSale(sale))
+  local p=M:GetFinancialPeriods()[1]
+  assert(p.realized==900 and p.uncosted==1900 and p.revenue==3800 and p.sales==1 and p.basis==1000)
+  advance(86400);local periods=M:GetFinancialPeriods()
+  assert(periods[1].sales==0 and periods[2].sales==1)
+  advance(30*86400);assert(M:GetFinancialPeriods()[3].sales==0)
+  M.db.financialDays=days;M.db.inventory=lots
+end)
+check('Wealth snapshots are bounded, character isolated and never book balance changes',function()
+  local old=M.db.wealthHistory;M.db.wealthHistory={};local realized=M:LedgerTotals().realized
+  M.lastWealthAt=nil;M:RecordWealthSample();M:RecordWealthSample()
+  assert(#M.db.wealthHistory[M.characterID]==1)
+  advance(61);M:RecordWealthSample();assert(#M.db.wealthHistory[M.characterID]<=2)
+  for i=1,725 do advance(3600);M:RecordWealthSample() end
+  assert(#M.db.wealthHistory[M.characterID]==720)
+  assert(M:LedgerTotals().realized==realized)
+  M.persistenceBlocked=true;advance(3600);local at=M.db.wealthHistory[M.characterID][720].at
+  M:RecordWealthSample();assert(M.db.wealthHistory[M.characterID][720].at==at)
+  M.persistenceBlocked=false;M.db.wealthHistory=old
+end)
+check('Price history excludes malformed points and shares; chart frames are reused',function()
+  local m=mk();local history=m.history
+  m.history={{at=time()-10,median=100},{at=time()-5,median=200},{at=time()+9999,median=999},{at=time(),median=0/0}}
+  local points=M:GetPriceHistory(m.marketKey);assert(#points==2 and points[1].value==100)
+  assert(#M:GetPriceHistory('shared-only')==0)
+  M:ShowHistoryWindow({marketKey=m.marketKey,name=m.name});local count=#frames
+  M:ShowHistoryWindow({marketKey=m.marketKey,name=m.name});assert(#frames==count)
+  M:ShowHistoryWindow(nil,true);assert(#frames==count)
+  m.history=history
+end)
+check('Live compare requires complete correlated results and cannot authorize a purchase',function()
+  resetQueue();local m=mk();local before=M.execution
+  assert(M:InspectLiveMarket({marketKey=m.marketKey}));M:PumpQueue()
+  searchRows={{auctionID=987,buyoutAmount=500,quantity=1,itemKey=M:ItemKey(m)}}
+  emit('ITEM_SEARCH_RESULTS_UPDATED',M:ItemKey(m));jobs()
+  assert(M.liveBrowse.status=='Complete' and #M.liveBrowse.rows==1)
+  assert(M.execution==before and M.execution.state=='idle')
+  for _,c in ipairs(calls) do assert(c[1]~='bid' and c[1]~='quote' and c[1]~='confirm') end
+  advance(11);assert(M:LiveMarketText(m.marketKey):find('EXPIRED',1,true))
+  emit('AUCTION_HOUSE_CLOSED');assert(M.liveBrowse==nil)
+end)
+check('Live compare fails closed for incomplete results and closed AH',function()
+  resetQueue();local m=mk();assert(M:InspectLiveMarket({marketKey=m.marketKey}));M:PumpQueue()
+  full=false;emit('ITEM_SEARCH_RESULTS_UPDATED',M:ItemKey(m));jobs()
+  assert(M.liveBrowse.received==nil and M.execution.state=='idle')
+  emit('AUCTION_HOUSE_CLOSED');assert(not M:InspectLiveMarket({marketKey=m.marketKey}))
+  resetQueue()
+end)
+check('Sniper presets retain capital safeguards and invalidate prepared quotes',function()
+  resetQueue();local old=M.db.settings.maxTransaction
+  M.execution.state='ready';assert(M:ApplySniperPreset('conservative'))
+  assert(M.execution.state=='invalid' and M.db.settings.minConfidence==60)
+  assert(M.db.settings.maxTransaction==old and M.db.settings.safeMode)
+  assert(not M:ApplySniperPreset('invalid'))
+  assert(M:ApplySniperPreset('balanced'));resetQueue()
+end)
+check('Browse searches item IDs, sorts unit prices and clears cross-view selections',function()
+  local m=mk();M:RebuildIndexes();jobs();M:BuildBrowseRows('5001');jobs()
+  assert(#M.browseRows>=1 and M.browseRows[1].itemID==5001)
+  M.browseRows={{name='B',marketKey=2,floor=500,fair=800},{name='A',marketKey=1,floor=900,fair=1000}}
+  M.db.settings.sort='ask';M:SortBrowseRows();assert(M.browseRows[1].floor==500)
+  M.db.settings.sort='name';M:SortBrowseRows();assert(M.browseRows[1].name=='A')
+  M.view='browse';M.selectedRow=M.browseRows[1];M:SetView('ledger');assert(M.selectedRow==nil)
+  M.db.settings.sort='score'
+end)
+check('Window layout persists valid geometry and rejects malformed saved anchors',function()
+  local old=M.db.settings.window
+  M.window:SetPoint('TOPLEFT',UIParent,'TOPLEFT',42,-80);M.window:SetScale(0.8);M:SaveWindowLayout()
+  assert(M.db.settings.window.x==42 and M.db.settings.window.scale==0.8)
+  M:RestoreWindowLayout();assert(M.window:GetScale()==0.8)
+  M.db.settings.window={point='INVALID',relative='CENTER',x=0/0,y=0,scale=1/0}
+  M:RestoreWindowLayout();assert(M.window:GetScale()==0.8)
+  M.db.settings.window=old
+end)
+check('Stack plans honor item limits and never post or split inventory',function()
+  local m=mk();local count=#calls
+  assert(not M:SetPreferredStack(m.marketKey,1.5));assert(M:SetPreferredStack(m.marketKey,20))
+  assert(M:StackPlanText({marketKey=m.marketKey,quantity=12}):find('12 x 1',1,true))
+  assert(#calls==count);assert(M:SetPreferredStack(m.marketKey,nil))
+end)
+check('Watch movement compares fresh independent scans and respects target crossings',function()
+  local m=mk();local watches=M.db.watchlist;local banker=M.db.banker
+  M.db.watchlist={[m.marketKey]={target=450}};M.db.banker={};m.latest.floor=500
+  M:RecordBankerScan({marketScanID=9001});assert(#M.db.banker.movements==0)
+  m.latest.floor=400;M:RecordBankerScan({marketScanID=9002})
+  assert(#M.db.banker.movements==1 and M.db.banker.movements[1].target)
+  m.latest.floor=200;M:RecordBankerScan({marketScanID=9002});assert(#M.db.banker.movements==0)
+  M.db.watchlist=watches;M.db.banker=banker
+end)
+check('All expanded screens render after interactions without creating new row frames',function()
+  for _,view in ipairs({'market','banker','browse','selling','investments','settings','opportunities','ledger'}) do
+    M:SetView(view);jobs();M:RenderUI()
+  end
+  local count=#frames;M:RenderUI();assert(#frames==count)
 end)
 
 print('ALL '..total..' TESTS PASSED')
