@@ -1,6 +1,6 @@
 local addonName, M = ...
 _G.VoidMarkMarket = M
-M.name, M.version = addonName or 'VoidMarkMarket', '1.3.1-beta'
+M.name, M.version = addonName or 'VoidMarkMarket', '1.4.0-beta'
 M.eventHandlers, M.runtimeLog, M.jobs = {}, {}, {}
 M.ahOpen, M.safeMode = false, true
 M.scanState = {running=false, phase='idle', status='No scan yet', progress=0}
@@ -170,6 +170,10 @@ SlashCmdList.VOIDMARKMARKET=function(msg)
   elseif msg=='diag' then M:SetView('diagnostics')
   elseif msg=='report' then M:ShowReport()
   elseif msg=='probe' then M:RunAPIProbe()
+  elseif msg=='craft' then M:RebuildCrafting();M:SetView('crafting')
+  elseif msg=='craftscan' then M:CaptureProfession()
+  elseif msg=='materials' then M:BuildCraftShopping();M:SetView('materials')
+  elseif msg=='gold' then M:SetView('goldmaking')
   elseif msg=='debug' then M.db.settings.debug=not M.db.settings.debug; M:Print('Debug '..tostring(M.db.settings.debug))
   else M:ToggleUI() end
 end

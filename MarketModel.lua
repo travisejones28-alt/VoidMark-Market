@@ -368,6 +368,7 @@ function TTB:UpdateMarketFromGroup(group, scanID, completedAt)
   local estimatedCheapROI = obs.cheapCost > 0 and estimatedCheapNet / obs.cheapCost or 0
 
   market.latest = obs
+  if self.StoreAcquisitionDepth then self:StoreAcquisitionDepth(market,group,completedAt) end
   market.modelReason=string.format("Current depth = 45%% lower quartile + 55%% median; historical weight %.0f%% (%d recent samples)",historyWeight*100,histCount)
   market.observations = observations
   market.fairValue = fairValue

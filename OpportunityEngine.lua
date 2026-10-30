@@ -122,6 +122,7 @@ function M:FinalizeMarketScan(grouped,summary,done)
     self:SetScanStatus('Modeling markets: '..updated,0.85)
   end,function()
     summary.marketScanID=scanID
+    if summary.source~='cached snapshot' then self.db.lastDepthSnapshotAt=at end
     self.db.marketStats={storedMarkets=0,marketsUpdated=updated,scanID=scanID,modelVersion=self.version}
     self:RebuildIndexes()
     -- Index and opportunities must finish before publishing scan completion.

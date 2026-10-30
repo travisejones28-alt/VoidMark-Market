@@ -96,4 +96,28 @@ PASS Deposit allowance cannot produce a recommended nonpositive-return sale
 PASS Icon lookup supports modern, legacy metadata and bag-provided icons
 PASS Clipboard import accepts CRLF and trailing newline but rejects internal blank records
 PASS Unproven models are explicitly labeled in Browse and hide sniper projections
-ALL 97 TESTS PASSED
+PASS Depth quotes exhaust cheap stock and charge complete stacks
+PASS Depth excludes extreme high outliers and incomplete generations
+PASS Shared price API rejects stale, cached and suffix-only prices
+PASS Observed vendor bundle costs never use vendor sell value
+PASS Craft net, AH fees, deposit, ROI and breakeven match arithmetic
+PASS Owned reagents reduce cash without manufacturing profit
+PASS Multi-stage crafting chooses cheaper known intermediate
+PASS Repeated chain ingredients share depth instead of reusing cheap stock
+PASS Chain surplus output is reused and recursive cycles terminate
+PASS Unlearned recipes are visible but cannot become crafting candidates
+PASS Missing prices and unreliable output history never invent profits
+PASS Investment caps and conservative output limits block crafting
+PASS Two projects consume shared bags once and combine reagent depth
+PASS Combined plans respect portfolio limits and withhold unsafe caps
+PASS Projects and learned recipes survive reload without changing safety or ledger
+PASS Legacy profession reader handles output yields and uncached links
+PASS Modern reader records learnable recipes and rejects optional-choice slots
+PASS Merchant capture rejects limited stock and extended currencies
+PASS Craft rankings run incrementally and stale results cannot leak to Nexus
+PASS Farming comparisons require measured yield and established resale
+PASS Disenchant distributions validate probabilities and suppress unknown outputs
+PASS New UI renders sorting, filters, plan editing and calculation details without transactions
+PASS Real scanner publishes whole-stack depth, excludes own asks and invalidates absent stock
+PASS Malformed recipe input and excessive chain depth fail safely
+ALL 121 TESTS PASSED

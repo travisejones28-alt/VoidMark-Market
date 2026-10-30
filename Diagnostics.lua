@@ -44,6 +44,11 @@ function M:BuildTextReport()
     'Markets '..#(self.marketIndex or {})..' | opportunities '..#self.db.opportunities..' | ledger '..#self.db.ledger,
     'No automatic transactions. Pricing is an estimate; activity is inferred supply movement.'}
   lines[#lines+1]=self:BuildFullScanReport()
+  lines[#lines+1]='Crafting: '..tostring(self.recipeDiagnostic or 'No profession captured')..' | results '..#(self.craftRows or {})
+  lines[#lines+1]='Crafting interfaces: legacy='..tostring(type(GetNumTradeSkills)=='function')..
+    ' | schematic='..tostring(C_TradeSkillUI and type(C_TradeSkillUI.GetRecipeSchematic)=='function' or false)..
+    ' | bags='..tostring(type(GetItemCount)=='function' or C_Item and type(C_Item.GetItemCount)=='function' or false)
+  lines[#lines+1]='PricingAPI v1; snapshot costs require live validation. No verified disenchant dataset bundled.'
   local scan=self.db.latestScan
   if scan then
     for _,k in ipairs({'source','requestedAt','startedAt','completedAt','rawRows','auctionsProcessed','invalidRecords','incompleteRecords','deferredRows','recoveredRows','unresolvedRows','retryPasses','hydrationSeconds','uniqueItems','uniqueBaseItems','totalQuantity','processingMS','responseAt','responseSeconds','parseMS','marketScanID','skippedMarkets','modelErrors'}) do lines[#lines+1]=k..': '..tostring(scan[k]) end

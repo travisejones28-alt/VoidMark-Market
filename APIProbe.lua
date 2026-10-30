@@ -1,6 +1,14 @@
 local addonName, TTB = ...
 
 local API_SPECS = {
+  { "GetNumTradeSkills", "OPTIONAL - legacy profession list" },
+  { "GetTradeSkillReagentItemLink", "OPTIONAL - legacy reagent identity" },
+  { "GetTradeSkillNumMade", "OPTIONAL - deterministic output quantity" },
+  { "C_TradeSkillUI.GetAllRecipeIDs", "OPTIONAL - modern recipe enumeration" },
+  { "C_TradeSkillUI.GetRecipeSchematic", "OPTIONAL - feature-detected recipe structure" },
+  { "GetItemCount", "OPTIONAL - legacy bag inventory" },
+  { "C_Item.GetItemCount", "OPTIONAL - modern bag inventory" },
+  { "GetMerchantItemInfo", "OPTIONAL - observed unlimited vendor materials" },
   { "C_AuctionHouse.ReplicateItems", "READ/SCAN - full AH snapshot request" },
   { "C_AuctionHouse.GetNumReplicateItems", "READ - cached snapshot count" },
   { "C_AuctionHouse.GetReplicateItemInfo", "READ - cached snapshot row" },

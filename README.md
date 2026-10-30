@@ -1,6 +1,9 @@
-# VoidMark Market 1.3.1-beta
+# VoidMark Market 1.4.0-beta
 
-Current release: [1.3.1 stress-test pricing fixes and live checks](RELEASE_1.3.1.md). [1.3.0 features](RELEASE_1.3.md). Historical hardening release: see [HARDENING.md](HARDENING.md) for confirmed fixes, validation and in-game checks. Download the rebuilt addon from `dist/`.
+Current release: [1.4.0 Crafting Intelligence, depth pricing and material plans](RELEASE_1.4.md).
+Use `/vmm craft`, `/vmm craftscan`, `/vmm materials` and `/vmm gold`.
+Previous releases: [1.3.1 pricing fixes](RELEASE_1.3.1.md), [1.3.0 features](RELEASE_1.3.md),
+and [historical hardening](HARDENING.md). Download the rebuilt addon from `dist/`.
 
 
 A testable Forever auction terminal built from the supplied working prototype.

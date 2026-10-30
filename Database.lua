@@ -49,6 +49,7 @@ function M:InitializeDatabase()
   root.schemaVersion=1; db.schemaVersion=1
   self.exposureDirty=true
   self:RebuildIndexes()
+  if self.InitializeCrafting then self:InitializeCrafting() end
   -- Pending spend is persistent. Reload/close never changes an uncertain purchase to failed.
   for _,p in pairs(db.pending) do
     if type(p)=='table' then
@@ -73,7 +74,7 @@ function M:RebuildIndexes()
       end
       if debugprofilestop()-start>=4 then return false end
     end
-  end,function() self:RebuildOpportunities(); if self.view=='browse' then self:BuildBrowseRows(self.db.settings.filter) end; self:RefreshUI() end)
+  end,function() self:RebuildOpportunities(); if self.RebuildCrafting then self:RebuildCrafting() end; if self.view=='browse' then self:BuildBrowseRows(self.db.settings.filter) end; self:RefreshUI() end)
 end
 function M:GetMarket(itemID)
   local keys=self.itemIndex[tonumber(itemID)] or {}; local best

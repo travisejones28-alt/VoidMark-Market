@@ -142,7 +142,8 @@ function M:StartSnapshotProcessing(total,source,diagnostic)
     local g=grouped[key]
     if not g then
       g={marketKey=key,itemID=itemID,itemSuffix=suffix,itemLink=link,name=name,texture=texture,quality=quality,level=level,
-        listings=0,quantity=0,floorUnitPrice=unit,ceilingUnitPrice=unit,priceLevels={},tierCount=0}
+        listings=0,quantity=0,floorUnitPrice=unit,ceilingUnitPrice=unit,priceLevels={},tierCount=0,
+        acquisitionLots={},lotIndex={},lotCount=0}
       grouped[key]=g; summary.uniqueItems=summary.uniqueItems+1
       if suffix~=0 then summary.variantMarkets=summary.variantMarkets+1 end
     end
@@ -154,6 +155,18 @@ function M:StartSnapshotProcessing(total,source,diagnostic)
     if g.priceLevels[unit] then g.priceLevels[unit]=g.priceLevels[unit]+count
     elseif g.tierCount<512 then g.priceLevels[unit]=count; g.tierCount=g.tierCount+1
     else g.analysisIncomplete=true end -- retain old history, block an oversized distribution
+    -- Preserve whole-stack acquisition costs; exclude this character's own asks.
+    local player=UnitName('player')
+    local mine=owner==player or ownerFull==player..'-'..(GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName())
+    if not mine then
+      local lotKey=tostring(count)..'/'..tostring(buyout)
+      local lot=g.lotIndex[lotKey]
+      if lot then lot.count=lot.count+1
+      elseif g.lotCount<512 then
+        lot={quantity=count,cost=buyout,count=1};g.lotCount=g.lotCount+1
+        g.acquisitionLots[#g.acquisitionLots+1]=lot;g.lotIndex[lotKey]=lot
+      else g.depthIncomplete=true end
+    end
     return 'accepted',nil,not complete
   end
   local function read(index)

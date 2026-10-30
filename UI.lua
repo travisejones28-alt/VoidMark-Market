@@ -1,5 +1,5 @@
 local _,M=...
-local tabs={{'OVERVIEW','market'},{'BROWSE','browse'},{'SNIPER','opportunities'},{'SHOPPING','shopping'},
+local tabs={{'OVERVIEW','market'},{'BROWSE','browse'},{'SNIPER','opportunities'},{'SHOPPING','shopping'},{'CRAFTING','crafting'},
  {'SELL','selling'},{'INVESTMENTS','investments'},{'BANKER','banker'},{'LEDGER','ledger'},{'SETTINGS','settings'}}
 local function label(parent,text,x,y,w,font)
   local f=parent:CreateFontString(nil,'OVERLAY',font or 'GameFontNormalSmall'); f:SetPoint('TOPLEFT',x,y)
@@ -15,6 +15,7 @@ end
 function M:SetView(view)
   if self.view~=view and view~='shopping' then self.selectedRow=nil end
   self.view=view; self.page=1; if self.window then self.window:Show() end
+  if view=='goldmaking' and self.RebuildGoldmaking then self:RebuildGoldmaking() end
   if view=='selling' or view=='post review' then self:RefreshInventory()
   elseif view=='browse' then self:BuildBrowseRows(self.db.settings.filter or '') end; self:RefreshUI()
 end
@@ -33,7 +34,7 @@ function M:InitializeUI()
   self.modeLabel=label(f,'SAFE MODE ON',365,-19,455)
   button(f,'TRANSFER',860,-12,125,function() self:ShowTransferWindow() end)
   button(f,'X',995,-12,26,function() f:Hide() end)
-  for i,v in ipairs(tabs) do local tab=v[2]; button(f,v[1],18+(i-1)*111,-48,108,function() self:SetView(tab) end) end
+  for i,v in ipairs(tabs) do local tab=v[2]; button(f,v[1],18+(i-1)*100,-48,98,function() self:SetView(tab) end) end
   self.status=label(f,'',18,-84,995)
   self.toolbar=CreateFrame('Frame',nil,f); self.toolbar:SetPoint('TOPLEFT',18,-109); self.toolbar:SetSize(1000,34)
   self.scanButton=button(self.toolbar,'FULL SCAN',0,0,110,function() self:RequestFreshScan() end)
@@ -264,6 +265,7 @@ function M:ShowReport()
 end
 function M:RenderUI()
   self.uiDirty=false; if not self.window or not self.window:IsShown() then return end
+  if self.craftAction then self.craftAction:Hide() end
   local view=self.view or 'market'; local s=self.db.settings
   self.modeLabel:SetText(s.safeMode and '|cff72e7aaSAFE MODE ON - no transactions|r' or '|cffffa250TRADING ENABLED - real clicks required|r')
   self.status:SetText('AH '..(self.ahOpen and 'OPEN' or 'CLOSED')..' | '..self.scanState.status..' | full scan cooldown '..self:FormatDuration(self:GetSecondsUntilFreshScanAllowed()))
@@ -271,13 +273,14 @@ function M:RenderUI()
   self.browseAction:Hide();self.presetButton:SetShown(view=='opportunities')
   self.presetButton:SetText('PRESET: '..(s.sniperPreset or 'balanced'):upper())
   self.toolbar:Show(); self.tableFrame:Hide(); self.detail:Hide(); self.contentScroll:Hide(); self.settingsFrame:Hide(); self.action:Hide(); self.ledgerAction:Hide(); self.ownedRefresh:Hide(); self.reviewRemove:Hide(); self.postReviewRemove:Hide(); self.postReviewBack:Hide(); self.sellAction:Hide(); self.watchFrame:Hide(); self.statsFrame:Hide()
-  self.filter:SetShown(view=='opportunities' or view=='browse'); self.sortButton:SetShown(view=='opportunities' or view=='browse'); self.sortButton:SetText('SORT: '..s.sort:upper())
+  self.filter:SetShown(view=='opportunities' or view=='browse' or view=='crafting'); self.sortButton:SetShown(view=='opportunities' or view=='browse' or view=='crafting'); self.sortButton:SetText('SORT: '..s.sort:upper())
   if view=='browse' then
     local names={profit='SPREAD',roi='FAIR/ASK',ask='ASK',name='NAME'}
     self.sortButton:SetText('SORT: '..(names[s.sort] or 'NAME'))
   end
   self.detail:SetHeight(view=='selling' and 90 or 125)
   self.scanButton:SetEnabled(self.ahOpen and not self.scanState.running); self.cachedButton:SetEnabled(self.ahOpen and not self.scanState.running)
+  if view=='crafting' or view=='materials' or view=='goldmaking' then return self:RenderCraftingUI(view) end
   if view=='settings' then self.settingsFrame:Show(); self.safe:SetChecked(s.safeMode); self.minimapToggle:SetChecked(not (s.minimap and s.minimap.hide)); return end
   if view=='market' or view=='banker' then
     local data=self:GetBankerSummary();local p=data.portfolio

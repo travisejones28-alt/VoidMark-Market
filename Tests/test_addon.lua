@@ -823,4 +823,5 @@ check('Unproven models are explicitly labeled in Browse and hide sniper projecti
   M.db.opportunities=old;M.db.settings.filter=filter
 end)
 
+assert(loadfile(addon..'Tests/crafting.lua'))()(M,check,jobs,emit)
 print('ALL '..total..' TESTS PASSED')
