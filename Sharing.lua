@@ -166,12 +166,16 @@ function M:PairPeer(name)
  local peer=canonical(name)
  if not peer or peer==canonical(unitCharacter('player')) then return 'Enter the other character name (First Surname)' end
  self.db.syncAddress=fullAddress(name)
- self.db.syncPeer=peer;self.db.shareJournal.seeded=nil;self.shareRun={};self:StartSharing();self:RefreshUI();return 'Paired with '..peer..'; waiting for the other character to reply'
+ self.db.syncPeer=peer;self.db.shareJournal.seeded=nil;self.shareRun={};self:StartSharing();self:RefreshUI()
+ return 'Peer set to '..peer..'. This is NOT connected yet. Use /vmm peer to check reply status.'
 end
 function M:SharingStatus()
  local peer=self.db.syncPeer
  if not peer then return 'Not paired. Pair each character with the other.' end
- return peer..' | '..(self.shareRun.status or 'Waiting for partner reply')
+ local r=self.shareRun or {}
+ local detail=r.lastChannel and (' via '..r.lastChannel) or ''
+ if r.lastContact then detail=detail..' | last reply '..math.floor(GetTime()-r.lastContact)..'s ago' end
+ return peer..' | '..(r.status or 'Waiting for partner reply')..detail
 end
 function M:QueueScanSharing(at)
  if not self.db.syncPeer or self.persistenceBlocked then return end
@@ -188,8 +192,17 @@ function M:StartSharing()
  local api=C_ChatInfo;self.shareRun=self.shareRun or {}
  if self.persistenceBlocked or not self.db.syncPeer or not api or not api.RegisterAddonMessagePrefix or not api.SendAddonMessage then return end
  if not self.shareRegistered then
-  local ok,v=pcall(api.RegisterAddonMessagePrefix,PREFIX)
-  self.shareRegistered=ok and (v==true or v==nil or type(v)=='number' and (v==(Enum and Enum.RegisterAddonMessagePrefixResult and Enum.RegisterAddonMessagePrefixResult.Success or 0) or api.IsAddonMessagePrefixRegistered and api.IsAddonMessagePrefixRegistered(PREFIX)))
+  -- Some Forever/Classic builds wrap the API and put the enum in the LAST
+  -- return value. Never treat nil as successful registration.
+  local ok,v=pcall(function() return select(-1,api.RegisterAddonMessagePrefix(PREFIX)) end)
+  local success=Enum and Enum.RegisterAddonMessagePrefixResult and Enum.RegisterAddonMessagePrefixResult.Success or 0
+  local duplicate=Enum and Enum.RegisterAddonMessagePrefixResult and Enum.RegisterAddonMessagePrefixResult.DuplicatePrefix or 1
+  self.shareRegistered=ok and (v==true or v==success or v==duplicate)
+  if not self.shareRegistered and api.IsAddonMessagePrefixRegistered then
+   local verified,registered=pcall(api.IsAddonMessagePrefixRegistered,PREFIX)
+   self.shareRegistered=verified and registered==true
+  end
+  if not self.shareRegistered then self.shareRun.status='Addon-message registration failed (result '..tostring(v)..')' end
  end
  local d=self.db;local j=d.shareJournal
  if not j.seeded then
@@ -231,8 +244,17 @@ local function send(self,ch,body)
   local name=address:match('^([^-]+)')
   target=canonical(name)==self.db.syncPeer and name or address
  end
- local ok,r=pcall(C_ChatInfo.SendAddonMessage,PREFIX,msg,ch,target)
- return ok and r~=false and (type(r)~='number' or r==(Enum and Enum.SendAddonMessageResult and Enum.SendAddonMessageResult.Success or 0))
+ -- The legacy compatibility wrapper can return (nil, enum). Read the
+ -- final return value, and do not mistake a nil/false result for success.
+ local ok,r=pcall(function() return select(-1,C_ChatInfo.SendAddonMessage(PREFIX,msg,ch,target)) end)
+ local success=Enum and Enum.SendAddonMessageResult and Enum.SendAddonMessageResult.Success or 0
+ local sent=ok and (r==true or r==success)
+ self.shareRun.lastChannel=ch
+ if not sent then
+  self.shareRun.lastSendError=ok and tostring(r) or 'API error'
+  self.shareRun.status='Send failed on '..ch..' (result '..self.shareRun.lastSendError..')'
+ else self.shareRun.lastSendError=nil end
+ return sent
 end
 function M:PumpSharing()
  if not self.db.syncPeer or self.persistenceBlocked or not self.shareRegistered then return end
@@ -253,7 +275,8 @@ function M:PumpSharing()
   local unconfirmed=ch=='WHISPER' and not r.lastContact
   r.probeDelay=unconfirmed and math.min(300,(r.probeDelay or 10)*2) or 20
   r.hello=now+r.probeDelay
-  if unconfirmed then r.status=sent and 'Waiting for direct partner reply' or 'Direct message unavailable; will retry' end
+  if unconfirmed and sent then r.status='Whisper queued; waiting for partner reply (delivery unconfirmed)'
+  elseif not sent then r.status='Message rejected on '..ch..' (result '..tostring(r.lastSendError)..'); retrying' end
   return
  end
  if r.cursor==nil or r.cursor>=j.seq or now<(r.retry or 0) then return end
