@@ -65,7 +65,10 @@ function M:PublishPrice(m)
  local j=self.db.shareJournal;local index='P'..m.marketKey
  local old=j.latest[index] and j.rows[j.latest[index]]
  local a,b,c,d
- if old then a,b,c,d=old:match('^P,[^,]+,(%d+),(%d+),(%d+),(%d+)
+ if old then a,b,c,d=old:match('^P,[^,]+,(%d+),(%d+),(%d+),(%d+)$') end
+ -- A saved legacy entry without confidence is published in the new format.
+ local confidence=whole(m.confidenceScore,0,100) and m.confidenceScore or 0
+ if tonumber(b)==floor and tonumber(c)==fair and tonumber(d)==confidence then
   if m.lastSeen>tonumber(a) then self:Journal('U'..m.marketKey,table.concat({'U',m.marketKey,a,m.lastSeen},',')) end
  else
   local u='U'..m.marketKey;if j.latest[u] then j.rows[j.latest[u]]=nil;j.latest[u]=nil end
