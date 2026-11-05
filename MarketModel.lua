@@ -317,6 +317,14 @@ function TTB:UpdateMarketFromGroup(group, scanID, completedAt)
   elseif histCount <= 8 then historyWeight = 0.46
   else historyWeight = 0.55 end
 
+  -- Fresh-server safeguard: many scans in the first hours do not constitute
+  -- an established economy. Grow history influence with elapsed market age.
+  local firstAt = #recentHistory>0 and tonumber(recentHistory[1].at) or completedAt
+  local historySpan = math.max(0, completedAt - firstAt)
+  if historySpan < 86400 then historyWeight = math.min(historyWeight, 0.15)
+  elseif historySpan < 3*86400 then historyWeight = math.min(historyWeight, 0.25)
+  elseif historySpan < 7*86400 then historyWeight = math.min(historyWeight, 0.40) end
+
   local fairValue = current
   if histFair > 0 then fairValue = current * (1 - historyWeight) + histFair * historyWeight end
   -- Reviewed seller invoices can inform the model, but cannot dominate depth.
@@ -344,7 +352,7 @@ function TTB:UpdateMarketFromGroup(group, scanID, completedAt)
   if observations <= 1 then confidenceScore = math.min(confidenceScore, 30)
   elseif observations == 2 then confidenceScore = math.min(confidenceScore, 48)
   elseif observations == 3 then confidenceScore = math.min(confidenceScore, 62) end
-  local span = #recentHistory>0 and completedAt-(tonumber(recentHistory[1].at) or completedAt) or 0
+  local span = historySpan
   if span<86400 then confidenceScore=math.min(confidenceScore,62)
   elseif span<7*86400 then confidenceScore=math.min(confidenceScore,80) end
 
@@ -371,7 +379,7 @@ function TTB:UpdateMarketFromGroup(group, scanID, completedAt)
 
   market.latest = obs
   if self.StoreAcquisitionDepth then self:StoreAcquisitionDepth(market,group,completedAt) end
-  market.modelReason=string.format("Current depth = 45%% lower quartile + 55%% median; historical weight %.0f%% (%d recent samples)",historyWeight*100,histCount)
+  market.modelReason=string.format("Current depth = 45%% lower quartile + 55%% median; historical weight %.0f%% (%d recent samples, %d hours)",historyWeight*100,histCount,math.floor(historySpan/3600))
   market.observations = observations
   market.fairValue = fairValue
   market.historicalFair = round(histFair)
@@ -380,6 +388,8 @@ function TTB:UpdateMarketFromGroup(group, scanID, completedAt)
   market.volatility = volatility
   market.confidenceScore = round(confidenceScore)
   market.confidence = confidenceLabel(confidenceScore)
+  market.historySpan = span
+  market.developingMarket = observations < 6 or span < 3*86400 or confidenceScore < 70
   market.activityScore = round(activityScore)
   market.activity = liquidityLabel(activityScore)
   market.supplyChange = round(supplyChange)
