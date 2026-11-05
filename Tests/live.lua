@@ -195,4 +195,46 @@ check('A completed full scan publishes batched asks without transferring scan hi
  local seen=m.lastSeen;local history=#m.history
  M:StartSnapshotProcessing(3000,'cached snapshot');jobs();assert(m.lastSeen==seen and #m.history==history and j.seq==seq)
 end)
+check('Auction House tabs work with Auctionator disabled and restore the standalone window',function()
+ local oldCreate=CreateFrame
+ local native=oldCreate('Frame');native.Tabs={oldCreate('Button'),oldCreate('Button'),oldCreate('Button')}
+ AuctionHouseFrame=native;AuctionHouseFrameDisplayMode={Buy={'BuyFrame'}}
+ native.SetDisplayMode=function(self,mode)self.displayMode=mode end
+ hooksecurefunc=function(f,key,after)local before=f[key];f[key]=function(...) before(...);after(...) end end
+ PanelTemplates_DeselectTab=function(b)b.selected=false end
+ PanelTemplates_SelectTab=function(b)b.selected=true end
+ PanelTemplates_TabResize=function()end
+ CreateFrame=function(...)
+  local f=oldCreate(...);f:SetSize(980,620)
+  f.Show=function(x)if not x.shown then x.shown=true;if x.scripts.OnShow then x.scripts.OnShow(x) end end end
+  f.Hide=function(x)if x.shown then x.shown=false;if x.scripts.OnHide then x.scripts.OnHide(x) end end end
+  return f
+ end
+ M.window:SetPoint('CENTER',UIParent,'CENTER',23,46)
+ local oldScale=M.window:GetScale()
+ M.window.GetParent=function()return UIParent end
+ M.window.GetFrameStrata=function()return 'MEDIUM' end
+ emit('AUCTION_HOUSE_SHOW')
+ local tabs=M.auctionTabs;assert(#tabs==4 and #native.Tabs==3)
+ M:InstallAuctionTabs();assert(M.auctionTabs==tabs)
+ local views={'shopping','selling','my auctions','market'}
+ for i,tab in ipairs(tabs) do
+  tab.button.scripts.OnClick();assert(M.view==views[i] and M.auctionDock.page==tab.page)
+  for j,other in ipairs(tabs) do assert(other.page:IsShown()==(j==i)) end
+ end
+ M:CloseMarketWindow()
+ assert(not M.auctionDock and native.displayMode==AuctionHouseFrameDisplayMode.Buy)
+ assert(not M.window:IsShown() and M.window:GetScale()==oldScale)
+ local _,parent,_,x,y=M.window:GetPoint();assert(parent==UIParent and x==23 and y==46)
+ -- With a shared tab manager, it owns the row and associates each registered page.
+ local registered={};local lib={
+  CreateTab=function(_,id,page,label)registered[id]={page=page,label=label,button=oldCreate('Button')} end,
+  GetButton=function(_,id)return registered[id].button end}
+ LibStub=function()return lib end;M.auctionTabs=nil;M:InstallAuctionTabs()
+ assert(registered.VoidMarkMarketShopping.label=='VM Shopping')
+ registered.VoidMarkMarketSelling.page:Show()
+ assert(M.view=='selling' and M.auctionDock)
+ registered.VoidMarkMarketSelling.page:Hide();assert(not M.auctionDock)
+ LibStub=nil;CreateFrame=oldCreate;AuctionHouseFrame=nil;M.auctionTabs=nil
+end)
 end

@@ -134,4 +134,5 @@ PASS Live sharing pauses in lockdown and only whispers an online paired characte
 PASS Clipboard paging covers 1,500 exact keys without copying transaction records
 PASS A newer simple ask does not erase a reliable earlier historical estimate
 PASS A completed full scan publishes batched asks without transferring scan history or duplicating observations
-ALL 135 TESTS PASSED
+PASS Auction House tabs work with Auctionator disabled and restore the standalone window
+ALL 136 TESTS PASSED

@@ -19,13 +19,13 @@ function M:SetView(view)
   if view=='selling' or view=='post review' then self:RefreshInventory()
   elseif view=='browse' then self:BuildBrowseRows(self.db.settings.filter or '') end; self:RefreshUI()
 end
-function M:ToggleUI() if self.window:IsShown() then self.window:Hide() else self.window:Show(); self:RefreshUI() end end
+function M:ToggleUI() if self.window:IsShown() then self:CloseMarketWindow() else self.window:Show(); self:RefreshUI() end end
 function M:InitializeUI()
   if self.window then return end
   local f=CreateFrame('Frame','VoidMarkMarketWindow',UIParent,'BackdropTemplate'); self.window=f
   f:SetSize(1040,680); f:SetPoint('CENTER'); f:SetFrameStrata('MEDIUM'); f:SetToplevel(true); f:SetMovable(true); f:EnableMouse(true)
   f:SetClampedToScreen(true); f:RegisterForDrag('LeftButton')
-  f:SetScript('OnDragStart',function(w) w:StartMoving() end); f:SetScript('OnDragStop',function(w) w:StopMovingOrSizing(); self:SaveWindowLayout() end)
+  f:SetScript('OnDragStart',function(w) if not self.auctionDock then w:StartMoving() end end); f:SetScript('OnDragStop',function(w) w:StopMovingOrSizing(); self:SaveWindowLayout() end)
   f:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Tooltips\\UI-Tooltip-Border',edgeSize=16,insets={left=4,right=4,top=4,bottom=4}})
   f:SetBackdropColor(0.025,0.022,0.04,0.97); f:SetBackdropBorderColor(0.45,0.3,0.7,1)
   if UIParent.GetWidth then f:SetScale(math.min(1,(UIParent:GetWidth()-30)/1040,(UIParent:GetHeight()-30)/680)) end
@@ -33,7 +33,7 @@ function M:InitializeUI()
   label(f,'VOIDMARK MARKET',18,-16,300,'GameFontNormalLarge')
   self.modeLabel=label(f,'Manual trading',365,-19,455)
   button(f,'TRANSFER',860,-12,125,function() self:ShowTransferWindow() end)
-  button(f,'X',995,-12,26,function() f:Hide() end)
+  button(f,'X',995,-12,26,function() self:CloseMarketWindow() end)
   for i,v in ipairs(tabs) do local tab=v[2]; button(f,v[1],18+(i-1)*100,-48,98,function() self:SetView(tab) end) end
   self.status=label(f,'',18,-84,995)
   self.toolbar=CreateFrame('Frame',nil,f); self.toolbar:SetPoint('TOPLEFT',18,-109); self.toolbar:SetSize(1000,34)
@@ -227,7 +227,7 @@ function M:InitializeUI()
   self.settingsFrame=CreateFrame('Frame',nil,f); self.settingsFrame:SetPoint('TOPLEFT',18,-151); self.settingsFrame:SetSize(998,460)
   button(self.settingsFrame,'SCALE -',0,-425,100,function() self:ChangeWindowScale(-0.05) end)
   button(self.settingsFrame,'SCALE +',108,-425,100,function() self:ChangeWindowScale(0.05) end)
-  button(self.settingsFrame,'RESET WINDOW',216,-425,150,function() self.db.settings.window=nil;self.window:ClearAllPoints();self.window:SetPoint('CENTER');self:ChangeWindowScale(0,true) end)
+  button(self.settingsFrame,'RESET WINDOW',216,-425,150,function() if self.auctionDock then return end;self.db.settings.window=nil;self.window:ClearAllPoints();self.window:SetPoint('CENTER');self:ChangeWindowScale(0,true) end)
   local settings={
     {'maxTransaction','Maximum transaction (gold)',10000},{'maxItemSpend','Maximum per-item exposure (gold)',10000},
     {'maxExposure','Maximum portfolio exposure (gold)',10000},{'maxQuantity','Maximum quantity',1},

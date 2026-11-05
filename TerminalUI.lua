@@ -24,7 +24,7 @@ function M:SortBrowseRows()
   end)
 end
 function M:SaveWindowLayout()
-  if self.persistenceBlocked then return end
+  if self.auctionDock or self.persistenceBlocked then return end
   local f=self.window
   local point,_,relative,x,y=f:GetPoint()
   local scale=f:GetScale()
@@ -45,6 +45,7 @@ function M:MaximumWindowScale()
   return math.max(0.4,math.min(1.5,(UIParent:GetWidth()-30)/1040,(UIParent:GetHeight()-30)/680))
 end
 function M:ChangeWindowScale(delta,reset)
+  if self.auctionDock then return end
   local scale=reset and 1 or (self.window:GetScale() or 1)+delta
   self.window:SetScale(math.max(0.4,math.min(self:MaximumWindowScale(),scale)))
   self:SaveWindowLayout()
