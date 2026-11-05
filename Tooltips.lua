@@ -31,6 +31,9 @@ function M:PriceObservation(key)
  local m=self.db.market[key];local localPrice
  if m and type(m.latest)=='table' and self:Finite(m.latest.floor,1,1e12) and self:Finite(m.lastSeen,1,time()+60) then
   localPrice={floor=m.latest.floor,at=m.lastSeen,fair=self:CanEstimateResale(m) and m.fairValue or nil,
+   confidence=self:Finite(m.confidenceScore,0,100) and m.confidenceScore or nil,
+   developing=m.developingMarket~=false and
+    ((tonumber(m.observations) or 0)<6 or (tonumber(m.historySpan) or 0)<3*86400 or (tonumber(m.confidenceScore) or 0)<70),
    source='Local scan',unverified=m.cacheUntrusted or m.analysisIncomplete}
  end
  local p=self.db.sharedPrices[key]
@@ -40,7 +43,9 @@ function M:PriceObservation(key)
  if localPrice and not localPrice.fair then localPrice.fair=sharedHistory end
  if p and self:Finite(p.floor,1,1e12) and self:Finite(p.at,1,time()+60) and
    (not localPrice or p.at>localPrice.at or (p.at==localPrice.at and localPrice.unverified)) then
-  return {floor=p.floor,at=p.at,fair=sharedHistory or (localPrice and localPrice.fair),source='Synced account'}
+  return {floor=p.floor,at=p.at,fair=sharedHistory or (localPrice and localPrice.fair),
+   confidence=self:Finite(p.confidence,0,100) and p.confidence or (localPrice and localPrice.confidence),
+   developing=true,source='Synced account'}
  end
  return localPrice
 end
@@ -56,7 +61,17 @@ function M:AppendMarketTooltip(tip,link)
  tip:AddDoubleLine('Lowest AH / unit',self:Money(p.floor),.95,.95,.95,1,.85,.4)
  tip:AddLine(p.source..' | '..ageText..' old',.75,.8,.85)
  if age>self.db.settings.maxDataAge or p.unverified then tip:AddLine('STALE / UNVERIFIED',1,.4,.3)
- elseif p.fair then tip:AddDoubleLine('Market estimate',self:Money(p.fair),.75,.8,.85,.75,.8,.85) end
+ else
+  if p.fair then tip:AddDoubleLine('Market estimate',self:Money(p.fair),.75,.8,.85,.75,.8,.85) end
+  if p.confidence then
+   tip:AddLine('Model confidence: '..math.floor(p.confidence+0.5)..'%',.75,.8,.85)
+  else
+   tip:AddLine('Model confidence: not yet shared',.75,.8,.85)
+  end
+  if p.developing or not p.confidence then
+   tip:AddLine('Developing Market - estimate is provisional',1,.75,.3)
+  end
+ end
 end
 function M:InitializePriceTooltips()
  if self.tooltipHooked then return end
