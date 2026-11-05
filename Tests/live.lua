@@ -201,6 +201,11 @@ check('Auction House tabs work with Auctionator disabled and restore the standal
  AuctionHouseFrame=native;AuctionHouseFrameDisplayMode={Buy={'BuyFrame'}}
  native:SetSize(800,538)
  native.GetFrameLevel=function()return 15 end
+ local starts,stops,movable=0,0,false
+ native.IsMovable=function()return movable end
+ native.SetMovable=function(_,v) movable=v end
+ native.StartMoving=function()assert(movable);starts=starts+1 end
+ native.StopMovingOrSizing=function()stops=stops+1 end
  native.GetFrameStrata=function()return 'HIGH' end
  native.GetEffectiveScale=function()return 1.2 end
  UIParent.GetEffectiveScale=function()return 1 end
@@ -211,13 +216,16 @@ check('Auction House tabs work with Auctionator disabled and restore the standal
  PanelTemplates_TabResize=function()end
  CreateFrame=function(...)
   local f=oldCreate(...);f:SetSize(0,0) -- unresolved page size at first OnShow
+  f.GetFrameLevel=function()return native:GetFrameLevel()+1 end
   f.Show=function(x)if not x.shown then x.shown=true;if x.scripts.OnShow then x.scripts.OnShow(x) end end end
   f.Hide=function(x)if x.shown then x.shown=false;if x.scripts.OnHide then x.scripts.OnHide(x) end end end
   return f
  end
  M.window:SetPoint('CENTER',UIParent,'CENTER',23,46)
  local oldScale=M.window:GetScale()
- M.window.GetParent=function()return UIParent end
+ local parentFrame=UIParent
+ M.window.GetParent=function()return parentFrame end
+ M.window.SetParent=function(_,parent)parentFrame=parent end
  M.window.GetFrameStrata=function()return 'MEDIUM' end
  M.window.GetFrameLevel=function()return 2 end
  M.window.SetFrameLevel=function(frame,n)frame.testLevel=n end
@@ -227,14 +235,20 @@ check('Auction House tabs work with Auctionator disabled and restore the standal
  local views={'shopping','selling','my auctions','market'}
  for i,tab in ipairs(tabs) do
   tab.button.scripts.OnClick();assert(M.view==views[i] and M.auctionDock.page==tab.page)
-  assert(M.window:IsShown() and M.window:GetScale()>0.8 and M.window.testLevel>native:GetFrameLevel())
+  assert(M.window:IsShown() and M.window:GetScale()>0 and M.window.testLevel>native:GetFrameLevel())
+  assert(parentFrame==tab.page)
+  if i==1 then
+   M.window.scripts.OnDragStart(M.window);M.window.scripts.OnDragStop(M.window)
+   assert(starts==1 and stops==1 and not movable and M.window:IsShown() and parentFrame==tab.page)
+   M.window.scripts.OnDragStart(M.window) -- switching tabs also ends a drag
+  elseif i==2 then assert(starts==2 and stops==2 and not movable) end
   if views[i]=='selling' then assert(M.sellAction:IsShown() and M.tableFrame:IsShown()) end
   if views[i]=='my auctions' then assert(M.ownedRefresh:IsShown() and M.tableFrame:IsShown()) end
   for j,other in ipairs(tabs) do assert(other.page:IsShown()==(j==i)) end
  end
  M:CloseMarketWindow()
  assert(not M.auctionDock and native.displayMode==AuctionHouseFrameDisplayMode.Buy)
- assert(not M.window:IsShown() and M.window:GetScale()==oldScale and M.window.testLevel==2)
+ assert(parentFrame==UIParent and not M.window:IsShown() and M.window:GetScale()==oldScale and M.window.testLevel==2)
  local _,parent,_,x,y=M.window:GetPoint();assert(parent==UIParent and x==23 and y==46)
  -- With a shared tab manager, it owns the row and associates each registered page.
  local registered={};local lib={

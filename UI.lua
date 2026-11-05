@@ -25,7 +25,8 @@ function M:InitializeUI()
   local f=CreateFrame('Frame','VoidMarkMarketWindow',UIParent,'BackdropTemplate'); self.window=f
   f:SetSize(1040,680); f:SetPoint('CENTER'); f:SetFrameStrata('MEDIUM'); f:SetToplevel(true); f:SetMovable(true); f:EnableMouse(true)
   f:SetClampedToScreen(true); f:RegisterForDrag('LeftButton')
-  f:SetScript('OnDragStart',function(w) if not self.auctionDock then w:StartMoving() end end); f:SetScript('OnDragStop',function(w) w:StopMovingOrSizing(); self:SaveWindowLayout() end)
+  f:SetScript('OnDragStart',function(w) self:StartMarketDrag(w) end)
+  f:SetScript('OnDragStop',function(w) self:StopMarketDrag(w) end)
   f:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Tooltips\\UI-Tooltip-Border',edgeSize=16,insets={left=4,right=4,top=4,bottom=4}})
   f:SetBackdropColor(0.025,0.022,0.04,0.97); f:SetBackdropBorderColor(0.45,0.3,0.7,1)
   if UIParent.GetWidth then f:SetScale(math.min(1,(UIParent:GetWidth()-30)/1040,(UIParent:GetHeight()-30)/680)) end

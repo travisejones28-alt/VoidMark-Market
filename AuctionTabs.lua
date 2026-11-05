@@ -12,19 +12,21 @@ local function dock(self, page, view)
   local ah = AuctionHouseFrame
   self.auctionDock = {
     page=page, anchor={window:GetPoint()}, scale=window:GetScale(),
-    strata=window:GetFrameStrata(), level=window:GetFrameLevel(),
+    strata=window:GetFrameStrata(), level=window:GetFrameLevel(), parent=window:GetParent(),
   }
-  -- Keep the terminal on UIParent. Native tab pages can still be laying out
-  -- during OnShow; the already visible AH has the authoritative dimensions.
-  local scaleRatio = ah:GetEffectiveScale()/UIParent:GetEffectiveScale()
+  -- Keep the controls in the same frame hierarchy when the AH is raised or
+  -- dragged. Use the AH bounds even if the new page has not laid out yet.
   local fit = math.min((ah:GetWidth()-16)/1040, (ah:GetHeight()-44)/680)
   if fit <= 0 then error('Auction House dimensions unavailable') end
+  window:SetParent(page)
+  window:SetToplevel(false)
   window:SetFrameStrata(ah:GetFrameStrata())
-  window:SetFrameLevel(ah:GetFrameLevel()+10)
+  window:SetFrameLevel(page:GetFrameLevel()+1)
+  if window.SetFixedFrameLevel then window:SetFixedFrameLevel(false) end
   window:SetMovable(false)
   window:SetClampedToScreen(false)
   window:ClearAllPoints()
-  window:SetScale(fit*scaleRatio)
+  window:SetScale(fit)
   window:SetPoint('CENTER', ah, 'CENTER', 0, -14/fit)
   self.selectedRow = nil
   self:SetView(view)
@@ -34,12 +36,41 @@ local function dock(self, page, view)
   end
 end
 
+function M:StartMarketDrag(window)
+  local state = self.auctionDock
+  if not state then window:StartMoving();return end
+  if state.dragging or (InCombatLockdown and InCombatLockdown()) then return end
+  local ah = AuctionHouseFrame
+  state.wasMovable = ah:IsMovable()
+  ah:SetMovable(true)
+  ah:StartMoving()
+  state.dragging = true
+end
+
+function M:StopMarketDrag(window)
+  local state = self.auctionDock
+  if state then
+    if state.dragging then
+      state.dragging = nil
+      AuctionHouseFrame:StopMovingOrSizing()
+      AuctionHouseFrame:SetMovable(state.wasMovable)
+    end
+    return
+  end
+  window:StopMovingOrSizing()
+  self:SaveWindowLayout()
+end
+
 local function undock(self, page)
   local state = self.auctionDock
   if not state or state.page ~= page then return end
-  self.auctionDock = nil
   local window = self.window
+  self:StopMarketDrag(window)
+  self.auctionDock = nil
   window:Hide()
+  window:ClearAllPoints()
+  window:SetParent(state.parent)
+  window:SetToplevel(true)
   window:SetFrameStrata(state.strata)
   window:SetFrameLevel(state.level)
   window:SetMovable(true)
