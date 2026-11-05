@@ -1,6 +1,6 @@
 local addonName, M = ...
 _G.VoidMarkMarket = M
-M.name, M.version = addonName or 'VoidMarkMarket', '1.5.5'
+M.name, M.version = addonName or 'VoidMarkMarket', '1.5.6'
 M.eventHandlers, M.runtimeLog, M.jobs = {}, {}, {}
 M.ahOpen = false
 M.scanState = {running=false, phase='idle', status='No scan yet', progress=0}
@@ -159,8 +159,9 @@ M.eventFrame:SetScript('OnUpdate',function(_,elapsed)
 end)
 SLASH_VOIDMARKMARKET1='/vmm'; SLASH_VOIDMARKMARKET2='/voidmarkmarket'
 SlashCmdList.VOIDMARKMARKET=function(msg)
-  msg=(msg or ''):lower():match('^%s*(.-)%s*$')
-  if msg:match('^peer') then M:Print(M:PairPeer(msg:match('^peer%s+(.+)$')))
+  local raw=(msg or ''):match('^%s*(.-)%s*$')
+  msg=raw:lower()
+  if msg=='peer' or msg:match('^peer%s') then M:Print(M:PairPeer(raw:match('^%S+%s+(.+)$')))
   elseif msg=='scan' then M:RequestFreshScan()
   elseif msg=='cached' then M:AnalyzeCachedSnapshot()
   elseif msg=='diag' then M:SetView('diagnostics')

@@ -166,13 +166,30 @@ check('Direct pairing needs no friend entry, respects lockdown and backs off wit
  local lockdown=true;local online=true;local n=0
  GetNumGroupMembers=function()return 0 end
  C_ChatInfo={RegisterAddonMessagePrefix=function()return 0 end,InChatMessagingLockdown=function() return lockdown end,
- SendAddonMessage=function(_,msg,ch,target)assert(ch=='WHISPER' and target=='bank' and #msg<=240);n=n+1;return 0 end}
+ SendAddonMessage=function(_,msg,ch,target)assert(ch=='WHISPER' and target=='Bank' and #msg<=240);n=n+1;return 0 end}
  C_FriendList={GetFriendInfo=function()error('friend lookup unnecessary') end}
  M:PairPeer('Bank-TestRealm');M:PumpSharing();assert(n==0)
  lockdown=false;advance(6);M:PumpSharing();assert(n==1)
  advance(25);M:PumpSharing();assert(n==2)
  advance(25);M:PumpSharing();assert(n==2)
  M:PairPeer('off');C_ChatInfo=old;C_FriendList=friend;GetNumGroupMembers=num
+end)
+check('Forever whisper, group and sender matching preserve the surname space',function()
+ new();local chat,group,full,nu,un=C_ChatInfo,GetNumGroupMembers,UnitFullName,NameUtil,UnitNameUnmodified
+ NameUtil={GetUnmodifiedUnitFullName=function()end,GetFullNameWithoutRealm=function(first,last)return first..' '..last end}
+ UnitNameUnmodified=function(unit)return 'Voidmark',unit=='player' and 'Soulreaver' or 'Bank' end
+ local count=0;GetNumGroupMembers=function()return count end
+ UnitFullName=function()return 'Voidmark','Bank' end
+ local channel,target
+ C_ChatInfo={RegisterAddonMessagePrefix=function()return 0 end,SendAddonMessage=function(_,_,c,t)channel,target=c,t;return 0 end}
+ SlashCmdList.VOIDMARKMARKET('peer Voidmark Bank')
+ M:PumpSharing();assert(channel=='WHISPER' and target=='Voidmark Bank')
+ local hello=M.economyID..'\tH\t123-456'
+ M:ReceiveSharing('VMMkt2',hello,'WHISPER','Voidmarkbank-TestRealm');assert(not M.shareRun.reply)
+ M:ReceiveSharing('VMMkt2',hello,'WHISPER','Voidmark Bank-TestRealm');assert(M.shareRun.reply)
+ count=1;advance(1);M:PumpSharing();assert(channel=='PARTY' and target==nil)
+ M:PairPeer('Voidmark Soulreaver');assert(M.db.syncPeer=='voidmark bank-testrealm')
+ C_ChatInfo,GetNumGroupMembers,UnitFullName,NameUtil,UnitNameUnmodified=chat,group,full,nu,un
 end)
 check('Clipboard paging covers 1,500 exact keys without copying transaction records',function()
  new();local source=M.db;M.marketIndex={}

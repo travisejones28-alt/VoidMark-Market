@@ -2,6 +2,17 @@ local _,M=...
 -- Latest-state journal: one pending revision per variant/list entry, not one
 -- historical row per change. A receiver advances only after validating a page.
 local PREFIX='VMMkt2'
+local function secret(v) return issecretvalue and issecretvalue(v) end
+local function unitCharacter(unit)
+ -- Forever returns first name and surname separately. A surname is not a realm.
+ if NameUtil and NameUtil.GetUnmodifiedUnitFullName and UnitNameUnmodified then
+  local first,last=UnitNameUnmodified(unit)
+  if secret(first) or secret(last) or not first then return end
+  return NameUtil.GetFullNameWithoutRealm(first,last)
+ end
+ local first=UnitName(unit)
+ if not secret(first) then return first end
+end
 local function enc(s) return (tostring(s):gsub('[%%%c,;|/]',function(c)return ('%%%02X'):format(c:byte()) end)) end
 local function dec(s) return (s:gsub('%%(%x%x)',function(x)return string.char(tonumber(x,16)) end)) end
 local function fields(s,sep)
@@ -67,7 +78,7 @@ function M:PublishWatch(list,key,entry)
  if not self:ParseKey(key) then return end
  local index=listKey(list,key);local old=self.db.shoppingEdits[index]
  local at=math.max(entry and entry.at or time(),old and old.at+1 or 0)
- local author=(UnitName('player') or ''):lower()
+ local author=(unitCharacter('player') or ''):lower()
  local price=entry and (entry.target or 0) or -1
  local line=table.concat({'W',enc(list),key,at,price,enc(author)},',')
  self.db.shoppingEdits[index]={at=at,author=author}
@@ -134,21 +145,27 @@ local function apply(self,p)
  end
  return true
 end
-local function secret(v) return issecretvalue and issecretvalue(v) end
-local function canonical(name)
+local function fullAddress(name)
  if secret(name) then return end
  if not validText(name,80) then return end
- local realm=GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName()
- if not name:find('-',1,true) then name=name..'-'..realm end
- return name:gsub('%s',''):lower()
+ local character,realm=name:match('^(.-)%-(.+)$')
+ character=(character or name):match('^%s*(.-)%s*$'):gsub(' +',' ')
+ realm=realm or (GetNormalizedRealmName and GetNormalizedRealmName()) or GetRealmName()
+ if character=='' or not realm or realm=='' then return end
+ return character..'-'..realm:gsub('%s','')
+end
+local function canonical(name)
+ local address=fullAddress(name)
+ return address and address:lower()
 end
 function M:PairPeer(name)
  if self.persistenceBlocked then return 'Database read-only' end
  if type(name)=='string' then name=name:match('^%s*(.-)%s*$') end
- if name=='off' or name=='' then self.db.syncPeer=nil;self.shareRun={};self:RefreshUI();return 'Automatic sharing off' end
+ if name=='' or (name and name:lower()=='off') then self.db.syncPeer=nil;self.db.syncAddress=nil;self.shareRun={};self:RefreshUI();return 'Automatic sharing off' end
  if not name then return self:SharingStatus() end
  local peer=canonical(name)
- if not peer or peer==canonical(UnitName('player')) then return 'Enter the other character name (Name-Realm)' end
+ if not peer or peer==canonical(unitCharacter('player')) then return 'Enter the other character name (First Surname)' end
+ self.db.syncAddress=fullAddress(name)
  self.db.syncPeer=peer;self.db.shareJournal.seeded=nil;self.shareRun={};self:StartSharing();self:RefreshUI();return 'Paired with '..peer..'; waiting for the other character to reply'
 end
 function M:SharingStatus()
@@ -193,7 +210,11 @@ local function channel(self)
  local raid=IsInRaid and IsInRaid()
  for i=1,GetNumGroupMembers() do
   local n,r=UnitFullName((raid and 'raid' or 'party')..i)
-  if not secret(n) and not secret(r) and n and canonical(r and r~='' and n..'-'..r or n)==self.db.syncPeer then
+  local identity
+  if NameUtil and NameUtil.GetUnmodifiedUnitFullName then
+   identity=unitCharacter((raid and 'raid' or 'party')..i)
+  elseif not secret(n) and not secret(r) and n then identity=r and r~='' and n..'-'..r or n end
+  if canonical(identity)==self.db.syncPeer then
    if IsInGroup and LE_PARTY_CATEGORY_INSTANCE and IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then return 'INSTANCE_CHAT' end
    return raid and 'RAID' or 'PARTY'
   end
@@ -206,8 +227,9 @@ local function send(self,ch,body)
  if #msg>240 then return false end
  local target
  if ch=='WHISPER' then
-  local name=self.db.syncPeer:match('^([^-]+)')
-  target=canonical(name)==self.db.syncPeer and name or self.db.syncPeer
+  local address=self.db.syncAddress or self.db.syncPeer
+  local name=address:match('^([^-]+)')
+  target=canonical(name)==self.db.syncPeer and name or address
  end
  local ok,r=pcall(C_ChatInfo.SendAddonMessage,PREFIX,msg,ch,target)
  return ok and r~=false and (type(r)~='number' or r==(Enum and Enum.SendAddonMessageResult and Enum.SendAddonMessageResult.Success or 0))

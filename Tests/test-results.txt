@@ -131,8 +131,9 @@ PASS Manual shopping does not require investment ROI but still blocks unaffordab
 PASS Live name search returns a new unscanned variant and admits it to shopping review without buying
 PASS Nexus import accepts the current character and complete learned recipes only
 PASS Direct pairing needs no friend entry, respects lockdown and backs off without a reply
+PASS Forever whisper, group and sender matching preserve the surname space
 PASS Clipboard paging covers 1,500 exact keys without copying transaction records
 PASS A newer simple ask does not erase a reliable earlier historical estimate
 PASS A completed full scan publishes batched asks without transferring scan history or duplicating observations
 PASS Auction House tabs work with Auctionator disabled and restore the standalone window
-ALL 136 TESTS PASSED
+ALL 137 TESTS PASSED
