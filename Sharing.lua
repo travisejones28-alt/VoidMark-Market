@@ -192,8 +192,39 @@ function M:QueueScanSharing(at)
   end
  end)
 end
+-- Restrict the filter to the exact character specified by /vmm peer.
+-- Filtering unrelated Blizzard system notices would hide useful errors.
+function M:HandlePeerOfflineNotice(message)
+ if type(message)~='string' or not self.db or not self.db.syncPeer then return false end
+ local address=self.db.syncAddress or self.db.syncPeer
+ local short=address:match('^([^-]+)')
+ if not short then return false end
+ local candidate=message:lower()
+ local template=ERR_CHAT_PLAYER_NOT_FOUND or "No player named '%s' is currently playing."
+ local match=false
+ for _,name in ipairs({short,address}) do
+  local ok,expected=pcall(string.format,template,name)
+  if ok and type(expected)=='string' and candidate==expected:lower() then match=true;break end
+ end
+ if not match then return false end
+ local r=self.shareRun or {}
+ self.shareRun=r
+ r.offlineUntil=GetTime()+300
+ r.cursor=nil;r.reply=nil;r.lastContact=nil
+ r.hello=nil;r.retry=nil;r.skipped=nil
+ r.status='Partner offline; quietly checking again in 5m'
+ self:RefreshUI()
+ return true
+end
 function M:StartSharing()
  local api=C_ChatInfo;self.shareRun=self.shareRun or {}
+ if not self.offlineFilterHooked and ChatFrame_AddMessageEventFilter then
+  ChatFrame_AddMessageEventFilter('CHAT_MSG_SYSTEM',function(_,event,msg)
+   if M:HandlePeerOfflineNotice(msg) then return true end
+   return false
+  end)
+  self.offlineFilterHooked=true
+ end
  if self.persistenceBlocked or not self.db.syncPeer or not api or not api.RegisterAddonMessagePrefix or not api.SendAddonMessage then return end
  if not self.shareRegistered then
   -- Some Forever/Classic builds wrap the API and put the enum in the LAST
@@ -268,6 +299,8 @@ function M:PumpSharing()
  local j=self.db.shareJournal
  if not r.reply and r.hello and now<r.hello and (not r.cursor or r.cursor>=j.seq or now<(r.retry or 0)) then return end
  local ch=channel(self)
+ if ch=='WHISPER' and r.offlineUntil and now<r.offlineUntil then return end
+ if ch~='WHISPER' then r.offlineUntil=nil end
  if ch=='WHISPER' and r.lastContact and now-r.lastContact>65 then
   r.cursor=nil;r.reply=nil;r.lastContact=nil;r.hello=nil
  end
@@ -310,12 +343,12 @@ function M:ReceiveSharing(prefix,msg,ch,sender)
  local function ack() r.reply=table.concat({'Q',rx.epoch,rx.seq},'\t') end
  if f[2]=='H' and #f==3 then
   if not r.lastContact then r.hello=nil end
-  r.lastContact=GetTime();r.probeDelay=nil
+  r.lastContact=GetTime();r.probeDelay=nil;r.offlineUntil=nil
   if not rx or rx.epoch~=f[3] then rx={epoch=f[3],seq=0};db[peer]=rx end
   ack();r.status='Partner connected'
  elseif f[2]=='Q' and f[3]==j.epoch and #f==4 then
   local n=tonumber(f[4]);if not whole(n,0,j.seq) then return end
-  r.lastContact=GetTime();r.probeDelay=nil
+  r.lastContact=GetTime();r.probeDelay=nil;r.offlineUntil=nil
   if r.cursor~=n then r.skipped=nil end;r.cursor=n;r.retry=0;r.status=n==j.seq and 'Up to date' or 'Sending changes'
  elseif f[2]=='D' and #f==6 and rx and f[3]==rx.epoch then
   local lo,hi=tonumber(f[4]),tonumber(f[5])
@@ -326,8 +359,10 @@ function M:ReceiveSharing(prefix,msg,ch,sender)
    local p=decode(self,line);if not p then return end;staged[#staged+1]=p
   end end
   for _,p in ipairs(staged) do if not apply(self,p) then r.status='Shopping list limit reached; transfer paused';self:RefreshUI();return end end
-  r.lastContact=GetTime();rx.seq=hi;ack();r.status='Received through change '..hi;self:RefreshUI()
+  r.lastContact=GetTime();r.offlineUntil=nil;rx.seq=hi;ack();r.status='Received through change '..hi;self:RefreshUI()
  end
 end
 M:RegisterHandler('CHAT_MSG_ADDON',function(self,_,...) self:ReceiveSharing(...) end)
 M:RegisterHandler('GROUP_ROSTER_UPDATE',function(self) if self.shareRun then self.shareRun.hello=nil end end)
+-- Backup detection when a chat-frame filter is unavailable on the client.
+M:RegisterHandler('CHAT_MSG_SYSTEM',function(self,_,msg) self:HandlePeerOfflineNotice(msg) end)
