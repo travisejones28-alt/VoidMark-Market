@@ -29,3 +29,4 @@ Diagnostics.lua
 UI.lua
 CraftingUI.lua
 Minimap.lua
+Tooltips.lua
