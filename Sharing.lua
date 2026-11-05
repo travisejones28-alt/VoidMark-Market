@@ -149,12 +149,12 @@ function M:PairPeer(name)
  if not name then return self:SharingStatus() end
  local peer=canonical(name)
  if not peer or peer==canonical(UnitName('player')) then return 'Enter the other character name (Name-Realm)' end
- self.db.syncPeer=peer;self.db.shareJournal.seeded=nil;self.shareRun={};self:StartSharing();self:RefreshUI();return 'Paired with '..peer..'; group up or add each other as character friends'
+ self.db.syncPeer=peer;self.db.shareJournal.seeded=nil;self.shareRun={};self:StartSharing();self:RefreshUI();return 'Paired with '..peer..'; waiting for the other character to reply'
 end
 function M:SharingStatus()
  local peer=self.db.syncPeer
  if not peer then return 'Not paired. Pair each character with the other.' end
- return peer..' | '..(self.shareRun.status or 'Waiting for grouped partner or online character friend')
+ return peer..' | '..(self.shareRun.status or 'Waiting for partner reply')
 end
 function M:QueueScanSharing(at)
  if not self.db.syncPeer or self.persistenceBlocked then return end
@@ -199,17 +199,17 @@ local function channel(self)
   end
  end
  end
- if C_FriendList and C_FriendList.GetFriendInfo then
-  local peer=self.db.syncPeer;local name,realm=peer:match('^(.-)%-(.+)$')
-  local ok,f=pcall(C_FriendList.GetFriendInfo,peer)
-  if (not ok or not f) and realm==(GetNormalizedRealmName() or ''):lower() then ok,f=pcall(C_FriendList.GetFriendInfo,name) end
-  if ok and f and not secret(f.connected) and f.connected and canonical(f.name)==peer then return 'WHISPER' end
- end
+ return 'WHISPER'
 end
 local function send(self,ch,body)
  local msg=self.economyID..'\t'..body
  if #msg>240 then return false end
- local ok,r=pcall(C_ChatInfo.SendAddonMessage,PREFIX,msg,ch,ch=='WHISPER' and self.db.syncPeer or nil)
+ local target
+ if ch=='WHISPER' then
+  local name=self.db.syncPeer:match('^([^-]+)')
+  target=canonical(name)==self.db.syncPeer and name or self.db.syncPeer
+ end
+ local ok,r=pcall(C_ChatInfo.SendAddonMessage,PREFIX,msg,ch,target)
  return ok and r~=false and (type(r)~='number' or r==(Enum and Enum.SendAddonMessageResult and Enum.SendAddonMessageResult.Success or 0))
 end
 function M:PumpSharing()
@@ -219,12 +219,20 @@ function M:PumpSharing()
  if (InCombatLockdown and InCombatLockdown()) or (C_ChatInfo.InChatMessagingLockdown and C_ChatInfo.InChatMessagingLockdown()) then r.status='Paused by client restrictions';return end
  local j=self.db.shareJournal
  if not r.reply and r.hello and now<r.hello and (not r.cursor or r.cursor>=j.seq or now<(r.retry or 0)) then return end
- local ch=channel(self);if not ch then r.next=now+4;r.status='Waiting for grouped partner or online character friend';return end
+ local ch=channel(self)
+ if ch=='WHISPER' and r.lastContact and now-r.lastContact>65 then
+  r.cursor=nil;r.reply=nil;r.lastContact=nil;r.hello=nil
+ end
  if r.reply then
-  if send(self,ch,r.reply) then r.reply=nil end;return
+  if send(self,ch,r.reply) then r.reply=nil else r.next=now+5 end;return
  end
  if not r.hello or now>=r.hello then
-  if send(self,ch,'H\t'..j.epoch) then r.hello=now+20 end;return
+  local sent=send(self,ch,'H\t'..j.epoch)
+  local unconfirmed=ch=='WHISPER' and not r.lastContact
+  r.probeDelay=unconfirmed and math.min(300,(r.probeDelay or 10)*2) or 20
+  r.hello=now+r.probeDelay
+  if unconfirmed then r.status=sent and 'Waiting for direct partner reply' or 'Direct message unavailable; will retry' end
+  return
  end
  if r.cursor==nil or r.cursor>=j.seq or now<(r.retry or 0) then return end
  local lo=r.cursor;local hi=math.max(lo,r.skipped or lo);local rows={}
@@ -237,8 +245,9 @@ function M:PumpSharing()
  end
  if #rows==0 and hi<j.seq then r.skipped=hi;return end
  r.skipped=nil
- if hi>lo and send(self,ch,table.concat({'D',j.epoch,lo,hi,table.concat(rows,';')},'\t')) then
-  r.retry=now+4;r.status='Sending changes '..hi..' / '..j.seq
+ if hi>lo then
+  r.retry=now+4
+  if send(self,ch,table.concat({'D',j.epoch,lo,hi,table.concat(rows,';')},'\t')) then r.status='Sending changes '..hi..' / '..j.seq end
  end
 end
 function M:ReceiveSharing(prefix,msg,ch,sender)
@@ -251,10 +260,13 @@ function M:ReceiveSharing(prefix,msg,ch,sender)
  local peer=self.db.syncPeer;local rx=db[peer]
  local function ack() r.reply=table.concat({'Q',rx.epoch,rx.seq},'\t') end
  if f[2]=='H' and #f==3 then
+  if not r.lastContact then r.hello=nil end
+  r.lastContact=GetTime();r.probeDelay=nil
   if not rx or rx.epoch~=f[3] then rx={epoch=f[3],seq=0};db[peer]=rx end
   ack();r.status='Partner connected'
  elseif f[2]=='Q' and f[3]==j.epoch and #f==4 then
   local n=tonumber(f[4]);if not whole(n,0,j.seq) then return end
+  r.lastContact=GetTime();r.probeDelay=nil
   if r.cursor~=n then r.skipped=nil end;r.cursor=n;r.retry=0;r.status=n==j.seq and 'Up to date' or 'Sending changes'
  elseif f[2]=='D' and #f==6 and rx and f[3]==rx.epoch then
   local lo,hi=tonumber(f[4]),tonumber(f[5])
@@ -265,7 +277,7 @@ function M:ReceiveSharing(prefix,msg,ch,sender)
    local p=decode(self,line);if not p then return end;staged[#staged+1]=p
   end end
   for _,p in ipairs(staged) do if not apply(self,p) then r.status='Shopping list limit reached; transfer paused';self:RefreshUI();return end end
-  rx.seq=hi;ack();r.status='Received through change '..hi;self:RefreshUI()
+  r.lastContact=GetTime();rx.seq=hi;ack();r.status='Received through change '..hi;self:RefreshUI()
  end
 end
 M:RegisterHandler('CHAT_MSG_ADDON',function(self,_,...) self:ReceiveSharing(...) end)

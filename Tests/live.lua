@@ -87,6 +87,8 @@ check('Two accounts resume lost data and ACKs after reload; unchanged floors sen
  assert(M.db.sharedPrices[65].floor==109 and #M.db.ledger==0 and not next(M.db.market))
  assert(M:ListBook('Mats')[65].target==200);local seq=M.db.shareReceived['bank-testrealm'].seq
  local previous=M.db.sharedPrices[65];endpoints.Main.shareRun={};selectClient('Main')
+ -- Finish recovery through targeted whispers after leaving the shared party.
+ GetNumGroupMembers=function()return 0 end
  selectClient('Bank');advance(1000);m.lastSeen=time();M:PublishPrice(m);assert(M:SetWatch(65,150))
  for i=1,60 do step() end
  selectClient('Main');assert(updates>0 and M.db.sharedPrices[65].at==m.lastSeen and M:ListBook('Mats')[65].target==150)
@@ -159,16 +161,17 @@ check('Nexus import accepts the current character and complete learned recipes o
  r.spell=2;r.incomplete=true;assert(M:ReadNexusRecipes());jobs();assert(not M.db.recipes['spell:2'])
  VoidMarkNexus=old
 end)
-check('Live sharing pauses in lockdown and only whispers an online paired character friend',function()
+check('Direct pairing needs no friend entry, respects lockdown and backs off without a reply',function()
  new();local old=C_ChatInfo;local friend=C_FriendList;local num=GetNumGroupMembers
  local lockdown=true;local online=true;local n=0
  GetNumGroupMembers=function()return 0 end
  C_ChatInfo={RegisterAddonMessagePrefix=function()return 0 end,InChatMessagingLockdown=function() return lockdown end,
- SendAddonMessage=function(_,msg,ch,target)assert(ch=='WHISPER' and target=='bank-testrealm' and #msg<=240);n=n+1;return 0 end}
- C_FriendList={GetFriendInfo=function()return {name='Bank',connected=online} end}
+ SendAddonMessage=function(_,msg,ch,target)assert(ch=='WHISPER' and target=='bank' and #msg<=240);n=n+1;return 0 end}
+ C_FriendList={GetFriendInfo=function()error('friend lookup unnecessary') end}
  M:PairPeer('Bank-TestRealm');M:PumpSharing();assert(n==0)
  lockdown=false;advance(6);M:PumpSharing();assert(n==1)
- online=false;advance(25);M:PumpSharing();assert(n==1)
+ advance(25);M:PumpSharing();assert(n==2)
+ advance(25);M:PumpSharing();assert(n==2)
  M:PairPeer('off');C_ChatInfo=old;C_FriendList=friend;GetNumGroupMembers=num
 end)
 check('Clipboard paging covers 1,500 exact keys without copying transaction records',function()

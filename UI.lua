@@ -272,7 +272,7 @@ function M:InitializeUI()
   self.minimapToggle:SetScript('OnClick',function(c)
     self:SetMinimapIconVisible(c:GetChecked() and true or false)
   end)
-  label(self.settingsFrame,'Group or add both characters as in-game friends to sync.\nTransfer also works offline by copying text.',385,-424,590)
+  label(self.settingsFrame,'Paired characters sync while both are online.\nTransfer also works offline by copying text.',385,-424,590)
   self.view='market'; self.page=1; self:RefreshUI(); f:Hide() -- Keep Market closed on login/reload until opened by the user.
 end
 function M:ShowReport()

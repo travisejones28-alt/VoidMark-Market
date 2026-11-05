@@ -130,7 +130,7 @@ PASS Cancellation validates exact ownership and fee again after confirmation
 PASS Manual shopping does not require investment ROI but still blocks unaffordable or over-limit purchases
 PASS Live name search returns a new unscanned variant and admits it to shopping review without buying
 PASS Nexus import accepts the current character and complete learned recipes only
-PASS Live sharing pauses in lockdown and only whispers an online paired character friend
+PASS Direct pairing needs no friend entry, respects lockdown and backs off without a reply
 PASS Clipboard paging covers 1,500 exact keys without copying transaction records
 PASS A newer simple ask does not erase a reliable earlier historical estimate
 PASS A completed full scan publishes batched asks without transferring scan history or duplicating observations
