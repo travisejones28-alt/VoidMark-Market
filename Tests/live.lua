@@ -161,6 +161,26 @@ check('Nexus import accepts the current character and complete learned recipes o
  r.spell=2;r.incomplete=true;assert(M:ReadNexusRecipes());jobs();assert(not M.db.recipes['spell:2'])
  VoidMarkNexus=old
 end)
+check('Offline peer suppresses only matching system errors and quietly resumes after cooldown',function()
+ new()
+ local oldChat,oldGroup,oldErr=C_ChatInfo,GetNumGroupMembers,ERR_CHAT_PLAYER_NOT_FOUND
+ local calls=0
+ ERR_CHAT_PLAYER_NOT_FOUND="No player named '%s' is currently playing."
+ GetNumGroupMembers=function() return 0 end
+ C_ChatInfo={RegisterAddonMessagePrefix=function()return 0 end,
+  SendAddonMessage=function(_,_,ch,target)
+   assert(ch=='WHISPER' and target=='Voidmark Bank');calls=calls+1;return 0
+  end}
+ M:PairPeer('Voidmark Bank');M:PumpSharing();assert(calls==1)
+ assert(not M:HandlePeerOfflineNotice("No player named 'Somebody' is currently playing."))
+ assert(M:HandlePeerOfflineNotice("No player named 'Voidmark Bank' is currently playing."))
+ for i=1,20 do advance(10);M:PumpSharing() end
+ assert(calls==1 and M.db.syncPeer)
+ assert(M.db.sharedPrices and M.db.market and M.db.ledger)
+ advance(101);M:PumpSharing();assert(calls==2)
+ M:PairPeer('off')
+ C_ChatInfo,GetNumGroupMembers,ERR_CHAT_PLAYER_NOT_FOUND=oldChat,oldGroup,oldErr
+end)
 check('Direct pairing needs no friend entry, respects lockdown and backs off without a reply',function()
  new();local old=C_ChatInfo;local friend=C_FriendList;local num=GetNumGroupMembers
  local lockdown=true;local online=true;local n=0
