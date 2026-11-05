@@ -9,21 +9,26 @@ local sections = {
 
 local function dock(self, page, view)
   local window = self.window
+  local ah = AuctionHouseFrame
   self.auctionDock = {
     page=page, anchor={window:GetPoint()}, scale=window:GetScale(),
-    strata=window:GetFrameStrata(), parent=window:GetParent(),
+    strata=window:GetFrameStrata(), level=window:GetFrameLevel(),
   }
-  window:StopMovingOrSizing()
-  window:SetParent(page)
-  window:SetFrameStrata('PARENT')
+  -- Keep the terminal on UIParent. Native tab pages can still be laying out
+  -- during OnShow; the already visible AH has the authoritative dimensions.
+  local scaleRatio = ah:GetEffectiveScale()/UIParent:GetEffectiveScale()
+  local fit = math.min((ah:GetWidth()-16)/1040, (ah:GetHeight()-44)/680)
+  if fit <= 0 then error('Auction House dimensions unavailable') end
+  window:SetFrameStrata(ah:GetFrameStrata())
+  window:SetFrameLevel(ah:GetFrameLevel()+10)
   window:SetMovable(false)
   window:SetClampedToScreen(false)
   window:ClearAllPoints()
-  -- The terminal has a fixed logical size. Fit its controls inside the AH chrome.
-  window:SetScale(math.min(page:GetWidth()/1040, page:GetHeight()/680))
-  window:SetPoint('CENTER', page, 'CENTER')
+  window:SetScale(fit*scaleRatio)
+  window:SetPoint('CENTER', ah, 'CENTER', 0, -14/fit)
   self.selectedRow = nil
   self:SetView(view)
+  self:RenderUI()
   if view == 'my auctions' and self:CanUseAuctionHouse() then
     self:RequestOwnedAuctionsDiagnostic()
   end
@@ -35,8 +40,8 @@ local function undock(self, page)
   self.auctionDock = nil
   local window = self.window
   window:Hide()
-  window:SetParent(state.parent)
   window:SetFrameStrata(state.strata)
+  window:SetFrameLevel(state.level)
   window:SetMovable(true)
   window:SetClampedToScreen(true)
   window:SetScale(state.scale)
@@ -74,7 +79,19 @@ function M:InstallAuctionTabs()
     page:SetPoint('TOPLEFT', ah, 'TOPLEFT', 8, -36)
     page:SetPoint('BOTTOMRIGHT', ah, 'BOTTOMRIGHT', -8, 8)
     page:Hide()
-    page:SetScript('OnShow', function() dock(self, page, view) end)
+    local errorLabel = page:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+    errorLabel:SetPoint('CENTER')
+    errorLabel:SetWidth(500)
+    page:SetScript('OnShow', function()
+      errorLabel:SetText('')
+      local ok, reason = pcall(dock, self, page, view)
+      if not ok then
+        undock(self, page)
+        local message = label..' could not open: '..tostring(reason)
+        self:Log('AUCTION TAB', message)
+        errorLabel:SetText(message)
+      end
+    end)
     page:SetScript('OnHide', function() undock(self, page) end)
     local title = 'VoidMark Market - '..label
     local button
