@@ -1,4 +1,13 @@
-# Reference Addon Compatibility Review — 2026-10-21
+# Auctionator reference — Forever Live 1.5
+
+Inspected the supplied installed Auctionator v341 (Interface 16001), by plusmouse and Borjamacare, copyright 2020–2025, All Rights Reserved. Reviewed its shopping-list and tooltip flows, full-scan and search adapters, bag selection, posting, cancellation, and Forever durations. Market uses independently implemented UI and Lua; no Auctionator code, images, libraries, or SavedVariables are shipped.
+
+Checked auction, chat, and character-friend calls against the [Forever client API declarations](https://github.com/Gethe/wow-ui-source/tree/eac30af597e5aaa43a60f6675ef5fdcea100375f/Interface/AddOns/Blizzard_APIDocumentationGenerated) and the [native auction frames](https://github.com/Gethe/wow-ui-source/tree/eac30af597e5aaa43a60f6675ef5fdcea100375f/Interface/AddOns/Blizzard_AuctionHouseUI). Runtime capability checks and manual in-game tests are still necessary.
+
+## Earlier reference review (historical)
+
+
+# Reference Addon Compatibility Review â€” 2026-10-21
 
 Eight user-supplied ZIP archives were opened, checked for manifests, dependencies, Lua module coverage, licensing and representative API paths. This is a static-source review; declared Interface 16001 is **not proof** that a component works on the actual Forever beta. No WoW client available in the test environment.
 

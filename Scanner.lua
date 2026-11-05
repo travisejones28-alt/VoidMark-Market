@@ -119,7 +119,7 @@ function M:StartSnapshotProcessing(total,source,diagnostic)
   end
   local summary={source=source,requestedAt=s.requestedAt,startedAt=time(),rawRows=total,auctionsProcessed=0,
     totalQuantity=0,invalidRecords=0,incompleteRecords=0,deferredRows=0,recoveredRows=0,unresolvedRows=0,retryPasses=0,rejectedReasons={},variantRows=0,variantMarkets=0,uniqueItems=0,uniqueBaseItems=0,skippedMarkets=0,modelErrors=0}
-  local grouped,baseSeen={},{}; local i=0
+  local grouped,baseSeen,linkKeys={},{},{};local cachedLinks=0; local i=0
   local pending,nextPending={},{}; local retryIndex=1; local retryAt,deadline,finalPass
   local function reject(reason)
     summary.invalidRecords=summary.invalidRecords+1
@@ -135,13 +135,19 @@ function M:StartSnapshotProcessing(total,source,diagnostic)
     if not itemID or itemID<=0 or not count or count<1 or not buyout then return 'defer','missingFields',true end
     if buyout<=0 then return 'reject','noBuyout',not complete end
     local link; if C_AuctionHouse.GetReplicateItemLink then local good,v=pcall(C_AuctionHouse.GetReplicateItemLink,index); if good then link=v end end
-    local suffix=self:Suffix(link)
+    local identity=link and linkKeys[link]
+    if not identity then
+      identity={self:LinkIdentity(link,itemID)}
+      if identity[1] and cachedLinks<3000 then linkKeys[link]=identity;cachedLinks=cachedLinks+1 end
+    end
+    local key,linkID,suffix,itemLevel,pet=unpack(identity)
+    if linkID~=itemID then key=nil end
     -- No link means variant identity is uncertain. Never mix random-stat gear blindly.
-    if suffix==nil then return 'defer','missingLink',true end
-    local key=self:Key(itemID,suffix); local unit=buyout/count
+    if not key then return 'defer','missingLink',true end
+    local unit=buyout/count
     local g=grouped[key]
     if not g then
-      g={marketKey=key,itemID=itemID,itemSuffix=suffix,itemLink=link,name=name,texture=texture,quality=quality,level=level,
+      g={marketKey=key,itemID=itemID,itemSuffix=suffix,itemLevel=itemLevel,battlePetSpeciesID=pet,itemLink=link,name=name,texture=texture,quality=quality,level=level,
         listings=0,quantity=0,floorUnitPrice=unit,ceilingUnitPrice=unit,priceLevels={},tierCount=0,
         acquisitionLots={},lotIndex={},lotCount=0}
       grouped[key]=g; summary.uniqueItems=summary.uniqueItems+1
@@ -239,7 +245,7 @@ function M:StartSnapshotProcessing(total,source,diagnostic)
         self:Log('FULL SCAN','Completed: '..summary.uniqueItems..' markets, '..#self.db.opportunities..' candidates')
       end
       self.db.latestScan=summary; self.db.scans[#self.db.scans+1]=summary
-       if source~='cached snapshot' then self:RecordBankerScan(summary) end
+       if source~='cached snapshot' then self:RecordBankerScan(summary);self:QueueScanSharing(self.db.lastDepthSnapshotAt) end
       if #self.db.scans>20 then table.remove(self.db.scans,1) end
       if source~='cached snapshot' then self.db.lastSuccessfulScanAt=time() end
       s.running=false; s.phase='done'; self:SetScanStatus(string.format('%d valid rows | %d markets | %d candidates | %d skipped',summary.auctionsProcessed,summary.uniqueItems,#self.db.opportunities,summary.skippedMarkets),1)

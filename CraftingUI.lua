@@ -19,6 +19,7 @@ function M:InitializeCraftingUI()
   end)
   self.inspectCraftButton=button(f,'CALCULATIONS',705,125,function() self:ShowCraftCalculations(self.selectedRow) end)
   button(f,'CRAFTING',835,100,function() self:SetView('crafting') end)
+  button(f,'NEXUS',940,55,function() local ok,e=self:ReadNexusRecipes();if not ok then self:Print(e) end end)
   f:Hide()
 end
 function M:CraftCalculationText(row)

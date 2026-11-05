@@ -7,7 +7,7 @@ end
 function M:SelectOpportunity(o)
   if self:HasUnresolvedPurchase() or self.execution.state=='quoting' or self.execution.state=='quoted' then self:Print('Resolve the current transaction first'); return end
   self.executionToken=(self.executionToken or 0)+1
-  self.execution={state='selected',opportunity=o,market=self.db.market[o.marketKey],token=self.executionToken,message='Snapshot estimate; click REVALIDATE'}
+  self.execution={state='selected',opportunity=o,market=self.db.market[o.marketKey] or o.shoppingMarket,token=self.executionToken,message='Snapshot estimate; click REVALIDATE'}
   self:SetView('execution')
 end
 function M:RevalidateSelected(quantity)
@@ -44,6 +44,7 @@ function M:RevalidateSelected(quantity)
     end
     live.economics=M:Economics(x.market,live.cost,live.quantity,x.opportunity.kind)
     local pass,why=M:CheckRisk(x.market,live.economics)
+    if x.opportunity.target and live.cost>live.quantity*x.opportunity.target then pass=false;why[#why+1]='Above shopping target' end
     live.blocks=why; x.live=live; x.state=pass and 'ready' or 'invalid'
     x.message=pass and 'Fresh market validated; one transaction requires one click' or table.concat(why,'; ')
     M:RefreshUI()
@@ -56,7 +57,6 @@ function M:ExecuteClicked()
   local x=self.execution
   if self.persistenceBlocked then self:Print('Database schema is newer than this addon; trading blocked'); return end
   if x.commodity and (self.db.quoteGuardUntil or 0)>time() then self:Print('Commodity guard: wait '..self:FormatDuration(self.db.quoteGuardUntil-time())); return end
-  if self.db.settings.safeMode then self:Print('SAFE MODE: transaction blocked'); return end
   if not self:CanUseAuctionHouse() or not self:ThrottleReady() or self:HasUnresolvedPurchase() or x.state~='ready' or not x.live then return end
   if GetTime()-x.live.received>10 then x.state='stale'; x.message='Live prices expired; revalidate'; self:RefreshUI(); return end
   local pass,why=self:CheckRisk(x.market,x.live.economics)
@@ -79,7 +79,7 @@ end
 function M:ConfirmClicked()
   -- Called only by CONFIRM QUOTE OnClick. Events never confirm automatically.
   local x=self.execution
-  if self.persistenceBlocked or self.db.settings.safeMode or not self:CanUseAuctionHouse() or x.state~='quoted' then return end
+  if self.persistenceBlocked or not self:CanUseAuctionHouse() or x.state~='quoted' then return end
   if GetTime()-x.quotedAt>5 then self:InvalidateQuote('Quote expired; revalidate'); return end
   if not self:ThrottleReady() then return end
   local pass,why=self:CheckRisk(x.market,x.live.economics)
@@ -110,7 +110,7 @@ end
 M:RegisterHandler('COMMODITY_PRICE_UPDATED',function(self,_,unit,total)
   local x=self.execution; if x.state~='quoting' or GetTime()-x.sent>3 then return end
   unit=tonumber(unit); total=tonumber(total)
-  if not unit or unit<=0 or not total or total<=0 or total>x.live.cost then
+  if not self:Finite(unit,1,1e12) or not self:Finite(total,1,x.live.cost) then
     self:InvalidateQuote('Price/quantity changed or invalid quote; revalidate'); return
   end
   x.live.cost=total; x.live.economics=self:Economics(x.market,total,x.live.quantity,x.opportunity.kind)

@@ -37,12 +37,13 @@ function M:BuildTextReport()
   local lines={'VOIDMARK MARKET '..self.version,'Client '..tostring(b.version)..' | build '..tostring(b.build)..' | interface '..tostring(b.tocVersion),
     'Economy '..self.economyID..' | schema '..self.root.schemaVersion,
     'Persistence marker loaded: '..tostring(self.loadedSavedMarker)..' (first install is unverified; check again after /reload)',
-    'SAFE MODE '..tostring(self.db.settings.safeMode)..' | AH open '..tostring(self.ahOpen)..' | throttle ready '..tostring(self:ThrottleReady()),
+    'Manual trading '..(self.persistenceBlocked and 'read-only' or 'enabled')..' | AH open '..tostring(self.ahOpen)..' | throttle ready '..tostring(self:ThrottleReady()),
     'Scanner '..s.phase..': '..s.status,
     'Queue waiting '..#q.waiting..' | active '..tostring(q.active and q.active.id)..' | sent '..q.stats.sent..' | retries '..q.stats.retries..' | timeouts '..q.stats.timeouts..' | dropped '..q.stats.dropped,
     'Execution '..self.execution.state..': '..self.execution.message,
     'Markets '..#(self.marketIndex or {})..' | opportunities '..#self.db.opportunities..' | ledger '..#self.db.ledger,
     'No automatic transactions. Pricing is an estimate; activity is inferred supply movement.'}
+  lines[#lines+1]='Partner: '..self:SharingStatus()
   lines[#lines+1]=self:BuildFullScanReport()
   lines[#lines+1]='Crafting: '..tostring(self.recipeDiagnostic or 'No profession captured')..' | results '..#(self.craftRows or {})
   lines[#lines+1]='Crafting interfaces: legacy='..tostring(type(GetNumTradeSkills)=='function')..

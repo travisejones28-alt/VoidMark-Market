@@ -1,74 +1,75 @@
-local _, M = ...
--- Passive item tooltip pricing. Cached AH asks are NOT live quotations.
--- Never triggers an auction search or sends an addon message on mouseover.
-function M:TooltipMarketForLink(link)
-  if not self.db or type(link)~='string' then return end
-  local itemString=link:match('item:([%d:%-]+)')
-  if not itemString then return end
-  local id=tonumber(itemString:match('^(%d+)'))
-  if not id then return end
-  -- Prefer an explicitly known exact item hyperlink. Generic IDs are safe
-  -- only when the item has a single stored market variant.
-  local exact
-  local variants={}
-  local lookup=self.itemIndex and self.itemIndex[id] or {}
-  for _,key in ipairs(lookup) do
-    local m=self.db.market[key]
-    if type(m)=='table' and m.itemID==id then
-      variants[#variants+1]=m
-      if m.itemLink==link then exact=m end
-    end
+local _,M=...
+-- A market key is an auction identity, never the first cached item with the same ID.
+function M:LinkIdentity(link,expectedID)
+ if type(link)~='string' then return end
+ local pet,petLevel=link:match('battlepet:(%d+):(%d+)')
+ if pet then
+  local id=expectedID or 82800
+  return self:Key(id,0,tonumber(petLevel),tonumber(pet)),id,0,tonumber(petLevel),tonumber(pet)
+ end
+ local payload=link:match('item:([%d:%-]+)')
+ if not payload then return end
+ local fields={}; for v in (payload..':'):gmatch('(.-):') do fields[#fields+1]=v end
+ local id,suffix=tonumber(fields[1]),tonumber(fields[7]) or 0
+ if expectedID and id~=expectedID then return end
+ local level=0
+ -- Enchants and instance IDs do not define an AH variant. Bonus/upgrade gear
+ -- needs its effective level; do not guess a base price if metadata is missing.
+ local instant=C_Item and C_Item.GetItemInfoInstant or GetItemInfoInstant
+ if instant then
+  local _,_,_,equip=instant(link)
+  if equip==nil then return end
+  if equip~='' and equip~='INVTYPE_BAG' and equip~='INVTYPE_NON_EQUIP_IGNORE' then
+   local fn=C_Item and C_Item.GetDetailedItemLevelInfo or GetDetailedItemLevelInfo
+   level=fn and fn(link); if not self:Finite(level,1,1e6) then return end
   end
-  if exact then return exact end
-  if #variants==1 then return variants[1] end
-  -- A nonvariant base ID can be used only if all stored variants are base IDs.
-  if #variants>1 then return nil,'Multiple variants; select exact auction item' end
+ elseif tonumber(fields[13] or 0) and tonumber(fields[13] or 0)>0 then return end
+ return self:Key(id,suffix,level,0),id,suffix,level,0
 end
-function M:AppendMarketTooltip(tooltip,link)
-  if not tooltip or not self.db or not link then return end
-  local market,reason=self:TooltipMarketForLink(link)
-  if not market then
-    if reason then tooltip:AddLine('VoidMark: '..reason,.75,.6,.9) end
-    return
-  end
-  local latest=market.latest
-  local floor=type(latest)=='table' and tonumber(latest.floor)
-  local at=tonumber(market.lastSeen)
-  if not self:Finite(floor,1,1e12) or not self:Finite(at,1,time()+300) then return end
-  local age=math.max(0,time()-at)
-  local fresh=self:MarketFresh(market) and not market.cacheUntrusted and not market.analysisIncomplete
-  local ageText=age>=86400 and string.format('%dd %dh',math.floor(age/86400),math.floor(age%86400/3600))
-    or age>=3600 and string.format('%dh %dm',math.floor(age/3600),math.floor(age%3600/60))
-    or string.format('%dm',math.floor(age/60))
-  tooltip:AddDoubleLine('VoidMark AH lowest (scan)',self:Money(floor),.7,.5,1,1,.87,.42)
-  tooltip:AddLine((fresh and 'Cached scan' or 'STALE / UNVERIFIED')..' | '..ageText..' old',
-    fresh and .6 or 1,fresh and .85 or .4,fresh and .6 or .4)
-  tooltip:Show()
+function M:PriceObservation(key)
+ if not self.db or not key then return end
+ local m=self.db.market[key];local localPrice
+ if m and type(m.latest)=='table' and self:Finite(m.latest.floor,1,1e12) and self:Finite(m.lastSeen,1,time()+60) then
+  localPrice={floor=m.latest.floor,at=m.lastSeen,fair=self:CanEstimateResale(m) and m.fairValue or nil,
+   source='Local scan',unverified=m.cacheUntrusted or m.analysisIncomplete}
+ end
+ local p=self.db.sharedPrices[key]
+ local sharedHistory=p and (p.histFair or (p.reliable and p.fair))
+ local histAt=p and (p.histAt or (p.reliable and p.at))
+ if not self:Finite(histAt,time()-self.db.settings.maxDataAge,time()+60) then sharedHistory=nil end
+ if localPrice and not localPrice.fair then localPrice.fair=sharedHistory end
+ if p and self:Finite(p.floor,1,1e12) and self:Finite(p.at,1,time()+60) and
+   (not localPrice or p.at>localPrice.at or (p.at==localPrice.at and localPrice.unverified)) then
+  return {floor=p.floor,at=p.at,fair=sharedHistory or (localPrice and localPrice.fair),source='Synced account'}
+ end
+ return localPrice
+end
+function M:TooltipMarketForLink(link)
+ local key=self:LinkIdentity(link)
+ return key and self:PriceObservation(key)
+end
+function M:AppendMarketTooltip(tip,link)
+ local p=self:TooltipMarketForLink(link);if not p then return end
+ local age=math.max(0,time()-p.at)
+ local ageText=age>=86400 and math.floor(age/86400)..'d' or age>=3600 and math.floor(age/3600)..'h' or math.floor(age/60)..'m'
+ tip:AddLine('VoidMark Market',.76,.56,1)
+ tip:AddDoubleLine('Lowest AH / unit',self:Money(p.floor),.95,.95,.95,1,.85,.4)
+ tip:AddLine(p.source..' | '..ageText..' old',.75,.8,.85)
+ if age>self.db.settings.maxDataAge or p.unverified then tip:AddLine('STALE / UNVERIFIED',1,.4,.3)
+ elseif p.fair then tip:AddDoubleLine('Market estimate',self:Money(p.fair),.75,.8,.85,.75,.8,.85) end
 end
 function M:InitializePriceTooltips()
-  if self.tooltipHooked then return end
-  self.tooltipHooked=true
-  if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall
-    and Enum and Enum.TooltipDataType and Enum.TooltipDataType.Item then
-    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item,function(tooltip,data)
-      if tooltip~=GameTooltip then return end
-      local link
-      if tooltip.GetItem then
-        local _,v=tooltip:GetItem()
-        link=v
-      end
-      if link then
-        local ok,err=pcall(M.AppendMarketTooltip,M,tooltip,link)
-        if not ok then M:Log('TOOLTIP',err) end
-      end
-    end)
-  elseif GameTooltip and GameTooltip.HookScript then
-    GameTooltip:HookScript('OnTooltipSetItem',function(tooltip)
-      local _,link=tooltip:GetItem()
-      if link then
-        local ok,err=pcall(M.AppendMarketTooltip,M,tooltip,link)
-        if not ok then M:Log('TOOLTIP',err) end
-      end
-    end)
+ if self.tooltipHooked then return end
+ self.tooltipHooked=true
+ local function append(tip)
+  if not tip or not tip.GetItem then return end
+  local _,link=tip:GetItem();if link then self:AppendMarketTooltip(tip,link) end
+ end
+ if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType and Enum.TooltipDataType.Item then
+  TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item,function(tip) pcall(append,tip) end)
+ else
+  for _,tip in pairs({GameTooltip,ItemRefTooltip,ShoppingTooltip1,ShoppingTooltip2}) do
+   if tip.HookScript then pcall(tip.HookScript,tip,'OnTooltipSetItem',append) end
   end
+ end
 end

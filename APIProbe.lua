@@ -1,6 +1,10 @@
 local addonName, TTB = ...
 
 local API_SPECS = {
+  { "C_ChatInfo.RegisterAddonMessagePrefix", "SYNC - register paired account protocol" },
+  { "C_ChatInfo.SendAddonMessage", "SYNC - incremental, throttled price/list updates" },
+  { "C_AuctionHouse.GetItemKeyFromItem", "SELL - exact bag identity" },
+  { "C_AuctionHouse.GetAvailablePostCount", "SELL - live quantity" },
   { "GetNumTradeSkills", "OPTIONAL - legacy profession list" },
   { "GetTradeSkillReagentItemLink", "OPTIONAL - legacy reagent identity" },
   { "GetTradeSkillNumMade", "OPTIONAL - deterministic output quantity" },

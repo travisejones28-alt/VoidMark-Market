@@ -1,5 +1,5 @@
 local _,M=...
-M.defaults={safeMode=true,debug=false,maxTransaction=100000,maxItemSpend=500000,maxQuantity=20,
+M.defaults={debug=false,maxTransaction=100000,maxItemSpend=500000,maxQuantity=20,
  maxExposure=2000000,minProfit=100,minROI=0.20,minConfidence=42,minLiquidity=15,
  riskTolerance=0.35,ahCut=0.05,depositReserve=100,maxDataAge=7200,historyDays=90,filter='',sort='score',minGoldReserve=0,sellStrategy='competitive',sellMinMargin=0}
 function M:InitializeDatabase()
@@ -17,8 +17,7 @@ function M:InitializeDatabase()
     if type(root.settings[k])~=type(v) then root.settings[k]=v end
     if type(v)=='number' and (root.settings[k]~=root.settings[k] or root.settings[k]<0 or root.settings[k]>1e12) then root.settings[k]=v end
   end
-  -- Every login starts safe. Trading must be enabled deliberately in Settings.
-  root.settings.safeMode=true; self.safeMode=true
+  root.settings.safeMode=nil -- retire only the obsolete switch
   root.settings.ahCut=math.min(0.30,root.settings.ahCut)
   root.settings.riskTolerance=math.min(2,root.settings.riskTolerance)
   root.economies=type(root.economies)=='table' and root.economies or {}
@@ -45,6 +44,7 @@ function M:InitializeDatabase()
     db.latestScan=db.latestScan or legacy.latestScan
     root.legacyImported={at=time(),economy=self.economyID,schema=legacy.schemaVersion}
   end
+  self:InitializeSharing()
   db.currentBuild=self:GetBuildSnapshot()
   root.schemaVersion=1; db.schemaVersion=1
   self.exposureDirty=true

@@ -42,6 +42,38 @@ function M:OwnedMaterial(item)
   if ok and self:Finite(n,0,10000000) then return math.floor(n) end
   return nil
 end
+-- Read only complete learned recipes for the logged-in Nexus character.
+-- Imported recipes never supply invented material costs or sale evidence.
+function M:ReadNexusRecipes()
+ local n=_G.VoidMarkNexus;local c=n and n.character
+ if self.persistenceBlocked or not c or n.economy~=self.economyID or c.name~=UnitName('player') or type(c.professions)~='table' then
+  return false,'No matching Nexus profession cache for this character'
+ end
+ local captured=0
+ local co=coroutine.create(function()
+  for _,prof in pairs(c.professions) do
+   for _,r in pairs(prof.recipes or {}) do
+    if r.learned and not r.incomplete and not r.bound and not r.disabled and r.outputMin==r.outputMax and type(r.reagents)=='table' then
+     local id=r.spell and ('spell:'..r.spell) or (prof.name..':'..tostring(r.output)..':'..r.name)
+     local cached=self.db.recipes[id]
+     if not cached or (cached.source=='VoidMark Nexus' and (cached.at or 0)<(r.at or 0)) or not self:KnownRecipe(cached) then
+      local reagents={};for _,v in ipairs(r.reagents) do reagents[#reagents+1]={itemID=v.id,quantity=v.qty} end
+      if self:RegisterRecipe({id=id,name=r.name,profession=prof.name,itemID=r.output,output=r.outputMin,
+       reagents=reagents,source='VoidMark Nexus',learned=true,spellID=r.spell}) then captured=captured+1 end
+     end
+    end
+    coroutine.yield()
+   end
+  end
+ end)
+ self:AddJob('nexus-recipes',function(start)
+  for i=1,15 do local ok,err=coroutine.resume(co);if not ok then error(err) end
+   if coroutine.status(co)=='dead' then return true end
+   if debugprofilestop()-start>=3 then break end
+  end
+ end,function() self.recipeDiagnostic=captured..' recipes read from Nexus';self:RebuildCrafting() end)
+ return true
+end
 function M:CaptureProfession()
   if not self.db then return end
   local legacy=type(GetNumTradeSkills)=='function' and type(GetTradeSkillReagentItemLink)=='function'

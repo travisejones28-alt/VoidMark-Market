@@ -10,7 +10,7 @@ PASS Timeouts retry once then stop
 PASS Existing searches use refresh; cached rows never unlock EXECUTE
 PASS Search pagination waits for complete results
 PASS Mismatched suffix results ignored
-PASS Live regular auction revalidation, safe mode and click-only buy
+PASS Live regular auction revalidation, click-only buy
 PASS Stale live results block purchase
 PASS Commodity quote needs second click; event never purchases
 PASS Commodity price increase invalidates quote
@@ -20,7 +20,7 @@ PASS Owned listings excluded from execution
 PASS Commodity ownership reduces available quantity
 PASS Moving-average accounting excludes unknown basis
 PASS Invoices are observed, deduped and not auto-booked
-90k scan job ticks: 883; synthetic-budget elapsed ms: 1925
+90k scan job ticks: 884; synthetic-budget elapsed ms: 1925
 PASS 90,000 rows process across frames; malformed row isolated
 PASS Oversized price distribution retains history and blocks trading
 PASS UI builds and every terminal tab renders
@@ -120,4 +120,18 @@ PASS Disenchant distributions validate probabilities and suppress unknown output
 PASS New UI renders sorting, filters, plan editing and calculation details without transactions
 PASS Real scanner publishes whole-stack depth, excludes own asks and invalidates absent stock
 PASS Malformed recipe input and excessive chain depth fail safely
-ALL 121 TESTS PASSED
+PASS Live migration removes either legacy mode value without changing finances/history or making a trade
+PASS Passive tooltip picks exact suffix, level, pet, source, freshness and never starts an AH query
+PASS Clipboard ask transfer carries floors, preserves newer observations and never imports history
+PASS Named shopping lists round-trip, preserve local targets, and allow unscanned item IDs
+PASS Two accounts resume lost data and ACKs after reload; unchanged floors send age only, no financial records
+PASS Posting rechecks slot, quantity, live quote, deposit and requires a confirm click
+PASS Cancellation validates exact ownership and fee again after confirmation
+PASS Manual shopping does not require investment ROI but still blocks unaffordable or over-limit purchases
+PASS Live name search returns a new unscanned variant and admits it to shopping review without buying
+PASS Nexus import accepts the current character and complete learned recipes only
+PASS Live sharing pauses in lockdown and only whispers an online paired character friend
+PASS Clipboard paging covers 1,500 exact keys without copying transaction records
+PASS A newer simple ask does not erase a reliable earlier historical estimate
+PASS A completed full scan publishes batched asks without transferring scan history or duplicating observations
+ALL 135 TESTS PASSED

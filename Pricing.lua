@@ -89,6 +89,10 @@ function M:GetProfitableDepth(m,kind)
 end
 -- Versioned, optional local contract. Callers get new tables, never database aliases.
 M.PricingAPI={version=1}
+function M.PricingAPI.GetObservedAsk(itemID,suffix,level,pet)
+ local o=M:PriceObservation(M:Key(itemID,suffix,level,pet));if not o then return nil end
+ return {unit=o.floor,at=o.at,source=o.source,stale=o.unverified or time()-o.at>M.db.settings.maxDataAge}
+end
 function M.PricingAPI.GetPrice(itemID) return M:GetPriceInfo(itemID) end
 function M.PricingAPI.GetAcquisitionCost(itemID,quantity) return M:QuoteAcquisition(itemID,quantity) end
 function M.PricingAPI.GetFarmingComparison(itemID,unitsPerHour)

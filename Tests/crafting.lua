@@ -104,7 +104,7 @@ check('Projects and learned recipes survive reload without changing safety or le
   reset();recipe('a',201,{{itemID=101,quantity=2}});M:SetCraftPlan('a',2)
   local old=M.db;M.db.settings.safeMode=false;M:InitializeDatabase();jobs()
   assert(M.db==old and #M:BuildCraftShopping().projects==1 and M:KnownRecipe(M.db.recipes.a))
-  assert(M.db.settings.safeMode and #M.db.ledger==0)
+  assert(M.db.settings.safeMode==nil and #M.db.ledger==0)
   M.characterID='Other';assert(#M:BuildCraftShopping().projects==0 and not M:KnownRecipe(M.db.recipes.a))
 end)
 check('Legacy profession reader handles output yields and uncached links',function()
@@ -160,7 +160,7 @@ check('New UI renders sorting, filters, plan editing and calculation details wit
   M.db.settings.filter='no matches';M:RenderUI();assert(not M.rows[1]:IsShown())
   M.db.settings.filter=''
   for _,view in ipairs({'materials','goldmaking','market','crafting'}) do M:SetView(view);jobs();M:RenderUI() end
-  assert(M.db.settings.safeMode and #M.db.ledger==0 and next(M.db.pending)==nil)
+  assert(M.db.settings.safeMode==nil and #M.db.ledger==0 and next(M.db.pending)==nil)
 end)
 check('Real scanner publishes whole-stack depth, excludes own asks and invalidates absent stock',function()
   reset();M.ahOpen=true

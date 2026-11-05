@@ -288,6 +288,8 @@ function TTB:UpdateMarketFromGroup(group, scanID, completedAt)
   local obs = self:BuildMarketObservation(group, scanID, completedAt)
 
   market.itemID = itemID
+  market.itemLevel = group.itemLevel or 0
+  market.battlePetSpeciesID = group.battlePetSpeciesID or 0
   market.itemSuffix = itemSuffix
   market.marketKey = key
   market.name = group.name or market.name or ("Item " .. tostring(itemID))

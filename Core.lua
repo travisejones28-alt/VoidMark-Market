@@ -1,8 +1,8 @@
 local addonName, M = ...
 _G.VoidMarkMarket = M
-M.name, M.version = addonName or 'VoidMarkMarket', '1.4.0-beta'
+M.name, M.version = addonName or 'VoidMarkMarket', '1.5.0'
 M.eventHandlers, M.runtimeLog, M.jobs = {}, {}, {}
-M.ahOpen, M.safeMode = false, true
+M.ahOpen = false
 M.scanState = {running=false, phase='idle', status='No scan yet', progress=0}
 function M:Now() return time() end
 function M:Finite(v,lo,hi)
@@ -56,7 +56,7 @@ function M:RegisterHandler(event,fn)
 end
 function M:GetBuildSnapshot()
   local v,b,d,t=GetBuildInfo()
-  return {version=v,build=b,buildDate=d,tocVersion=t,projectID=WOW_PROJECT_ID,isForeverBeta=tonumber(t)==16001}
+  return {version=v,build=b,buildDate=d,tocVersion=t,projectID=WOW_PROJECT_ID,isForever=tonumber(t)==16001}
 end
 function M:CanUseAuctionHouse() return self.ahOpen and type(C_AuctionHouse)=='table' end
 function M:GetSecondsUntilFreshScanAllowed()
@@ -127,11 +127,6 @@ function M:IsCommodity(key)
     local ok,info=pcall(C_AuctionHouse.GetItemKeyInfo,key)
     if ok and type(info)=='table' and type(info.isCommodity)=='boolean' then return info.isCommodity end
   end
-  if C_AuctionHouse.GetItemCommodityStatus and Enum and Enum.ItemCommodityStatus then
-    local ok,s=pcall(C_AuctionHouse.GetItemCommodityStatus,key.itemID)
-    if ok and s==Enum.ItemCommodityStatus.Commodity then return true end
-    if ok and s==Enum.ItemCommodityStatus.Item then return false end
-  end
   return nil -- Unknown classification must never enable a purchase.
 end
 M.eventFrame=CreateFrame('Frame')
@@ -142,7 +137,7 @@ M.eventFrame:SetScript('OnEvent',function(_,event,...)
   elseif event=='PLAYER_LOGIN' then
     if not M.db then M:InitializeDatabase() end
     M:RegisterHandler('AUCTION_HOUSE_DISABLED',function() end)
-    M:RunAPIProbe(); M:InitializeUI(); M:InitializeMinimapButton(); M:InitializePriceTooltips(); M:Print('v'..M.version..' loaded. /vmm | SAFE MODE ON')
+    M:RunAPIProbe(); M:InitializeUI(); M:InitializeMinimapButton(); M:InitializePriceTooltips(); M:StartSharing()
   end
   if event=='AUCTION_HOUSE_DISABLED' then event='AUCTION_HOUSE_CLOSED' end
   local args={...}
@@ -153,9 +148,9 @@ end)
 local tick=0
 M.eventFrame:SetScript('OnUpdate',function(_,elapsed)
   if not M.db then return end
-  M:RunJobs(); tick=tick+elapsed
+  if next(M.jobs) then M:RunJobs() end; tick=tick+elapsed
   if tick<0.1 then return end; tick=0
-  M:PumpQueue(); M:ExecutionTick()
+  M:PumpQueue(); M:ExecutionTick(); M:PumpSharing()
   if M.liveBrowse and M.liveBrowse.received and not M.liveBrowse.expired and GetTime()-M.liveBrowse.received>10 then
     M.liveBrowse.expired=true;M:RefreshUI()
   end
@@ -165,7 +160,8 @@ end)
 SLASH_VOIDMARKMARKET1='/vmm'; SLASH_VOIDMARKMARKET2='/voidmarkmarket'
 SlashCmdList.VOIDMARKMARKET=function(msg)
   msg=(msg or ''):lower():match('^%s*(.-)%s*$')
-  if msg=='scan' then M:RequestFreshScan()
+  if msg:match('^peer') then M:Print(M:PairPeer(msg:match('^peer%s+(.+)$')))
+  elseif msg=='scan' then M:RequestFreshScan()
   elseif msg=='cached' then M:AnalyzeCachedSnapshot()
   elseif msg=='diag' then M:SetView('diagnostics')
   elseif msg=='report' then M:ShowReport()

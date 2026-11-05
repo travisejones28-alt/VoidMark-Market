@@ -1,6 +1,10 @@
+## 1.5.0 — Forever Live
+
+Remove Safe Mode. Add confirmed manual shopping, posting and cancellation, named shopping lists, passive variant-specific price tooltips, and incremental paired-account sharing. Retain schema 1, account-local finances, old clipboard imports, crafting and the existing intelligence dashboards.
+
 # Changelog
 
-## 1.4.0-beta — 2026-10-30
+## 1.4.0-beta â€” 2026-10-30
 
 - Add whole-stack depth pricing, own-listing exclusion, outlier filtering and
   fresh-generation stock invalidation without replacing the existing scanner.

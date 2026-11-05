@@ -1,8 +1,8 @@
 ## Interface: 16001
 ## Title: VoidMark Market
-## Notes: Forever market intelligence, live-validated trading and local ledger. Starts in Safe Mode.
+## Notes: Forever market intelligence, live-validated trading and local ledger. Click to trade.
 ## Author: Taliaa / OpenAI
-## Version: 1.4.0-beta
+## Version: 1.5.0
 ## SavedVariables: VoidMarkMarketDB, TaliaaTradeBetaDB
 ## IconTexture: Interface\Icons\INV_Misc_Coin_01
 
@@ -25,6 +25,8 @@ Terminal.lua
 Analytics.lua
 TerminalUI.lua
 Sync.lua
+Sharing.lua
+ManualTrade.lua
 Diagnostics.lua
 UI.lua
 CraftingUI.lua

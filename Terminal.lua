@@ -43,28 +43,34 @@ end
 
 function M:SetWatch(marketKey,target)
   if self.persistenceBlocked then return false,'Database read-only' end
-  local market=self.db.market[marketKey]
-  if not market or not market.marketKey then return false,'Market not indexed yet' end
+  local key,id=self:ParseKey(marketKey)
+  if not key then return false,'Select an item or enter a valid item ID' end
+  local market=self.db.market[key]
+  local book=self:ListBook(self.activeList)
+  if not book then return false,'List unavailable' end
   if target~=nil and (not self:Finite(target,1,1e12) or target%1~=0) then return false,'Target must be positive copper' end
   local count=0
-  for _ in pairs(self.db.watchlist) do count=count+1 end
-  if not self.db.watchlist[marketKey] and count>=200 then return false,'200 watch entries maximum' end
-  self.db.watchlist[marketKey]={at=time(),target=target,name=market.name or ('Item '..tostring(market.itemID))}
+  for _ in pairs(book) do count=count+1 end
+  if not book[key] and count>=200 then return false,'200 watch entries maximum' end
+  book[key]={at=time(),target=target,itemID=id,name=market and market.name or (GetItemInfo and GetItemInfo(id)) or ('Item '..id)}
+  self:PublishWatch(self.activeList,key,book[key])
   self:RefreshUI()
   return true
 end
 function M:RemoveWatch(marketKey)
   if self.persistenceBlocked then return false end
-  self.db.watchlist[marketKey]=nil; self:RefreshUI(); return true
+  local book=self:ListBook(self.activeList); if not book or not book[marketKey] then return false end
+  book[marketKey]=nil;self:PublishWatch(self.activeList,marketKey,nil); self:RefreshUI(); return true
 end
 function M:GetWatchRows()
   local out={}
-  for key,entry in pairs(self.db.watchlist or {}) do
+  for key,entry in pairs(self:ListBook(self.activeList) or {}) do
     if type(entry)=='table' then
       local m=self.db.market[key]
-      local fresh=m and not m.analysisIncomplete and self:MarketFresh(m) or false
-      local floor=m and m.latest and m.latest.floor or 0
-      local status=not m and 'MISSING' or not fresh and 'STALE'
+      local p=self:PriceObservation(key)
+      local fresh=p and not p.unverified and time()-p.at<=self.db.settings.maxDataAge
+      local floor=p and p.floor or 0
+      local status=not p and 'MISSING' or not fresh and 'STALE'
         or (entry.target and floor>0 and floor<=entry.target) and 'TARGET' or 'WATCH'
       out[#out+1]={marketKey=key,itemID=m and m.itemID or entry.itemID,name=m and m.name or entry.name or tostring(key),
         floor=floor,fair=m and m.fairValue or 0,target=entry.target,confidence=m and m.confidence or 'Unknown',
@@ -127,36 +133,37 @@ function M:BuildBrowseRows(query)
   local token=(self.browseToken or 0)+1;self.browseToken=token
   local keys=self.marketIndex or {};local i=1;local out={}
   local needle=tostring(query or ''):lower()
-  self.browseRows={}
+  self.browseRows={};local sharedCursor
   self:AddJob('browse',function(start)
     for j=1,80 do
-      if i>#keys or #out>=300 then return true end
+      if #out>=300 then return true end
+      if i>#keys then
+       local key,s=next(self.db.sharedPrices,sharedCursor);sharedCursor=key;if not key then return true end
+       if type(s)=='table' and not self.db.market[key] then
+        local name=(GetItemInfo and GetItemInfo(s.id)) or ('Item '..tostring(s.id))
+        if needle=='' or tostring(s.id)==needle or name:lower():find(needle,1,true) then
+         local fresh=self:Finite(s.at,time()-(self.db.settings.maxDataAge or 7200),time()+60)
+         out[#out+1]={marketKey=key,itemID=s.id,name=name,floor=s.floor or 0,fair=s.fair or 0,
+          modelReady=fresh and s.reliable,confidence='Shared',status=fresh and 'SHARED*' or 'SHARED OLD'}
+        end
+       end
+      else
       local m=self.db.market[keys[i]];i=i+1
       if m and type(m.name)=='string' and (m.name:lower():find(needle,1,true) or tostring(m.itemID)==needle) then
-        local fresh=m.latest and self:MarketFresh(m) and not m.analysisIncomplete
+        local obs=self:PriceObservation(m.marketKey)
+        local fresh=obs and not obs.unverified and time()-obs.at<=self.db.settings.maxDataAge
         local week,month=self:MarketWindow(m,7),self:MarketWindow(m,30)
-        out[#out+1]={marketKey=m.marketKey,itemID=m.itemID,name=m.name,floor=m.latest and m.latest.floor or 0,
+        out[#out+1]={marketKey=m.marketKey,itemID=m.itemID,name=m.name,floor=obs and obs.floor or 0,
           fair=m.fairValue or 0,quantity=m.latest and m.latest.quantity or 0,
           median7=week and week.median,median30=month and month.median,
           confidence=m.confidence or 'Unknown',modelReady=self:CanEstimateResale(m),
-          status=not fresh and 'STALE' or self:CanEstimateResale(m) and 'CACHED' or 'UNPROVEN'}
+          status=not fresh and 'STALE' or obs.source=='Synced account' and 'SHARED*' or self:CanEstimateResale(m) and 'CACHED' or 'UNPROVEN'}
+      end
       end
       if debugprofilestop()-start>=4 then return false end
     end
   end,function()
     if token~=self.browseToken then return end
-    -- Imported observations are labeled separately and never become local market history.
-    for key,s in pairs(self.db.sharedPrices or {}) do
-      if #out>=300 then break end
-      if type(s)=='table' and not self.db.market[key] and
-        (needle=='' or tostring(s.id):find(needle,1,true)) then
-        local fresh=self:Finite(s.at,time()-(self.db.settings.maxDataAge or 7200),time()+300)
-        out[#out+1]={marketKey=key,itemID=s.id,name='Item '..tostring(s.id)..' (manual share)',
-          floor=0,fair=s.fair,quantity=s.quantity or 0,confidence=tostring(s.confidence)..' (shared)',
-          status=fresh and 'SHARED*' or 'SHARED OLD'}
-      end
-    end
-    table.sort(out,function(x,y)return tostring(x.name)<tostring(y.name) end)
     self.browseRows=out;self:SortBrowseRows();self:RefreshUI()
   end)
 end

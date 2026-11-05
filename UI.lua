@@ -31,7 +31,7 @@ function M:InitializeUI()
   if UIParent.GetWidth then f:SetScale(math.min(1,(UIParent:GetWidth()-30)/1040,(UIParent:GetHeight()-30)/680)) end
   self:RestoreWindowLayout()
   label(f,'VOIDMARK MARKET',18,-16,300,'GameFontNormalLarge')
-  self.modeLabel=label(f,'SAFE MODE ON',365,-19,455)
+  self.modeLabel=label(f,'Manual trading',365,-19,455)
   button(f,'TRANSFER',860,-12,125,function() self:ShowTransferWindow() end)
   button(f,'X',995,-12,26,function() f:Hide() end)
   for i,v in ipairs(tabs) do local tab=v[2]; button(f,v[1],18+(i-1)*100,-48,98,function() self:SetView(tab) end) end
@@ -73,6 +73,9 @@ function M:InitializeUI()
     for i,w in ipairs(widths) do b.cols[i]=label(b,'',cx+(i==1 and 26 or 0),-6,w-(i==1 and 31 or 5),'GameFontHighlightSmall'); cx=cx+w end
     b:SetScript('OnClick',function(row)
       if not row.data then return end
+      if self.view=='selling' and self.selectedRow~=row.data then
+       self.postQuote=nil; self.postUnit:SetText('');self.postQty:SetText(tostring(math.min(row.data.quantity or 1,self.db.sellStacks[row.data.marketKey] or row.data.quantity or 1)))
+      end
       self.selectedRow=row.data
       if self.view=='opportunities' then self:SelectOpportunity(row.data)
       elseif self.view=='review' and row.data.opportunity then self:SelectOpportunity(row.data.opportunity)
@@ -94,14 +97,24 @@ function M:InitializeUI()
     local ok,why=self:SetPreferredStack(row and row.marketKey,value)
     self:Print(ok and 'Stack preference saved' or why)
   end)
+  label(self.stackFrame,'Qty:',342,-6,32);self.postQty=edit(self.stackFrame,375,-1,52,'1')
+  label(self.stackFrame,'Gold/unit:',438,-6,64);self.postUnit=edit(self.stackFrame,505,-1,88,'')
+  self.postDuration=3
+  self.durationButton=button(self.stackFrame,'24h',601,0,62,function(b)
+   self.postDuration=self.postDuration%3+1;b:SetText(({2,8,24})[self.postDuration]..'h')
+  end)
+  button(self.stackFrame,'CHECK PRICE',674,0,132,function() self:CheckPost(self.selectedRow) end)
+  button(self.stackFrame,'POST...',816,0,110,function()
+   local g=tonumber(self.postUnit:GetText());self:ReviewPost(self.selectedRow,tonumber(self.postQty:GetText()),g and math.floor(g*10000+.5),self.postDuration)
+  end)
   self.browseAction=CreateFrame('Frame',nil,f);self.browseAction:SetPoint('BOTTOMLEFT',18,18);self.browseAction:SetSize(998,28)
   button(self.browseAction,'LIVE COMPARE',0,0,150,function() local ok,why=self:InspectLiveMarket(self.selectedRow);if not ok then self:Print(why or 'Search unavailable') end end)
   button(self.browseAction,'PRICE HISTORY',160,0,150,function() self:ShowHistoryWindow(self.selectedRow) end)
-  button(self.browseAction,'REVIEW PURCHASE',320,0,165,function()
+  button(self.browseAction,'BUY ITEM',320,0,165,function()
     local m=self.selectedRow and self.db.market[self.selectedRow.marketKey]
-    local o=m and self:MakeOpportunity(m)
-    if o then self:SelectOpportunity(o) else self:Print('No local purchase model; scan first') end
+    self:ShopSelected(self.selectedRow)
   end)
+  button(self.browseAction,'SEARCH LIVE',495,0,145,function() self:LiveNameSearch(self.filter:GetText()) end)
   self.presetButton=button(f,'PRESET: BALANCED',18,-628,210,function()
     local names={'balanced','conservative','exploratory'};local current=self.db.settings.sniperPreset or 'balanced'
     for i,name in ipairs(names) do if name==current then self:ApplySniperPreset(names[i%3+1]);break end end
@@ -139,18 +152,28 @@ function M:InitializeUI()
     local amount=rawTarget~='' and tonumber(rawTarget) or nil
     if rawTarget~='' and not amount then self:Print('Enter a numeric gold price target');return end
     local copper=amount and math.floor(amount*10000+0.5) or nil
-    local ok,why=self:SetWatch(market and market.marketKey,copper)
+    local ok,why=self:SetWatch(market and market.marketKey or (selected and (raw=='' or tostring(selected.itemID)==raw) and selected.marketKey) or id,copper)
     self:Print(ok and 'Watch target saved for this economy' or why)
   end)
   button(self.watchFrame,'REMOVE SELECTED',680,2,160,function()
     if not self.selectedRow or not self.selectedRow.marketKey then self:Print('Select a watched item first');return end
     self:RemoveWatch(self.selectedRow.marketKey);self.selectedRow=nil
   end)
-  label(self.watchFrame,'Targets are observational only; stale auctions never trigger a buy. Purchases require live validation and clicks.',0,-41,974)
+  label(self.watchFrame,'List:',0,-44,40)
+  self.listEdit=edit(self.watchFrame,42,-37,165,self.activeList)
+  button(self.watchFrame,'OPEN / CREATE',217,-37,135,function()
+   local ok,err=self:SetList(self.listEdit:GetText());if not ok then self:Print(err) end
+  end)
+  button(self.watchFrame,'NEXT LIST',360,-37,100,function()
+   local names={'Shopping'};for name in pairs(self.db.shoppingLists) do names[#names+1]=name end
+   table.sort(names);for i,n in ipairs(names) do if n==self.activeList then self:SetList(names[i%#names+1]);break end end
+   self.listEdit:SetText(self.activeList)
+  end)
+  button(self.watchFrame,'BUY SELECTED',474,-37,145,function() self:ShopSelected(self.selectedRow) end)
   self.action=CreateFrame('Frame',nil,f); self.action:SetPoint('BOTTOMLEFT',18,18); self.action:SetSize(1000,28)
   self.quantity=edit(self.action,83,-1,80,'1'); label(self.action,'Quantity:',0,-7,80)
   self.revalidateButton=button(self.action,'REVALIDATE',180,0,130,function() self:RevalidateSelected(self.quantity:GetText()) end)
-  self.executeButton=button(self.action,'EXECUTE',318,0,130,function() self:ExecuteClicked() end)
+  self.executeButton=button(self.action,'EXECUTE',318,0,130,function() if self.execution.commodity then self:ExecuteClicked() else self:ReviewRegularPurchase() end end)
   self.confirmButton=button(self.action,'CONFIRM QUOTE',456,0,155,function() self:ConfirmClicked() end)
   self.cancelQuoteButton=button(self.action,'DISCARD QUOTE',619,0,150,function()
     if self.execution.state=='quoting' or self.execution.state=='quoted' then self:InvalidateQuote('Quote discarded') end
@@ -189,6 +212,7 @@ function M:InitializeUI()
   end)
   button(self.sellAction,'POST QUEUE',885,0,111,function()self:SetView('post review')end)
   self.ownedRefresh=button(f,'REFRESH MY AUCTIONS',18,-628,210,function() self:RequestOwnedAuctionsDiagnostic() end)
+  self.cancelOwned=button(f,'CANCEL SELECTED...',238,-628,180,function() self:ReviewCancel(self.selectedRow) end)
   self.postReviewRemove=button(f,'REMOVE POST INTENT',18,-628,200,function()
     local row=self.selectedRow
     if row and row.marketKey then self:RemovePostingReview(row.marketKey);self.selectedRow=nil
@@ -235,13 +259,11 @@ function M:InitializeUI()
     elseif self.execution.state=='ready' then self.execution.state='stale'; self.execution.message='Limits changed; revalidate' end
     self:RebuildOpportunities(); self:RefreshUI()
   end)
-  self.safe=CreateFrame('CheckButton',nil,self.settingsFrame,'UICheckButtonTemplate'); self.safe:SetPoint('TOPLEFT',190,-349); self.safe:SetSize(28,28)
-  label(self.settingsFrame,'SAFE MODE (starts ON every login)',223,-357,450)
-  self.safe:SetChecked(true); self.safe:SetScript('OnClick',function(c)
-    self.db.settings.safeMode=c:GetChecked() and true or false; self.safeMode=self.db.settings.safeMode
-    if self.safeMode and (self.execution.state=='quoted' or self.execution.state=='quoting') then self:InvalidateQuote('Safe Mode enabled') end
-    self:RefreshUI()
-  end)
+  label(self.settingsFrame,'Sync partner (Name-Realm):',175,-354,190)
+  self.partner=edit(self.settingsFrame,374,-348,190,self.db.syncPeer or '')
+  button(self.settingsFrame,'PAIR',575,-348,75,function() self:Print(self:PairPeer(self.partner:GetText())) end)
+  button(self.settingsFrame,'UNPAIR',658,-348,85,function() self:Print(self:PairPeer('off'));self.partner:SetText('') end)
+  self.syncState=label(self.settingsFrame,'',180,-394,775)
   self.minimapToggle=CreateFrame('CheckButton',nil,self.settingsFrame,'UICheckButtonTemplate')
   self.minimapToggle:SetPoint('TOPLEFT',0,-386); self.minimapToggle:SetSize(28,28)
   label(self.settingsFrame,'Show minimap icon',34,-394,240)
@@ -249,7 +271,7 @@ function M:InitializeUI()
   self.minimapToggle:SetScript('OnClick',function(c)
     self:SetMinimapIconVisible(c:GetChecked() and true or false)
   end)
-  label(self.settingsFrame,'Safe Mode starts ON. Each purchase requires a click.\nDeposits and liquidity are estimates. Sharing uses manual transfer.',385,-424,590)
+  label(self.settingsFrame,'Group or add both characters as in-game friends to sync.\nTransfer also works offline by copying text.',385,-424,590)
   self.view='market'; self.page=1; self:RefreshUI(); f:Hide() -- Keep Market closed on login/reload until opened by the user.
 end
 function M:ShowReport()
@@ -267,13 +289,13 @@ function M:RenderUI()
   self.uiDirty=false; if not self.window or not self.window:IsShown() then return end
   if self.craftAction then self.craftAction:Hide() end
   local view=self.view or 'market'; local s=self.db.settings
-  self.modeLabel:SetText(s.safeMode and '|cff72e7aaSAFE MODE ON - no transactions|r' or '|cffffa250TRADING ENABLED - real clicks required|r')
+  self.modeLabel:SetText(self.persistenceBlocked and '|cffff9966Read-only: newer database|r' or '|cff72e7aaManual trading enabled|r')
   self.status:SetText('AH '..(self.ahOpen and 'OPEN' or 'CLOSED')..' | '..self.scanState.status..' | full scan cooldown '..self:FormatDuration(self:GetSecondsUntilFreshScanAllowed()))
   self.historyAction:SetShown(view=='investments' or view=='banker' or view=='market');self.stackFrame:SetShown(view=='selling')
-  self.browseAction:Hide();self.presetButton:SetShown(view=='opportunities')
+  self.cancelOwned:SetShown(view=='my auctions');self.browseAction:Hide();self.presetButton:SetShown(view=='opportunities')
   self.presetButton:SetText('PRESET: '..(s.sniperPreset or 'balanced'):upper())
   self.toolbar:Show(); self.tableFrame:Hide(); self.detail:Hide(); self.contentScroll:Hide(); self.settingsFrame:Hide(); self.action:Hide(); self.ledgerAction:Hide(); self.ownedRefresh:Hide(); self.reviewRemove:Hide(); self.postReviewRemove:Hide(); self.postReviewBack:Hide(); self.sellAction:Hide(); self.watchFrame:Hide(); self.statsFrame:Hide()
-  self.filter:SetShown(view=='opportunities' or view=='browse' or view=='crafting'); self.sortButton:SetShown(view=='opportunities' or view=='browse' or view=='crafting'); self.sortButton:SetText('SORT: '..s.sort:upper())
+  self.filter:SetShown(view=='opportunities' or view=='browse' or view=='crafting' or view=='shopping'); self.sortButton:SetShown(view=='opportunities' or view=='browse' or view=='crafting'); self.sortButton:SetText('SORT: '..s.sort:upper())
   if view=='browse' then
     local names={profit='SPREAD',roi='FAIR/ASK',ask='ASK',name='NAME'}
     self.sortButton:SetText('SORT: '..(names[s.sort] or 'NAME'))
@@ -281,7 +303,7 @@ function M:RenderUI()
   self.detail:SetHeight(view=='selling' and 90 or 125)
   self.scanButton:SetEnabled(self.ahOpen and not self.scanState.running); self.cachedButton:SetEnabled(self.ahOpen and not self.scanState.running)
   if view=='crafting' or view=='materials' or view=='goldmaking' then return self:RenderCraftingUI(view) end
-  if view=='settings' then self.settingsFrame:Show(); self.safe:SetChecked(s.safeMode); self.minimapToggle:SetChecked(not (s.minimap and s.minimap.hide)); return end
+  if view=='settings' then self.settingsFrame:Show(); self.syncState:SetText(self:SharingStatus()); self.minimapToggle:SetChecked(not (s.minimap and s.minimap.hide)); return end
   if view=='market' or view=='banker' then
     local data=self:GetBankerSummary();local p=data.portfolio
     local values={data.gold,data.available,p.cost,p.estimatedNet,data.realized,data.pending}
@@ -296,27 +318,33 @@ function M:RenderUI()
     self.action:Show(); local x=self.execution; local m=x.market
     local lines={'|cffffffffEXECUTION / '..x.state:upper()..'|r',x.message,'',m and m.name or 'Select an opportunity first.'}
     if m then
+      if x.opportunity.kind=='shopping' then
+       lines[#lines+1]='Shopping purchase: live asking price and spending limits apply.'
+      else
       lines[#lines+1]='Historical ask '..self:Money(m.latest.floor)..' | fair '..self:Money(m.fairValue)..' | meaningful floor '..self:Money(m.latest.meaningfulFloor or m.latest.q10)
-      lines[#lines+1]='Confidence '..tostring(m.confidence)..' | inferred liquidity '..tostring(m.activity)..' | '..m.observations..' observations'
+      lines[#lines+1]='Confidence '..tostring(m.confidence)..' | inferred liquidity '..tostring(m.activity)..' | '..(m.observations or 0)..' observations'
       lines[#lines+1]=m.modelReason or ''
       local p=x.opportunity.parts
       if p then lines[#lines+1]=string.format('Rank %d: profit +%.1f, ROI +%.1f, confidence +%.1f, liquidity +%.1f, depth +%.1f, volatility -%.1f, capital -%.1f',x.opportunity.score,p.profit,p.roi,p.confidence,p.liquidity,p.depth,p.risk,p.exposure) end
       lines[#lines+1]='Snapshot limits: '..(x.opportunity.pass and 'passed at analysis time' or table.concat(x.opportunity.blocks or {},'; '))
+      end
       if x.live then
         local e=x.live.economics
-        lines[#lines+1]='\nLIVE: '..x.live.quantity..' units | total '..self:Money(x.live.cost)..' | expected net '..self:Money(e.net)..' | ROI '..self:PercentText(e.roi)
-        lines[#lines+1]='Gross estimate '..self:Money(e.gross)..' | cut '..self:Money(e.fee)..' | deposit allowance '..self:Money(e.depositReserve)
+        lines[#lines+1]='\nLIVE: '..x.live.quantity..' units | total '..self:Money(x.live.cost)
+        if e.kind~='shopping' then
+         lines[#lines+1]='Expected net '..self:Money(e.net)..' | ROI '..self:PercentText(e.roi)..' | gross '..self:Money(e.gross)..' | cut '..self:Money(e.fee)..' | deposit allowance '..self:Money(e.depositReserve)
+        end
         lines[#lines+1]=x.commodity and 'Commodity: EXECUTE requests a quote; CONFIRM QUOTE purchases it.' or ('Regular item: one full auction #'..tostring(x.live.auctionID))
-        lines[#lines+1]='Model '..e.kind..(e.kind=='vendor' and ': vendor spread, no resale fees' or ': resale estimates do not guarantee a sale')
+        if e.kind~='shopping' then lines[#lines+1]='Model '..e.kind..(e.kind=='vendor' and ': vendor spread, no resale fees' or ': resale estimates do not guarantee a sale') end
       end
       lines[#lines+1]='\nWhy: '..table.concat(m.reasons or {},'; ')
       lines[#lines+1]='Risks: '..table.concat(m.risks or {},'; ')
     end
     self.revalidateButton:SetEnabled(not self.persistenceBlocked and self.ahOpen and m~=nil and not self:HasUnresolvedPurchase() and x.state~='quoting' and x.state~='quoted' and x.state~='validating')
-    self.executeButton:SetEnabled(not self.persistenceBlocked and not s.safeMode and self.ahOpen and x.state=='ready' and not self:HasUnresolvedPurchase())
-    self.confirmButton:SetEnabled(not s.safeMode and x.state=='quoted')
+    self.executeButton:SetEnabled(not self.persistenceBlocked and self.ahOpen and x.state=='ready' and not self:HasUnresolvedPurchase())
+    self.confirmButton:SetEnabled(not self.persistenceBlocked and self.ahOpen and x.state=='quoted')
     self.cancelQuoteButton:SetEnabled(x.state=='quoted' or x.state=='quoting')
-    self.addReviewButton:SetEnabled(x.opportunity~=nil and not self.persistenceBlocked)
+    self.addReviewButton:SetEnabled(x.opportunity~=nil and x.opportunity.kind~='shopping' and not self.persistenceBlocked)
     text=table.concat(lines,'\n')
   elseif view=='diagnostics' then text=self:BuildTextReport()
   elseif view=='market' then
@@ -327,7 +355,7 @@ function M:RenderUI()
     text=text..self:FinancialSummaryText()..'\n\n'..self:BuildFullScanReport()..'\n\n'
     text=text..'Cost-matched realized '..self:Money(totals.realized)..' | verified net sale revenue '..self:Money(totals.revenue)..'\n'..
       'Portfolio liquidation uses fresh models with sufficient history/confidence. Unproven positions remain unpriced.\n'..
-      'Scan results are advisory. Select SNIPER for live revalidation; SELL uses the native Auction House for posting.\n'..
+      'Scan results are advisory. Select SNIPER for live revalidation; SELL lets you review and post bag items.\n'..
       'Use BANKER to review scan changes and SHOPPING for saved price targets. /vmm report opens diagnostics.'
   elseif view=='banker' then
     local summary=self:GetBankerSummary()
@@ -364,7 +392,9 @@ function M:RenderUI()
     elseif view=='browse' then
       self.browseAction:Show();source=self.browseRows or {}; headers={'Cached item','Item ID','Ask/unit','Model est.','Scan med 7d','Scan med 30d','Confidence','State'}
     elseif view=='shopping' then
-      source=self:GetWatchRows();headers={'Watched item','Item ID','Ask/unit','Fair','Target','','Confidence','State'}
+      source={};local needle=(s.filter or ''):lower()
+      for _,row in ipairs(self:GetWatchRows()) do if needle=='' or row.name:lower():find(needle,1,true) or tostring(row.itemID)==needle then source[#source+1]=row end end
+      headers={'Watched item','Item ID','Ask/unit','Fair','Target','','Confidence','State'}
       self.watchFrame:Show()
     elseif view=='investments' then
       source=self:GetPortfolioRows();headers={'Owned investment','Quantity','Cost basis','Net est.','Unrealized','ROI','Age','State'}
@@ -428,7 +458,7 @@ function M:RenderUI()
     elseif view=='review' then
       self.detail:SetText('This is an advisory purchase REVIEW QUEUE, not a transaction queue.\nItems with REVALIDATE can be clicked to inspect, but the live purchase still needs complete search validation and a permitted user click.\nRECHECK items have stale/blocked/missing market data. They remain saved until you remove them.')
     elseif view=='shopping' then
-      self.detail:SetText('Select an item to update or remove its target. Enter a base item ID and target in gold below.\nTargets only flag fresh cached asking prices; no automatic purchases.')
+      self.detail:SetText('List: '..self.activeList..' | Select an item to update or remove its target. Enter a base item ID and target in gold below.\nTargets only flag fresh cached asking prices; no automatic purchases.')
     elseif view=='investments' then
       local _,p=self:GetPortfolioRows()
       self.detail:SetText('Capital at known cost '..self:Money(p.cost)..' | modeled liquidation after estimated fees '..self:Money(p.estimatedNet)..
@@ -444,13 +474,13 @@ function M:RenderUI()
         self.detail:SetText('Bag '..o.bag..' / slot '..o.slot..' | '..tostring(o.status)..' | '..tostring(o.strategy or 'No strategy')..
           '\n'..(o.price and ('Price per unit '..self:Money(o.price)..' | Gross '..self:Money(o.gross)..' | estimated AH cut '..self:Money(o.estimatedCut)..' | deposit allowance '..self:Money(o.depositAllowance)) or 'No reliable pricing available')..
           '\n'..(o.profit and ('Estimated net profit '..self:Money(o.profit)..' | ROI '..self:PercentText(o.roi or 0)) or 'Profit unavailable: basis is not fully known')..
-          '\n'..tostring(o.reason or '')..'\n'..self:StackPlanText(o)..'\nAdvisory only. Confirm live deposit and duration in the native AH.')
-      else self.detail:SetText('Select a bag item for its price, cost basis and risk. No post is made by this panel.') end
+          '\n'..tostring(o.reason or '')..'\n'..self:StackPlanText(o)..'\n'..(self.postQuote and self.postQuote.at and ('Live competitor: '..(self.postQuote.floor and self:Money(self.postQuote.floor) or 'none')) or 'Check price, choose quantity and gold/unit, then post.'))
+      else self.detail:SetText('Select a bag item for its price, cost basis and risk. Choose Check Price to compare live listings.') end
     elseif view=='my auctions' then
       self.detail:SetText(o and ('Own auction #'..tostring(o.auctionID)..' | '..tostring(o.action or 'INSPECT')..
         '\n'..tostring(o.reason or 'Select a row to fetch live competition.')..
         '\n'..(o.repriceDifference and ('Gross reduction on reprice '..self:Money(o.repriceDifference)) or 'No repricing economics available')..
-        '\nCancel/repost is advisory only; confirm native AH deposit, fees, time remaining and live sale demand.') or
+        '\nCancel Selected shows the current fee before you confirm.') or
         'Select an auction to inspect the live competitors. No cancel/post action is automatic.')
     elseif view=='browse' then
       self.detail:SetText((o and self:LiveMarketText(o.marketKey)..'\n' or '')..'Search cached market history by name or item ID. '..tostring(#source)..' cached results shown (maximum 300).'..
@@ -483,16 +513,19 @@ function M:ShowTransferWindow()
     e:SetWidth(768);e:SetAutoFocus(false);e:SetScript('OnEscapePressed',function()f:Hide()end)
     scroll:SetScrollChild(e);self.transferEdit=e
     self.transferStatus=label(f,'No data transferred',18,-521,810)
-    button(f,'GENERATE EXPORT',18,-537,180,function()
-      local raw,err=self:ExportMarketTransfer()
-      if raw then e:SetText(raw);e:SetFocus();e:HighlightText();self.transferStatus:SetText('Export ready; Ctrl+C to copy')
-      else self.transferStatus:SetText(err or 'Export failed') end
-    end)
+    local pricePage,pricePages=0,1
+    local function prices(page)
+      local raw,err,current,total=self:ExportMarketTransfer(page)
+      if not raw then self.transferStatus:SetText(err);return end
+      pricePage,pricePages=current,total;e:SetText(raw);e:SetFocus();e:HighlightText()
+      self.transferStatus:SetText('Prices '..current..' / '..total..' | Copy and import each page.')
+    end
+    button(f,'EXPORT PRICES',18,-537,180,function() prices(1) end)
     button(f,'IMPORT PASTED TEXT',211,-537,195,function()
       local ok,msg=self:ImportMarketTransfer(e:GetText())
       self.transferStatus:SetText((ok and '|cff72e7aa' or '|cffff7777')..tostring(msg)..'|r')
     end)
-    button(f,'SELECT ALL',419,-537,125,function()e:SetFocus();e:HighlightText()end)
+    button(f,'NEXT PRICES',419,-537,125,function() prices(pricePage%pricePages+1) end)
     button(f,'EXPORT SHOPPING',550,-537,139,function()
       local raw,err=self:ExportShoppingTransfer()
       if raw then e:SetText(raw);e:SetFocus();e:HighlightText();self.transferStatus:SetText('Shopping list ready; Ctrl+C to copy')

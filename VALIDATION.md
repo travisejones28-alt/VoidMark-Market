@@ -1,3 +1,12 @@
+# Forever Live 1.5.0 validation
+
+135 Lua 5.1 mock regressions passed. All addon modules were loaded from the Interface 16001 TOC. Tests include a completed 3,000-row scan, interrupted full scans, passive local/shared tooltips, named lists, offline paging over 1,500 items, new-schema and old-schema preservation, confirmed manual posts/cancels with changed slots and fees, regular/commodity purchasing, and reading Nexus recipes. The paired-client simulation drops a data message and an acknowledgment, resets the receiver session, exchanges a timestamp-only update, rejects the wrong sender/economy and malformed payloads, and checks that the ledger and model histories were not copied.
+
+These are executable mocks, not a live benchmark or an in-game trade. See [the live test checklist](README.md#verify-on-the-live-client). Specifically verify actual chat routing, effective gear-level keys, native secondary post confirmation, duration/deposit values and real AH result events. Protected server behavior and throughput on the two PCs must be tested in game.
+
+## Earlier version validation (historical)
+
+
 # 1.3.1-beta stress-test fixes
 
 97 local regression tests pass, including the supplied extreme Rough Arrow pricing scenario. See [RELEASE_1.3.1.md](RELEASE_1.3.1.md). No new live testing while servers are offline. Historical validation follows.
@@ -10,7 +19,7 @@
 
 63 Lua 5.1 regression tests and shared-addon integration pass. Use `python Tests/run_tests.py` with `lupa==2.8`. See HARDENING.md for scope and required live checks. Historical validation follows.
 
-# Item-data recovery audit — 1.0.2-beta
+# Item-data recovery audit â€” 1.0.2-beta
 
 **58 automated checks passed**, including the 51 checks from 1.0.1.
 New coverage includes delayed links recovered once with suffix identity intact;
@@ -26,7 +35,7 @@ build 70235. Item-data recovery and log coalescing in 1.0.2 are mock-validated;
 a live test is still required. Rejection reasons in the old report were not
 recorded, so the actual recoverable row count is unknown.
 
-## Full-scan audit — 1.0.1-beta
+## Full-scan audit â€” 1.0.1-beta
 
 **51 automated checks passed**, including the 37 baseline checks. Full output is
 in `Tests/test-results.txt`.
@@ -42,7 +51,7 @@ The baseline 50,000-row fixture still processes across roughly 600 scheduled job
 All baseline purchase, model, accounting and UI checks pass. No in-game beta scan
 has been run in this environment. Follow the new diagnostic test in README.md.
 
-## Baseline audit — 1.0.0-beta
+## Baseline audit â€” 1.0.0-beta
 
 **37 automated checks passed.** Full output is in `Tests/test-results.txt`.
 

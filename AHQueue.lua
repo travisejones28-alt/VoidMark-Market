@@ -9,7 +9,7 @@ end
 function M:QueueRequest(r)
   if not self:CanUseAuctionHouse() then if r.fail then r.fail('Auction House closed') end; return false end
   local q=self.queue
-  if q.dedupe[r.id] then return false,'duplicate' end
+  if q.dedupe[r.id] then if r.fail then r.fail('A search for this item is already running') end; return false,'duplicate' end
   if #q.waiting>=100 then if r.fail then r.fail('Queue full') end; return false end
   q.sequence=q.sequence+1; r.token=q.sequence; r.priority=r.priority or 10; r.at=GetTime(); r.attempt=0
   q.dedupe[r.id]=r; q.waiting[#q.waiting+1]=r

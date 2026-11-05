@@ -18,8 +18,7 @@ function M:RefreshInventory()
         local currentBag,currentSlot=bag,slot;slot=slot+1
         local success,info=pcall(C_Container.GetContainerItemInfo,currentBag,currentSlot)
         if success and type(info)=='table' and info.itemID and not info.isBound then
-          local suffix=self:Suffix(info.hyperlink)
-          local key=suffix and self:Key(info.itemID,suffix) or nil
+          local key=self:LinkIdentity(info.hyperlink,info.itemID)
           local qty=tonumber(info.stackCount) or 1
           if self:Finite(qty,1,1e6) and qty%1==0 then
             local plan=key and self:BuildSellPlan(key,qty) or
@@ -67,7 +66,7 @@ function M:CaptureOwnedAuctions()
         local key=self:Key(info.itemKey.itemID,info.itemKey.itemSuffix,info.itemKey.itemLevel,info.itemKey.battlePetSpeciesID)
         local m=self.db.market[key]; local qty=tonumber(info.quantity) or 1
         local unit=tonumber(info.unitPrice) or (tonumber(info.buyoutAmount) or 0)/math.max(1,qty)
-        rows[#rows+1]={auctionID=info.auctionID,marketKey=key,name=m and m.name or ('Item '..info.itemKey.itemID),quantity=qty,
+        rows[#rows+1]={auctionID=info.auctionID,itemKey=info.itemKey,marketKey=key,name=m and m.name or ('Item '..info.itemKey.itemID),quantity=qty,
           unit=unit,timeLeft=info.timeLeftSeconds or info.timeLeft,status=info.status,action='INSPECT',deposit=info.depositAmount,
           floor=m and m.latest and m.latest.meaningfulFloor,reason='Snapshot comparison only; refresh item before deciding'}
       end
@@ -77,6 +76,7 @@ function M:CaptureOwnedAuctions()
 end
 function M:AnalyzeOwnedLive(row)
   local market=row and self.db.market[row.marketKey]
+  if not market and row and row.itemKey then market=row.itemKey end
   if not market or not row.auctionID then
     if row then row.action='HOLD';row.reason='Cannot safely identify this auction or its variant' end
     self:RefreshUI();return

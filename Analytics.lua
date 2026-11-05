@@ -79,8 +79,9 @@ function M:ApplySniperPreset(name)
 end
 
 function M:InspectLiveMarket(row)
-  local m=row and self.db.market[row.marketKey]
-  if not m or not self.ahOpen then return false,'Select a local market with the Auction House open' end
+  local key,id,s,l,p=self:ParseKey(row and row.marketKey)
+  local m=key and (self.db.market[key] or {marketKey=key,itemID=id,itemSuffix=s,itemLevel=l,battlePetSpeciesID=p})
+  if not m or not self.ahOpen then return false,'Select an item with the Auction House open' end
   if self:HasUnresolvedPurchase() or (self.execution and
     (self.execution.state=='quoting' or self.execution.state=='quoted' or self.execution.state=='validating' or self.execution.state=='ready')) then
     return false,'Finish or discard the current purchase review before searching'
@@ -109,14 +110,14 @@ function M:StackPlanText(row)
   if not row or not row.marketKey then return '' end
   local wanted=self.db.sellStacks[row.marketKey]
   local qty=tonumber(row.quantity)
-  if not wanted or not qty or qty<1 then return 'Set an optional stack size below; split and post in the native AH.' end
+  if not wanted or not qty or qty<1 then return 'Set an optional stack size below; or enter the quantity to post.' end
   local m=self.db.market[row.marketKey];local maxStack
   if m and GetItemInfo then local _,_,_,_,_,_,_,limit=GetItemInfo(m.itemID);maxStack=tonumber(limit) end
   if not maxStack or maxStack<1 then return 'Item stack limit unavailable; wait for item metadata.' end
   local size=math.min(wanted,maxStack,qty)
   local full=math.floor(qty/size);local remainder=qty%size
   return 'Stack plan: '..full..' x '..size..(remainder>0 and (' + '..remainder..' remainder') or '')..
-    (size<wanted and ' (limited by item/stock)' or '')..'. Native posting only.'
+    (size<wanted and ' (limited by item/stock)' or '')..'. Each post requires a click.'
 end
 M:RegisterHandler('AUCTION_HOUSE_CLOSED',function(self)
   self.liveBrowseToken=(self.liveBrowseToken or 0)+1;self.liveBrowse=nil

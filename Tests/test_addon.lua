@@ -83,7 +83,7 @@ local function advance(s) clock=clock+s end
 local function resetQueue()
  M.ahOpen=true
  M:CancelRequests('test reset'); M.queue.waiting={};M.queue.dedupe={};M.queue.active=nil; M.queue.nextSend=0
- M.execution={state='idle',message='idle'};M.db.pending={};M.db.settings.safeMode=true;M.db.settings.depositReserve=0;M.db.quoteGuardUntil=0
+ M.execution={state='idle',message='idle'};M.db.pending={};M.db.settings.depositReserve=0;M.db.quoteGuardUntil=0
  calls={};ready=true;has=false;full=true;commodity=false
 end
 local market
@@ -106,7 +106,7 @@ check('All TOC modules load',function() assert(M.ExecutionTick and M.RenderUI an
 check('Idempotent legacy migration and startup safety',function()
  TaliaaTradeBetaDB={schemaVersion=3,market={[100]={itemID=100,marketKey=100,name='Legacy',history={},latest={floor=100},fairValue=200}},scanSequence=9}
  M:InitializeDatabase();jobs(); assert(M.db.market[100]==TaliaaTradeBetaDB.market[100]);assert(M.root.legacyImported);assert(M.db.scanSequence==9)
- local old=M.db.market[100];M:InitializeDatabase();jobs();assert(M.db.market[100]==old);assert(M.db.settings.safeMode)
+ local old=M.db.market[100];M:InitializeDatabase();jobs();assert(M.db.market[100]==old);assert(M.db.settings.safeMode==nil)
 end)
 check('Bait-resistant model, bounded history, vendor return index',function()
  mk();assert(market.fairValue>4000);assert(market.latest.meaningfulFloor==4500);assert(market.vendorPrice==100)
@@ -155,33 +155,33 @@ check('Mismatched suffix results ignored',function()
  emit('ITEM_SEARCH_RESULTS_UPDATED',{itemID=5001,itemSuffix=-1});assert(M.queue.active)
  M:CancelRequests('end')
 end)
-check('Live regular auction revalidation, safe mode and click-only buy',function()
- selectReady(false);M:ExecuteClicked();assert(calls[#calls][1]=='search')
- M.db.settings.safeMode=false;M:ExecuteClicked();assert(calls[#calls][1]=='bid');assert(M.execution.state=='pending')
+check('Live regular auction revalidation, click-only buy',function()
+ selectReady(false);assert(calls[#calls][1]=='search')
+ M:ExecuteClicked();assert(calls[#calls][1]=='bid');assert(M.execution.state=='pending')
  assert(M:HasUnresolvedPurchase());emit('AUCTION_HOUSE_PURCHASE_COMPLETED',41);assert(M:HasUnresolvedPurchase())
  emit('AUCTION_HOUSE_PURCHASE_COMPLETED',42);assert(not M:HasUnresolvedPurchase());assert(M.execution.state=='complete')
  local lot=M.db.inventory[M:InventoryKey(5001)];assert(lot.quantity==1 and lot.cost==500)
  emit('AUCTION_HOUSE_PURCHASE_COMPLETED',42);assert(lot.quantity==1)
 end)
 check('Stale live results block purchase',function()
- selectReady(false);M.db.settings.safeMode=false;advance(11);local n=#calls;M:ExecuteClicked();assert(#calls==n);assert(M.execution.state=='stale')
+ selectReady(false);advance(11);local n=#calls;M:ExecuteClicked();assert(#calls==n);assert(M.execution.state=='stale')
 end)
 check('Commodity quote needs second click; event never purchases',function()
- selectReady(true,3);M.db.settings.safeMode=false;M:ExecuteClicked();assert(calls[#calls][1]=='quote')
+ selectReady(true,3);M:ExecuteClicked();assert(calls[#calls][1]=='quote')
  emit('COMMODITY_PRICE_UPDATED',500,1500);assert(M.execution.state=='quoted');assert(calls[#calls][1]=='quote')
  M:ConfirmClicked();assert(calls[#calls][1]=='confirm');assert(M.execution.state=='pending')
  emit('COMMODITY_PURCHASE_SUCCEEDED');assert(M.execution.state=='complete')
 end)
 check('Commodity price increase invalidates quote',function()
- selectReady(true,3);M.db.settings.safeMode=false;M:ExecuteClicked();emit('COMMODITY_PRICE_UPDATED',600,1800)
+ selectReady(true,3);M:ExecuteClicked();emit('COMMODITY_PRICE_UPDATED',600,1800)
  assert(M.execution.state=='invalid');assert(calls[#calls][1]=='cancel-quote');assert(not M:HasUnresolvedPurchase())
 end)
 check('Late/duplicate quote cannot silently confirm',function()
- selectReady(true,3);M.db.settings.safeMode=false;M:ExecuteClicked();advance(4);emit('COMMODITY_PRICE_UPDATED',500,1500)
+ selectReady(true,3);M:ExecuteClicked();advance(4);emit('COMMODITY_PRICE_UPDATED',500,1500)
  M:ExecutionTick();assert(M.execution.state=='invalid');local n=#calls;emit('COMMODITY_PRICE_UPDATED',500,1500);assert(#calls==n)
 end)
 check('Unknown purchase reserves funds; late success resolves exactly once',function()
- selectReady(true,2);M.db.settings.safeMode=false;M:ExecuteClicked();emit('COMMODITY_PRICE_UPDATED',500,1000);M:ConfirmClicked()
+ selectReady(true,2);M:ExecuteClicked();emit('COMMODITY_PRICE_UPDATED',500,1000);M:ConfirmClicked()
  local p=M.execution.order;advance(16);M:ExecutionTick();assert(p.status=='unknown');assert(M:HasUnresolvedPurchase())
  emit('AUCTION_HOUSE_CLOSED');assert(M.db.pending[p.id]);emit('COMMODITY_PURCHASE_SUCCEEDED');assert(not M.db.pending[p.id]);assert(p.status=='confirmed')
  emit('AUCTION_HOUSE_SHOW')
@@ -313,7 +313,7 @@ check('Fresh-result completeness is mandatory',function()
  C_AuctionHouse.HasFullItemSearchResults=old
 end)
 check('Aborted commodity quote enforces a stale-event guard',function()
- selectReady(true,1);M.db.settings.safeMode=false;M:ExecuteClicked();M:InvalidateQuote('discard');local untilTime=M.db.quoteGuardUntil;assert(untilTime>time())
+ selectReady(true,1);M:ExecuteClicked();M:InvalidateQuote('discard');local untilTime=M.db.quoteGuardUntil;assert(untilTime>time())
  M:RevalidateSelected(1);M:PumpQueue();advance(0.4);M:PumpQueue();searchRows={{unitPrice=500,quantity=10}};emit('COMMODITY_SEARCH_RESULTS_UPDATED',5001);jobs()
  local n=#calls;M:ExecuteClicked();assert(#calls==n);assert(M.execution.state=='ready')
 end)
@@ -538,7 +538,7 @@ check('Manual cross-account transfer keeps history, orders and prices isolated',
   local m=mk();M:RebuildIndexes();jobs()
   local before=#m.history;local baseline=m.fairValue
   local original=M.db.sharedPrices;M.db.sharedPrices={}
-  local txt=M:ExportMarketTransfer();assert(type(txt)=='string' and txt:find('VMMX1',1,true))
+  local txt=M:ExportMarketTransfer();assert(type(txt)=='string' and txt:find('VMMX2',1,true))
   local good,msg=M:ImportMarketTransfer(txt);assert(good,msg)
   assert(#m.history==before and m.fairValue==baseline)
   assert(next(M.db.sharedPrices)~=nil)
@@ -713,7 +713,7 @@ check('Sniper presets retain capital safeguards and invalidate prepared quotes',
   resetQueue();local old=M.db.settings.maxTransaction
   M.execution.state='ready';assert(M:ApplySniperPreset('conservative'))
   assert(M.execution.state=='invalid' and M.db.settings.minConfidence==60)
-  assert(M.db.settings.maxTransaction==old and M.db.settings.safeMode)
+  assert(M.db.settings.maxTransaction==old and M.db.settings.safeMode==nil)
   assert(not M:ApplySniperPreset('invalid'))
   assert(M:ApplySniperPreset('balanced'));resetQueue()
 end)
@@ -824,4 +824,5 @@ check('Unproven models are explicitly labeled in Browse and hide sniper projecti
 end)
 
 assert(loadfile(addon..'Tests/crafting.lua'))()(M,check,jobs,emit)
+assert(loadfile(addon..'Tests/live.lua'))()(M,check,jobs,advance,emit)
 print('ALL '..total..' TESTS PASSED')
