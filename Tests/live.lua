@@ -250,6 +250,27 @@ check('Auction House tabs work with Auctionator disabled and restore the standal
  assert(not M.auctionDock and native.displayMode==AuctionHouseFrameDisplayMode.Buy)
  assert(parentFrame==UIParent and not M.window:IsShown() and M.window:GetScale()==oldScale and M.window.testLevel==2)
  local _,parent,_,x,y=M.window:GetPoint();assert(parent==UIParent and x==23 and y==46)
+ -- On the Blizzard Buy tab the same grip controls the whole AH.
+ local grip=M.ahGrip
+ local cursor=100
+ local savedCursor=GetCursorPosition
+ GetCursorPosition=function()return cursor,200 end
+ native:SetScale(1)
+ grip.scripts.OnMouseDown(grip,'RightButton')
+ cursor=200;grip.scripts.OnUpdate(grip);grip.scripts.OnMouseUp(grip,'RightButton')
+ assert(native:GetScale()>1 and M.db.settings.auctionScale==native:GetScale() and not grip.scripts.OnUpdate)
+ GetCursorPosition=savedCursor
+ local buttons={}
+ AuctionHouseFrameMove={}
+ native.MA_OnMouseDown=function(_,frame,button)assert(frame==native);buttons[#buttons+1]='down '..button end
+ native.MA_OnMouseUp=function(_,frame,button)assert(frame==native);buttons[#buttons+1]='up '..button end
+ for _,button in ipairs({'LeftButton','RightButton'}) do
+  grip.scripts.OnMouseDown(grip,button)
+  assert(not grip.scripts.OnUpdate)
+  grip.scripts.OnMouseUp(grip,button)
+ end
+ assert(table.concat(buttons,',')=='down LeftButton,up LeftButton,down RightButton,up RightButton')
+ AuctionHouseFrameMove=nil
  -- With a shared tab manager, it owns the row and associates each registered page.
  local registered={};local lib={
   CreateTab=function(_,id,page,label)registered[id]={page=page,label=label,button=oldCreate('Button')} end,

@@ -36,29 +36,74 @@ local function dock(self, page, view)
   end
 end
 
-function M:StartMarketDrag(window)
-  local state = self.auctionDock
-  if not state then window:StartMoving();return end
-  if state.dragging or (InCombatLockdown and InCombatLockdown()) then return end
+local function moveAnyControls(ah)
+  return type(ah.MA_OnMouseDown)=='function' and type(ah.MA_OnMouseUp)=='function'
+    and _G.AuctionHouseFrameMove ~= nil
+end
+
+local function beginGesture(self, button)
+  if self.ahGesture or (button~='LeftButton' and button~='RightButton') or
+     (InCombatLockdown and InCombatLockdown()) then return end
   local ah = AuctionHouseFrame
-  state.wasMovable = ah:IsMovable()
-  ah:SetMovable(true)
-  ah:StartMoving()
-  state.dragging = true
+  local gesture = {button=button, managed=moveAnyControls(ah)}
+  self.ahGesture=gesture
+  if gesture.managed then
+    ah:MA_OnMouseDown(ah, button)
+  elseif button=='LeftButton' then
+    gesture.wasMovable=ah:IsMovable()
+    ah:SetMovable(true)
+    ah:StartMoving()
+  else
+    local startX=GetCursorPosition()
+    local scale=ah:GetScale()
+    self.ahGrip:SetScript('OnUpdate',function()
+      local x=GetCursorPosition()
+      ah:SetScale(math.max(.5, math.min(2.5, scale+(x-startX)*.0024)))
+    end)
+  end
+end
+
+local function endGesture(self, button)
+  local gesture=self.ahGesture
+  if not gesture or (button and button~=gesture.button) then return end
+  self.ahGesture=nil
+  local ah=AuctionHouseFrame
+  if gesture.managed then
+    ah:MA_OnMouseUp(ah,gesture.button)
+  elseif gesture.button=='LeftButton' then
+    ah:StopMovingOrSizing()
+    ah:SetMovable(gesture.wasMovable)
+  else
+    self.ahGrip:SetScript('OnUpdate',nil)
+    if not self.persistenceBlocked then self.db.settings.auctionScale=ah:GetScale() end
+  end
+end
+
+function M:StartMarketDrag(window)
+  if self.auctionDock then beginGesture(self,'LeftButton');return end
+  window:StartMoving()
 end
 
 function M:StopMarketDrag(window)
-  local state = self.auctionDock
-  if state then
-    if state.dragging then
-      state.dragging = nil
-      AuctionHouseFrame:StopMovingOrSizing()
-      AuctionHouseFrame:SetMovable(state.wasMovable)
-    end
-    return
-  end
+  if self.auctionDock then endGesture(self);return end
   window:StopMovingOrSizing()
   self:SaveWindowLayout()
+end
+
+local function installTitleGrip(self, ah)
+  local grip=CreateFrame('Frame',nil,ah)
+  self.ahGrip=grip
+  grip:SetPoint('TOPLEFT',ah,'TOPLEFT',64,-3)
+  grip:SetPoint('TOPRIGHT',ah,'TOPRIGHT',-34,-3)
+  grip:SetHeight(20)
+  grip:SetFrameLevel(ah:GetFrameLevel()+12)
+  grip:EnableMouse(true)
+  grip:SetScript('OnMouseDown',function(_,button) beginGesture(self,button) end)
+  grip:SetScript('OnMouseUp',function(_,button) endGesture(self,button) end)
+  grip:SetScript('OnHide',function() endGesture(self) end)
+  local saved=self.db.settings.auctionScale
+  local moveAnyLoaded=C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded('MoveAny')
+  if not moveAnyLoaded and not moveAnyControls(ah) and self:Finite(saved,.5,2.5) then ah:SetScale(saved) end
 end
 
 local function undock(self, page)
@@ -91,6 +136,7 @@ end
 function M:InstallAuctionTabs()
   local ah = AuctionHouseFrame
   if self.auctionTabs or not self.window or not ah or not ah.Tabs or #ah.Tabs == 0 then return end
+  installTitleGrip(self,ah)
   local lib = LibStub and LibStub('LibAHTab-1-0', true)
   local tabs = {}
   if not lib then

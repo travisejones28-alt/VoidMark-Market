@@ -6,6 +6,8 @@ Open the Auction House to use the **Shopping**, **Selling**, **Canceling**, and 
 
 ## Set up the bank alt and main
 
+On any auction tab, left-drag the gold title bar to move the whole window. Hold the right mouse button and drag right to enlarge it or left to shrink it. With MoveAny managing the AH, its lock, modifier, scale and position settings apply.
+
 1. In **Settings → Sync partner**, enter the **other** character’s `Name-Realm` on each account and click **Pair**. Alternatively use `/vmm peer Name-Realm`. Both characters must be on the same realm and faction.
 2. Group the two characters, or add each other as ordinary **character friends** and stay online. Group addon messages work in a party/raid; outside a group Market tries a targeted addon whisper to the online friend. This does not use Battle.net chat. Client chat restrictions or combat may pause delivery.
 3. At the AH on the bank alt, click **Full Scan**. On the main, hover over the same item. The **VoidMark Market** section shows the lowest observed price **per unit**, the source, and how old it is. A reliable historical estimate appears when available. The displayed ask is cached and can change before you buy.
