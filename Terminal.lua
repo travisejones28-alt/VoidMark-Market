@@ -66,7 +66,7 @@ function M:GetWatchRows()
       local floor=m and m.latest and m.latest.floor or 0
       local status=not m and 'MISSING' or not fresh and 'STALE'
         or (entry.target and floor>0 and floor<=entry.target) and 'TARGET' or 'WATCH'
-      out[#out+1]={marketKey=key,itemID=m and m.itemID,name=m and m.name or entry.name or tostring(key),
+      out[#out+1]={marketKey=key,itemID=m and m.itemID or entry.itemID,name=m and m.name or entry.name or tostring(key),
         floor=floor,fair=m and m.fairValue or 0,target=entry.target,confidence=m and m.confidence or 'Unknown',
         status=status,watchedAt=entry.at or 0,fresh=fresh}
     end
