@@ -83,3 +83,79 @@ function M:ImportMarketTransfer(raw)
   self:RefreshUI()
   return true,'Imported '..updated..' newer advisory prices; no history or trade eligibility changed'
 end
+
+
+-- VMMW1 shopping-list transfer: independent of prices and execution state.
+-- This format is small enough for manual clipboard exchange between WoW accounts.
+function M:ExportShoppingTransfer()
+  local realm,faction=self.economyID:match('^(.-)|([^|]+)$')
+  if not realm or realm:find('[\t\r\n]') or faction:find('[\t\r\n]') then return nil,'Invalid economy' end
+  local rows={}
+  for key,entry in pairs(self.db.watchlist or {}) do
+    if type(entry)=='table' then
+      local market=self.db.market[key]
+      local id,suffix,level,pet
+      if market then
+        id,suffix,level,pet=market.itemID,market.itemSuffix or 0,market.itemLevel or 0,market.battlePetSpeciesID or 0
+      else
+        local value=tostring(key)
+        id=tonumber(value:match('^(%d+)'))
+        suffix=tonumber(value:match(':s(-?%d+)')) or 0
+        level=tonumber(value:match(':l(%d+)')) or 0
+        pet=tonumber(value:match(':p(%d+)')) or 0
+      end
+      local target=entry.target
+      if self:Key(id,suffix,level,pet)==key
+        and (target==nil or (self:Finite(target,1,1e12) and target%1==0)) then
+        local name=tostring(entry.name or market and market.name or ('Item '..id))
+          :gsub('[\t\r\n]',' '):sub(1,100)
+        rows[#rows+1]={key=tostring(key),line=table.concat({id,suffix,level,pet,target or 0,name},'\t')}
+      end
+    end
+  end
+  table.sort(rows,function(a,b) return a.key<b.key end)
+  if #rows>200 then return nil,'Too many shopping entries (limit 200)' end
+  local output={'VMMW1\t'..realm..'\t'..faction..'\t'..time()..'\t'..#rows}
+  for _,row in ipairs(rows) do output[#output+1]=row.line end
+  return table.concat(output,'\n')
+end
+function M:ImportShoppingTransfer(raw)
+  if self.persistenceBlocked then return false,'Database read-only' end
+  if type(raw)~='string' or #raw>35000 then return false,'Invalid shopping transfer length' end
+  raw=raw:gsub('\r\n','\n'):gsub('\n+$','')
+  local lines={}
+  for line in (raw..'\n'):gmatch('(.-)\n') do lines[#lines+1]=line end
+  if #lines<1 or #lines>201 then return false,'Too many shopping rows' end
+  local realm,faction=self.economyID:match('^(.-)|([^|]+)$')
+  local magic,r,f,at,count=lines[1]:match('^([^\t]+)\t([^\t]+)\t([^\t]+)\t([^\t]+)\t([^\t]+)$')
+  at,count=tonumber(at),tonumber(count)
+  if magic~='VMMW1' or r~=realm or f~=faction then return false,'Realm/faction or format mismatch' end
+  if not validWhole(self,at,time()-30*86400,time()+300)
+    or not validWhole(self,count,0,200) or count~=#lines-1 then return false,'Invalid shopping header' end
+  local staged,seen={},{}
+  for i=2,#lines do
+    local id,suffix,level,pet,target,name=lines[i]:match('^([^\t]+)\t([^\t]+)\t([^\t]+)\t([^\t]+)\t([^\t]+)\t([^\t]*)$')
+    id,suffix,level,pet,target=tonumber(id),tonumber(suffix),tonumber(level),tonumber(pet),tonumber(target)
+    local key=self:Key(id,suffix,level,pet)
+    if not key or not validWhole(self,target,0,1e12) or not name or #name>100 or name:find('[%c]')
+      or seen[tostring(key)] then return false,'Invalid shopping row '..i end
+    seen[tostring(key)]=true
+    staged[#staged+1]={key=key,name=name~='' and name or ('Item '..id),target=target>0 and target or nil,id=id}
+  end
+  local existing=0
+  for _ in pairs(self.db.watchlist) do existing=existing+1 end
+  local new=0
+  for _,entry in ipairs(staged) do if not self.db.watchlist[entry.key] then new=new+1 end end
+  if existing+new>200 then return false,'Import would exceed 200 shopping entries' end
+  local updated=0
+  for _,entry in ipairs(staged) do
+    local previous=self.db.watchlist[entry.key]
+    -- Never overwrite locally edited targets. Incoming entries only fill gaps.
+    if not previous then
+      self.db.watchlist[entry.key]={at=at,target=entry.target,name=entry.name,itemID=entry.id}
+      updated=updated+1
+    end
+  end
+  self:RefreshUI()
+  return true,'Imported '..updated..' new shopping entries; existing targets preserved'
+end
