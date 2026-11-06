@@ -39,3 +39,56 @@ The overview, banker dashboard, Sniper, post and purchase review queues, investm
 - Use `/vmm report` for build/API, scan, sync and transaction diagnostics. Controlled Lua tests exercise the workflows; they do not establish server delivery, in-game frame rate, or successful live transactions.
 
 See [validation](VALIDATION.md), [the crafting release](RELEASE_1.4.md), and the [previous version’s full manual](https://github.com/travisejones28-alt/VoidMark-Market/blob/e7b6dea7d60de02850d6517315e750a225f2087b/README.md) for legacy migration and earlier behavior.
+
+
+### Automatic cross-account synchronization (1.5.8)
+
+The SYNC tab displays reciprocal pairing, actual reply status/channel, economy,
+local and peer scan times, received price count, inbound/outbound revision progress,
+last received page, completed receive and acknowledged send, and error diagnostics.
+Voidmark Soulreaver and Voidmark Bank pair automatically on first initialization
+in their realm/faction database. Existing explicit peers and subsequent `peer off`
+choices are preserved. Other characters use the existing Settings peer field or
+`/vmm peer First Surname`. Cross-realm pairing is rejected; every received packet
+must match the configured peer and exact realm/faction economy.
+
+Voidmark Bank requests a full scan automatically when its Auction House is open,
+the 15-minute local cooldown permits it, and combat restrictions permit it. This
+can be disabled in SYNC. Unsupported scan APIs are not called; failed attempts
+are separated by at least five minutes, and the existing scanner handles queueing,
+client throttles, response timeouts, and late responses. Opening an ordinary bank
+alone cannot query AH prices. A client restriction or additional server cooldown
+can still require a manual FULL SCAN click; diagnostics show the actual outcome.
+
+Both accounts must be logged in concurrently with the addon enabled. No party,
+raid, friend entry, or manual grouping is required by the addon: it uses targeted
+addon whispers when no shared group exists. The server may restrict delivery;
+queued messages are never treated as proof of connection. Offline probes back off
+to five minutes and matching offline system errors are suppressed without hiding
+unrelated chat errors. Reconnect clears runtime state; Force Sync changes the
+journal epoch to replay the current latest states without deleting saved records.
+Acknowledged receive cursors survive reload, pages retry on missing acknowledgments,
+and unchanged asks transmit timestamp deltas. New metadata messages describe peer
+scan time and total revisions; older peers still exchange prices but cannot supply
+these additional diagnostic fields. Install the same version on both accounts.
+
+Received prices immediately rebuild an open Browse view, remain visible with AH
+closed, and appear on item tooltips. SYNCED / SYNC STALE labels, observation dates,
+and age distinguish them from live quotes. Shared observations do not populate the
+trusted local market model, transaction ledger, or execution eligibility. Trading
+continues to require the existing live AH validation and confirmation controls.
+SavedVariables remain separate for Beta and Live; links share addon code only.
+
+Verification in game (not performed by the automated harness):
+1. Reload both accounts on the same realm/faction. Open `/vmm`, then SYNC. Confirm
+   reciprocal peers and a real reply while ungrouped; confirm a different faction
+   or realm cannot exchange observations.
+2. On Voidmark Bank open the Auction House and wait for the automatic full scan.
+   Confirm scan completion, received prices, and completed transfer timestamps.
+3. On Soulreaver close the AH, search Browse by a scanned item ID, then inspect its
+   tooltip. Confirm the synced observation and timestamp; no live quote is implied.
+4. Disconnect/reload one account mid-transfer, reconnect, and confirm it resumes.
+   Force Sync should preserve shopping targets, history, settings, and ledger.
+5. With the bank peer offline confirm quiet backoff; allow prices to age past the
+   configured maximum and confirm stale labels and blocked execution without a
+   fresh live validation. Repeat on Beta and Live independently.

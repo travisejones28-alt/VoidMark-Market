@@ -825,4 +825,5 @@ end)
 
 assert(loadfile(addon..'Tests/crafting.lua'))()(M,check,jobs,emit)
 assert(loadfile(addon..'Tests/live.lua'))()(M,check,jobs,advance,emit)
+assert(loadfile(addon..'Tests/sync_auto.lua'))()(M,check,jobs,advance)
 print('ALL '..total..' TESTS PASSED')

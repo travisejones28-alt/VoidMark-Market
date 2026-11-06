@@ -44,6 +44,14 @@ function M:InitializeSharing()
  d.shareJournal=d.shareJournal or {epoch=tostring(time())..'-'..math.random(1000,999999),seq=0,latest={},rows={}}
  d.shareBases=d.shareBases or {};d.shareReceived=d.shareReceived or {};self.shareRun={}
  self.activeList=d.activeList or 'Shopping'
+ if d.syncAutoPairSeen==nil and not self.persistenceBlocked then
+  local name=(unitCharacter('player') or ''):lower()
+  local peer=name=='voidmark soulreaver' and 'Voidmark Bank' or name=='voidmark bank' and 'Voidmark Soulreaver'
+  if peer then
+   d.syncAutoPairSeen=true
+   if not d.syncPeer then self:PairPeer(peer) end
+  end
+ end
 end
 function M:SetList(name)
  name=tostring(name or ''):match('^%s*(.-)%s*$')
@@ -165,10 +173,15 @@ end
 function M:PairPeer(name)
  if self.persistenceBlocked then return 'Database read-only' end
  if type(name)=='string' then name=name:match('^%s*(.-)%s*$') end
- if name=='' or (name and name:lower()=='off') then self.db.syncPeer=nil;self.db.syncAddress=nil;self.shareRun={};self:RefreshUI();return 'Automatic sharing off' end
+ if name=='' or (name and name:lower()=='off') then self.db.syncAutoPairSeen=true;self.db.syncPeer=nil;self.db.syncAddress=nil;self.shareRun={};self:RefreshUI();return 'Automatic sharing off' end
  if not name then return self:SharingStatus() end
  local peer=canonical(name)
  if not peer or peer==canonical(unitCharacter('player')) then return 'Enter the other character name (First Surname)' end
+ local realm=GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName()
+ if peer:match('%-(.+)$')~=realm:gsub('%s',''):lower() then return 'Peer must be on the same realm' end
+ if self.db.syncPeer~=peer then
+  self.db.syncLastSentAt=nil;self.db.syncLastReceivedAt=nil;self.db.syncLastReceivedCompleteAt=nil
+ end
  self.db.syncAddress=fullAddress(name)
  self.db.syncPeer=peer;self.db.shareJournal.seeded=nil;self.shareRun={};self:StartSharing();self:RefreshUI()
  return 'Peer set to '..peer..'. This is NOT connected yet. Use /vmm peer to check reply status.'
@@ -225,7 +238,10 @@ function M:StartSharing()
   end)
   self.offlineFilterHooked=true
  end
- if self.persistenceBlocked or not self.db.syncPeer or not api or not api.RegisterAddonMessagePrefix or not api.SendAddonMessage then return end
+ if self.persistenceBlocked or not self.db.syncPeer then return end
+ if not api or not api.RegisterAddonMessagePrefix or not api.SendAddonMessage then
+  self.shareRun.status='Addon messaging unavailable on this client';return
+ end
  if not self.shareRegistered then
   -- Some Forever/Classic builds wrap the API and put the enum in the LAST
   -- return value. Never treat nil as successful registration.
@@ -292,12 +308,14 @@ local function send(self,ch,body)
  return sent
 end
 function M:PumpSharing()
+ if self.db then self:AutomaticBankScan(GetTime()) end
  if not self.db.syncPeer or self.persistenceBlocked or not self.shareRegistered then return end
  local r=self.shareRun;local now=GetTime()
+ if self.view=='sync' and now>=(r.uiAt or 0) then r.uiAt=now+1;self:RefreshUI() end
  if now<(r.next or 0) then return end;r.next=now+0.5
  if (InCombatLockdown and InCombatLockdown()) or (C_ChatInfo.InChatMessagingLockdown and C_ChatInfo.InChatMessagingLockdown()) then r.status='Paused by client restrictions';return end
  local j=self.db.shareJournal
- if not r.reply and r.hello and now<r.hello and (not r.cursor or r.cursor>=j.seq or now<(r.retry or 0)) then return end
+ if not r.reply and not (r.infoPending and r.lastContact) and r.hello and now<r.hello and (not r.cursor or r.cursor>=j.seq or now<(r.retry or 0)) then return end
  local ch=channel(self)
  if ch=='WHISPER' and r.offlineUntil and now<r.offlineUntil then return end
  if ch~='WHISPER' then r.offlineUntil=nil end
@@ -307,8 +325,13 @@ function M:PumpSharing()
  if r.reply then
   if send(self,ch,r.reply) then r.reply=nil else r.next=now+5 end;return
  end
+ if r.infoPending and r.lastContact then
+  if send(self,ch,table.concat({'I',j.epoch,j.seq,self.db.lastDepthSnapshotAt or 0},'\t')) then r.infoPending=nil else r.next=now+5 end
+  return
+ end
  if not r.hello or now>=r.hello then
   local sent=send(self,ch,'H\t'..j.epoch)
+  if sent then r.infoPending=true end
   local unconfirmed=ch=='WHISPER' and not r.lastContact
   r.probeDelay=unconfirmed and math.min(300,(r.probeDelay or 10)*2) or 20
   r.hello=now+r.probeDelay
@@ -337,7 +360,8 @@ function M:ReceiveSharing(prefix,msg,ch,sender)
  if prefix~=PREFIX or not self.db or self.persistenceBlocked or not self.db.syncPeer or canonical(sender)~=self.db.syncPeer or
   (ch~='WHISPER' and ch~='PARTY' and ch~='RAID' and ch~='INSTANCE_CHAT') or type(msg)~='string' or #msg>240 then return end
  local f=fields(msg,'\t')
- if f[1]~=self.economyID or not f[3] or not f[3]:match('^%d+%-%d+$') then return end
+ if f[1]~=self.economyID then self.shareRun.status='Rejected peer: realm/faction mismatch';self:RefreshUI();return end
+ if not f[3] or not f[3]:match('^%d+%-%d+$') then return end
  local r=self.shareRun;local j=self.db.shareJournal;local db=self.db.shareReceived
  local peer=self.db.syncPeer;local rx=db[peer]
  local function ack() r.reply=table.concat({'Q',rx.epoch,rx.seq},'\t') end
@@ -346,10 +370,20 @@ function M:ReceiveSharing(prefix,msg,ch,sender)
   r.lastContact=GetTime();r.probeDelay=nil;r.offlineUntil=nil
   if not rx or rx.epoch~=f[3] then rx={epoch=f[3],seq=0};db[peer]=rx end
   ack();r.status='Partner connected'
+ elseif f[2]=='I' and #f==5 and rx and f[3]==rx.epoch then
+  local total,scan=tonumber(f[4]),tonumber(f[5])
+  if not whole(total,rx.seq,1e12) or not whole(scan,0,time()+60) then return end
+  local changed=rx.total~=total
+  rx.total=total;rx.scanAt=scan>0 and scan or nil
+  if changed and total>0 and rx.seq==total then self.db.syncLastReceivedCompleteAt=time() end
+  self:RefreshUI()
  elseif f[2]=='Q' and f[3]==j.epoch and #f==4 then
   local n=tonumber(f[4]);if not whole(n,0,j.seq) then return end
   r.lastContact=GetTime();r.probeDelay=nil;r.offlineUntil=nil
-  if r.cursor~=n then r.skipped=nil end;r.cursor=n;r.retry=0;r.status=n==j.seq and 'Up to date' or 'Sending changes'
+  if r.cursor~=n then r.skipped=nil end
+  r.cursor=n;r.retry=0
+  if n==j.seq and r.lastAck~=n then self.db.syncLastSentAt=time() end
+  r.lastAck=n;r.status=n==j.seq and 'Up to date' or 'Sending changes'
  elseif f[2]=='D' and #f==6 and rx and f[3]==rx.epoch then
   local lo,hi=tonumber(f[4]),tonumber(f[5])
   if not whole(lo,0,1e12) or not whole(hi,lo+1,1e12) then return end
@@ -359,10 +393,70 @@ function M:ReceiveSharing(prefix,msg,ch,sender)
    local p=decode(self,line);if not p then return end;staged[#staged+1]=p
   end end
   for _,p in ipairs(staged) do if not apply(self,p) then r.status='Shopping list limit reached; transfer paused';self:RefreshUI();return end end
-  r.lastContact=GetTime();r.offlineUntil=nil;rx.seq=hi;ack();r.status='Received through change '..hi;self:RefreshUI()
+  r.lastContact=GetTime();r.offlineUntil=nil;rx.seq=hi;self.db.syncLastReceivedAt=time();ack()
+  if rx.total and hi>=rx.total then self.db.syncLastReceivedCompleteAt=time() end
+  if self.view=='browse' then self:BuildBrowseRows(self.db.settings.filter or '') end
+  r.status='Received through change '..hi;self:RefreshUI()
  end
 end
 M:RegisterHandler('CHAT_MSG_ADDON',function(self,_,...) self:ReceiveSharing(...) end)
 M:RegisterHandler('GROUP_ROSTER_UPDATE',function(self) if self.shareRun then self.shareRun.hello=nil end end)
 -- Backup detection when a chat-frame filter is unavailable on the client.
 M:RegisterHandler('CHAT_MSG_SYSTEM',function(self,_,msg) self:HandlePeerOfflineNotice(msg) end)
+
+function M:AutomaticBankScan(now)
+ if now<(self.autoScanCheck or 0) then return end
+ self.autoScanCheck=now+5
+ if self.persistenceBlocked or self.db.settings.autoBankScan==false or
+  (unitCharacter('player') or ''):lower()~='voidmark bank' or not self:CanUseAuctionHouse() or
+  self.scanState.running or self:GetSecondsUntilFreshScanAllowed()>0 or
+  (InCombatLockdown and InCombatLockdown()) or now<(self.autoScanNext or 0) then return end
+ if not C_AuctionHouse or type(C_AuctionHouse.ReplicateItems)~='function' then return end
+ self.autoScanNext=now+300
+ self:RequestFreshScan()
+end
+function M:ReconnectSharing(force)
+ if self.persistenceBlocked then return end
+ self.shareRun={};self.shareRegistered=nil
+ if force then
+  self.db.shareJournal.epoch=tostring(time())..'-'..math.random(1000,999999)
+ end
+ self:StartSharing();self:RefreshUI()
+end
+function M:SyncTime(at)
+ return at and date('%Y-%m-%d %H:%M:%S',at) or 'Never'
+end
+function M:SyncReport()
+ local r=self.shareRun or {};local j=self.db.shareJournal
+ -- Count large caches in frame-budgeted slices only while this view is open.
+ if not self.jobs['sync-count'] and GetTime()>=(r.countAt or 0) then
+  local cursor;local count,newest=0,nil
+  self:AddJob('sync-count',function(start)
+   for _=1,80 do
+    local k,p=next(self.db.sharedPrices,cursor);cursor=k
+    if not k then r.priceCount=count;r.newestPrice=newest;r.countAt=GetTime()+10;self:RefreshUI();return true end
+    if p.floor then count=count+1;newest=math.max(newest or 0,p.at or 0) end
+    if debugprofilestop()-start>=2 then return false end
+   end
+  end)
+ end
+ local rx=self.db.shareReceived[self.db.syncPeer] or {}
+ local diag=self.db.fullScanDiagnostic or {}
+ return table.concat({
+  'Voidmark Soulreaver <-> Voidmark Bank',self:SharingStatus(),
+  'Economy (must match): '..self.economyID,
+  'Last local scan: '..self:SyncTime(self.db.lastDepthSnapshotAt),
+  'Last peer scan: '..self:SyncTime(rx.scanAt),
+  'Newest received observation: '..self:SyncTime(r.newestPrice),
+  'Last received page: '..self:SyncTime(self.db.syncLastReceivedAt),
+  'Last complete receive: '..self:SyncTime(self.db.syncLastReceivedCompleteAt),
+  'Last fully acknowledged send: '..self:SyncTime(self.db.syncLastSentAt),
+  'Received prices: '..tostring(r.priceCount or 'Counting')..' | outbound revisions: '..tostring(r.cursor or 0)..' / '..j.seq,
+  'Inbound revisions: '..tostring(rx.seq or 0)..' / '..tostring(rx.total or 'Awaiting peer metadata'),
+  'Scan: '..tostring(self.scanState.status)..' | progress: '..tostring(self.scanState.progress or 0),
+  'Diagnostics: '..tostring(r.lastSendError or diag.error or 'No recorded error'),
+  '', 'Bank scans automatically while its Auction House is open and cooldown permits.',
+  'Both accounts must be online with reciprocal pairing. No group required.',
+  'Whisper restrictions can block delivery; queued messages do not prove connection.',
+  'Synced prices are observations, never live quotes or trade authorization.'},'\n')
+end

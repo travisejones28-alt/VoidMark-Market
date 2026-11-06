@@ -49,7 +49,7 @@ check('Named shopping lists round-trip, preserve local targets, and allow unscan
  assert(M:SetList('Shopping'));assert(M:SetWatch(99,33));assert(M:ListBook('Potion mats')[99].target==40)
  assert(not M:ImportShoppingTransfer(raw:gsub('99\t0','0\t0')));assert(M:RemoveWatch(99));assert(M:ListBook('Potion mats')[99])
 end)
-check('Two accounts resume lost data and ACKs after reload; unchanged floors send age only, no financial records',function()
+check('Ungrouped accounts resume lost data and ACKs after reload; unchanged floors send age only, no financial records',function()
  local oldChat,oldCount,oldFull,oldGroup,oldRaid,oldUnit=C_ChatInfo,GetNumGroupMembers,UnitFullName,IsInGroup,IsInRaid,UnitName
  local endpoints={};local current
  for _,who in ipairs({'Bank','Main'}) do
@@ -61,7 +61,7 @@ check('Two accounts resume lost data and ACKs after reload; unchanged floors sen
   M.db.syncPeer=(name=='Bank' and 'main' or 'bank')..'-testrealm';M.shareRegistered=true
  end
  local packets={};local bytes=0;local updates=0
- UnitName=function() return current end;GetNumGroupMembers=function() return 2 end
+ UnitName=function() return current end;GetNumGroupMembers=function() return 0 end
  UnitFullName=function(unit)if unit=='party1' then return current=='Bank' and 'Main' or 'Bank','TestRealm' end end
  IsInGroup=function()return true end;IsInRaid=function()return false end
  C_ChatInfo={SendAddonMessage=function(prefix,msg,ch)

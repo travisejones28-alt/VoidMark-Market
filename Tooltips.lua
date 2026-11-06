@@ -58,8 +58,8 @@ function M:AppendMarketTooltip(tip,link)
  local age=math.max(0,time()-p.at)
  local ageText=age>=86400 and math.floor(age/86400)..'d' or age>=3600 and math.floor(age/3600)..'h' or math.floor(age/60)..'m'
  tip:AddLine('VoidMark Market',.76,.56,1)
- tip:AddDoubleLine('Lowest AH / unit',self:Money(p.floor),.95,.95,.95,1,.85,.4)
- tip:AddLine(p.source..' | '..ageText..' old',.75,.8,.85)
+ tip:AddDoubleLine('Observed AH / unit',self:Money(p.floor),.95,.95,.95,1,.85,.4)
+ tip:AddLine(p.source..' | '..ageText..' old | '..self:SyncTime(p.at),.75,.8,.85)
  if age>self.db.settings.maxDataAge or p.unverified then tip:AddLine('STALE / UNVERIFIED',1,.4,.3)
  else
   if p.fair then tip:AddDoubleLine('Market estimate',self:Money(p.fair),.75,.8,.85,.75,.8,.85) end

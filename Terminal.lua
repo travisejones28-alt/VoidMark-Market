@@ -144,7 +144,7 @@ function M:BuildBrowseRows(query)
         if needle=='' or tostring(s.id)==needle or name:lower():find(needle,1,true) then
          local fresh=self:Finite(s.at,time()-(self.db.settings.maxDataAge or 7200),time()+60)
          out[#out+1]={marketKey=key,itemID=s.id,name=name,floor=s.floor or 0,fair=s.fair or 0,
-          modelReady=fresh and s.reliable,confidence='Shared',status=fresh and 'SHARED*' or 'SHARED OLD'}
+          modelReady=fresh and s.reliable,at=s.at,confidence='Shared',status=fresh and 'SYNCED' or 'SYNC STALE'}
         end
        end
       else
@@ -156,8 +156,8 @@ function M:BuildBrowseRows(query)
         out[#out+1]={marketKey=m.marketKey,itemID=m.itemID,name=m.name,floor=obs and obs.floor or 0,
           fair=m.fairValue or 0,quantity=m.latest and m.latest.quantity or 0,
           median7=week and week.median,median30=month and month.median,
-          confidence=m.confidence or 'Unknown',modelReady=self:CanEstimateResale(m),
-          status=not fresh and 'STALE' or obs.source=='Synced account' and 'SHARED*' or self:CanEstimateResale(m) and 'CACHED' or 'UNPROVEN'}
+          at=obs and obs.at,confidence=m.confidence or 'Unknown',modelReady=self:CanEstimateResale(m),
+          status=obs and obs.source=='Synced account' and (fresh and 'SYNCED' or 'SYNC STALE') or not fresh and 'STALE' or self:CanEstimateResale(m) and 'CACHED' or 'UNPROVEN'}
       end
       end
       if debugprofilestop()-start>=4 then return false end

@@ -1,6 +1,6 @@
 local _,M=...
 local tabs={{'OVERVIEW','market'},{'BROWSE','browse'},{'SNIPER','opportunities'},{'SHOPPING','shopping'},{'CRAFTING','crafting'},
- {'SELL','selling'},{'INVESTMENTS','investments'},{'BANKER','banker'},{'LEDGER','ledger'},{'SETTINGS','settings'}}
+ {'SYNC','sync'},{'SELL','selling'},{'INVESTMENTS','investments'},{'BANKER','banker'},{'LEDGER','ledger'},{'SETTINGS','settings'}}
 local function label(parent,text,x,y,w,font)
   local f=parent:CreateFontString(nil,'OVERLAY',font or 'GameFontNormalSmall'); f:SetPoint('TOPLEFT',x,y)
   if w then f:SetWidth(w) end; f:SetJustifyH('LEFT'); f:SetText(text); return f
@@ -35,7 +35,15 @@ function M:InitializeUI()
   self.modeLabel=label(f,'Manual trading',365,-19,455)
   button(f,'TRANSFER',860,-12,125,function() self:ShowTransferWindow() end)
   button(f,'X',995,-12,26,function() self:CloseMarketWindow() end)
-  for i,v in ipairs(tabs) do local tab=v[2]; button(f,v[1],18+(i-1)*100,-48,98,function() self:SetView(tab) end) end
+  for i,v in ipairs(tabs) do local tab=v[2]; button(f,v[1],18+(i-1)*91,-48,89,function() self:SetView(tab) end) end
+  self.syncFrame=CreateFrame('Frame',nil,f);self.syncFrame:SetPoint('TOPLEFT',18,-151);self.syncFrame:SetSize(1000,465)
+  self.syncReport=label(self.syncFrame,'',0,-70,960)
+  button(self.syncFrame,'RECONNECT',0,0,130,function() self:ReconnectSharing(false) end)
+  button(self.syncFrame,'FORCE SYNC',140,0,130,function() self:ReconnectSharing(true) end)
+  self.autoScanButton=button(self.syncFrame,'',280,0,220,function()
+   if self.persistenceBlocked then return end
+   self.db.settings.autoBankScan=self.db.settings.autoBankScan==false;self:RefreshUI()
+  end)
   self.status=label(f,'',18,-84,995)
   self.toolbar=CreateFrame('Frame',nil,f); self.toolbar:SetPoint('TOPLEFT',18,-109); self.toolbar:SetSize(1000,34)
   self.scanButton=button(self.toolbar,'FULL SCAN',0,0,110,function() self:RequestFreshScan() end)
@@ -303,7 +311,12 @@ function M:RenderUI()
   end
   self.detail:SetHeight(view=='selling' and 90 or 125)
   self.scanButton:SetEnabled(self.ahOpen and not self.scanState.running); self.cachedButton:SetEnabled(self.ahOpen and not self.scanState.running)
+  self.syncFrame:Hide()
   if view=='crafting' or view=='materials' or view=='goldmaking' then return self:RenderCraftingUI(view) end
+  if view=='sync' then
+   self.toolbar:Hide();self.syncFrame:Show();self.syncReport:SetText(self:SyncReport())
+   self.autoScanButton:SetText('AUTO BANK SCAN: '..(s.autoBankScan==false and 'OFF' or 'ON'));return
+  end
   if view=='settings' then self.settingsFrame:Show(); self.syncState:SetText(self:SharingStatus()); self.minimapToggle:SetChecked(not (s.minimap and s.minimap.hide)); return end
   if view=='market' or view=='banker' then
     local data=self:GetBankerSummary();local p=data.portfolio
@@ -484,8 +497,8 @@ function M:RenderUI()
         '\nCancel Selected shows the current fee before you confirm.') or
         'Select an auction to inspect the live competitors. No cancel/post action is automatic.')
     elseif view=='browse' then
-      self.detail:SetText((o and self:LiveMarketText(o.marketKey)..'\n' or '')..'Search cached market history by name or item ID. '..tostring(#source)..' cached results shown (maximum 300).'..
-        '\nUNPROVEN models cannot suggest selling prices or value investments. Scan medians are asking prices, not sales. SHARED* prices are advisory only.\nSelect a local item, then SHOPPING to set a target. Cached prices are not live quotes.')
+      self.detail:SetText((o and self:LiveMarketText(o.marketKey)..'\nObservation: '..self:SyncTime(o.at)..' (advisory; revalidate before trading)\n' or '')..'Search cached market history by name or item ID. '..tostring(#source)..' cached results shown (maximum 300).'..
+        '\nUNPROVEN models cannot suggest selling prices or value investments. Scan medians are asking prices, not sales. SYNCED prices are advisory only.\nSelect a local item, then SHOPPING to set a target. Cached prices are not live quotes.')
     elseif view=='ledger' then
       local t=self:LedgerTotals()
       self.detail:SetText('Cost-matched realized '..self:Money(t.realized)..' | ROI '..self:PercentText(t.roi)..' | fees '..self:Money(t.fees)..' | uncosted revenue '..self:Money(t.uncostedRevenue)..'\n'..(o and (tostring(o.evidence)..'\n'..tostring(o.name or '')..' | market '..tostring(o.marketKey)..' | deposit refund '..self:Money(o.depositRefund)) or 'Select an invoice or unresolved order.')..'\nMailbox invoices are observed facts, but have no unique ID. Review identity before BOOK REVIEWED SALE.\nPurchase cost uses moving average. Unknown cost is excluded from realized profit; manually reported outcomes are labeled.')

@@ -1,3 +1,11 @@
+## 1.5.8 - Automatic account sync dashboard
+- Add SYNC tab, automatic named pairing, automatic eligible bank-character AH scans,
+  reconnect/full replay, peer scan metadata, persisted completion diagnostics.
+- Refresh Browse after incoming price pages; show observation timestamps in Browse
+  details and tooltips, with explicit synced/stale labels.
+- Preserve saved data, throttled resumable deltas, trade gates, and offline backoff.
+- Add pairing/off persistence, automatic scan guards, and sync dashboard regressions.
+
 ## 1.5.0 — Forever Live
 
 Remove Safe Mode. Add confirmed manual shopping, posting and cancellation, named shopping lists, passive variant-specific price tooltips, and incremental paired-account sharing. Retain schema 1, account-local finances, old clipboard imports, crafting and the existing intelligence dashboards.

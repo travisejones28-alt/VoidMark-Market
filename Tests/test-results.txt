@@ -124,16 +124,20 @@ PASS Live migration removes either legacy mode value without changing finances/h
 PASS Passive tooltip picks exact suffix, level, pet, source, freshness and never starts an AH query
 PASS Clipboard ask transfer carries floors, preserves newer observations and never imports history
 PASS Named shopping lists round-trip, preserve local targets, and allow unscanned item IDs
-PASS Two accounts resume lost data and ACKs after reload; unchanged floors send age only, no financial records
+PASS Ungrouped accounts resume lost data and ACKs after reload; unchanged floors send age only, no financial records
 PASS Posting rechecks slot, quantity, live quote, deposit and requires a confirm click
 PASS Cancellation validates exact ownership and fee again after confirmation
 PASS Manual shopping does not require investment ROI but still blocks unaffordable or over-limit purchases
 PASS Live name search returns a new unscanned variant and admits it to shopping review without buying
 PASS Nexus import accepts the current character and complete learned recipes only
+PASS Offline peer suppresses only matching system errors and quietly resumes after cooldown
 PASS Direct pairing needs no friend entry, respects lockdown and backs off without a reply
 PASS Forever whisper, group and sender matching preserve the surname space
 PASS Clipboard paging covers 1,500 exact keys without copying transaction records
 PASS A newer simple ask does not erase a reliable earlier historical estimate
 PASS A completed full scan publishes batched asks without transferring scan history or duplicating observations
 PASS Auction House tabs work with Auctionator disabled and restore the standalone window
-ALL 137 TESTS PASSED
+PASS Automatic named pairing preserves explicit peer and off across reload
+PASS Automatic bank scan requires AH and cooldown and bounds failed retries
+PASS Sync diagnostics distinguish received pages and complete transfers; force preserves financial data
+ALL 141 TESTS PASSED
