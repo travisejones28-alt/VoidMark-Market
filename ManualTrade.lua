@@ -80,16 +80,31 @@ function M:CheckPost(row)
   self.sellRetry=nil;self:Print(e);return
  end
  self.sellRetry=nil
- local draft={row=row,k=b.k};self.postQuote=draft
+ local draft={row=row,k=b.k,deadline=GetTime()+10};self.postQuote=draft
  self:Search(b.k,60,function(result)
   if self.postQuote~=draft or self.view~='selling' then return end
+  -- A late live answer replaces a price we filled from the last scan.
+  local replaceFallback=draft.fallback and draft.fallbackUnit and self:GetPostPrice()==draft.fallbackUnit
+  draft.fallback=nil;draft.reason=nil
   draft.at=result.received;draft.floor=result.rows[1] and result.rows[1].unit;draft.listings=result.all or {}
   local unit,clamped=self:SuggestPostUnit(row,draft.floor);draft.atMinimum=clamped
-  if self:PostPriceEmpty() and unit then self:SetPostPrice(unit) end
+  if (self:PostPriceEmpty() or replaceFallback) and unit then self:SetPostPrice(unit) end
   local now=readBag(self,row);draft.max=now and now.max;draft.commodity=now and now.commodity
   if now and self.postQty and not draft.qtyTouched then self.postQty:SetText(tostring(now.max)) end
   self:RefreshUI()
- end,function(e) if self.postQuote==draft then self.postQuote=nil;self:Print(e) end end)
+ end,function(e) if self.postQuote==draft then self:UseScanPrice(draft,e) end end,nil,true)
+end
+-- The live check failed or did not answer: price from the last scan instead of
+-- leaving the item stuck on "Checking live price..." with an empty price.
+function M:UseScanPrice(draft,reason)
+ if self.postQuote~=draft or draft.at then return end
+ draft.at=GetTime();draft.fallback=true;draft.reason=reason;draft.listings={}
+ local unit,clamped=self:SuggestPostUnit(draft.row,nil);draft.atMinimum=clamped
+ if unit and self:PostPriceEmpty() then self:SetPostPrice(unit);draft.fallbackUnit=unit end
+ local why=reason and (' ('..tostring(reason)..')') or ''
+ self:Print(unit and ('Live price did not answer'..why..'; using the last scan price. Check it before posting.')
+  or ('Live price did not answer'..why..' and there is no scan price. Enter a price.'))
+ self:RefreshUI()
 end
 local function postTerms(self,row,n,unit,duration)
  if self.tradePending then return nil,'A previous request is awaiting its result' end

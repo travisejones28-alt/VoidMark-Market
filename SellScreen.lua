@@ -105,6 +105,7 @@ function M:PostClicked()
   -- Quote missing or older than a minute: refresh it; your typed price is kept.
   self.postQuote=nil;self:CheckPost(r);self:Print('Live price re-checked. Click Post again.');return
  end
+ if q and not q.at then self:Print('Still checking the live price. Click Post again in a moment.');return end
  local unit=self:GetPostPrice()
  if not unit or unit<1 then self:Print('Enter a price of at least 1 copper');return end
  self:ReviewPost(self.selectedRow,tonumber(self.postQty:GetText()),unit,self.postDuration)
@@ -286,6 +287,7 @@ function M:RenderSellScreen()
  if not r then info='Click an item on the left. Its live price is checked automatically.'
  elseif not self.ahOpen then info='Open the Auction House to check prices and post.'
  elseif q and not q.at then info='Checking live price...'
+ elseif q and q.fallback then info='Live price did not answer - using your last scan price. Click Refresh to try again.'
  elseif q then info=q.floor and ('Lowest other: '..money(self,q.floor)..(q.atMinimum and ' | held at your minimum' or (' | your price undercuts by '..money(self,self.db.settings.sellUndercut or 1)))) or 'No other listings - your price sets the market.'
  else info='Click Refresh to check the live price.' end
  s.info:SetText(info)

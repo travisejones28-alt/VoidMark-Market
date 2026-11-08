@@ -173,4 +173,7 @@ PASS 1.9.4 no background bag, crafting or item-name work while the window is clo
 PASS 1.9.5 three stacks post as one 60-unit post, a locked slot is retried, closing the AH ends "Checking"
 PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
-ALL 174 TESTS PASSED
+PASS 1.9.7 A refresh that answers without an event still fills the price (Linen Cloth)
+PASS 1.9.7 No live answer: last scan price after 10 s, and a late live answer replaces it
+PASS 1.9.7 A price you typed is never replaced by a late live answer
+ALL 177 TESTS PASSED

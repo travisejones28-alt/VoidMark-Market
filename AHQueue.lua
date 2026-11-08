@@ -70,11 +70,12 @@ function M:PumpQueue()
   elseif r and GetTime()-r.sent>r.timeout then
     q.stats.timeouts=q.stats.timeouts+1
     if r.kind~='replicate' and r.attempt<2 and not r.reading then
-      r.attempt=r.attempt+1; r.sent=GetTime(); r.resend=true; q.stats.retries=q.stats.retries+1
+      r.attempt=r.attempt+1; r.sent=GetTime(); r.resend=true; r.polled=nil; q.stats.retries=q.stats.retries+1
     else self:FinishRequest(r,false,'Request timed out; no fresh response'); return end
   end
   if self.execution and (self.execution.state=='quoting' or self.execution.state=='quoted' or self.execution.state=='pending') then return end
   if r then
+    self:PollSearch(r)
     if r.resend and self:ThrottleReady() then
       r.resend=nil; local ok,err=pcall(self.SendAHRequest,self,r)
       if not ok then self:FinishRequest(r,false,tostring(err)) end
@@ -94,11 +95,23 @@ function M:PumpQueue()
   local ok,err=pcall(self.SendAHRequest,self,r)
   if not ok then self:FinishRequest(r,false,tostring(err)) else q.stats.sent=q.stats.sent+1 end
 end
-function M:Search(m,priority,done,fail,valid)
+function M:Search(m,priority,done,fail,valid,allowCached)
   local key=self:ItemKey(m); local commodity=self:IsCommodity(key)
   if commodity==nil then if fail then fail('Commodity classification unavailable; wait for item data') end; return false end
   return self:QueueRequest({id='search:'..tostring(self:Key(key.itemID,key.itemSuffix,key.itemLevel,key.battlePetSpeciesID)),kind='search',
-    key=key,commodity=commodity,priority=priority,done=done,fail=fail,valid=valid})
+    key=key,commodity=commodity,priority=priority,done=done,fail=fail,valid=valid,allowCached=allowCached})
+end
+-- Forever sometimes answers a refresh of an item already searched this session
+-- without a "results updated" event. For price checks that only fill the sell
+-- price (never purchases), read the client's complete results after a short wait.
+function M:PollSearch(r)
+  if not r or r.kind~='search' or not r.allowCached or r.reading or r.resend or r.polled then return end
+  if GetTime()-(r.sent or 0)<2.5 then return end
+  local A=C_AuctionHouse; local arg=r.commodity and r.key.itemID or r.key
+  local fullFn=r.commodity and A.HasFullCommoditySearchResults or A.HasFullItemSearchResults
+  if type(fullFn)~='function' then return end
+  local ok,full=pcall(fullFn,arg)
+  if ok and full then r.polled=true; self:ReadSearch('poll',arg) end
 end
 function M:ReadSearch(event,key)
   local r=self.queue.active

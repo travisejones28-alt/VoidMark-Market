@@ -158,6 +158,8 @@ function M:BagCount(key,itemID)
  return n
 end
 function M:SellTick()
+ local q=self.postQuote
+ if q and not q.at and q.deadline and GetTime()>=q.deadline and self.UseScanPrice then self:UseScanPrice(q,'no reply in 10 seconds') end
  if self.sellCheckAt and GetTime()>=self.sellCheckAt then
   local row=self.sellCheckRow;self.sellCheckAt=nil;self.sellCheckRow=nil
   if row and row==self.selectedRow and self.ahOpen and self.view=='selling' then self:CheckPost(row);self:RefreshUI() end
