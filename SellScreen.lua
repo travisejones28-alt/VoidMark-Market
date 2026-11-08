@@ -87,7 +87,8 @@ function M:SetDuration(d)
 end
 function M:PickListing(entry)
  if not entry then return end
- local unit=entry.own and entry.unit or self:SuggestPostUnit(self.selectedRow,entry.unit)
+ local q=self.postQuote
+ local unit=entry.own and entry.unit or self:SuggestPostUnit(self.selectedRow,entry.unit,q and q.commodity)
  self:SetPostPrice(unit);self:RefreshUI()
 end
 function M:SellDeposit()

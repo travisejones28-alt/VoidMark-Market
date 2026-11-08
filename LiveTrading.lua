@@ -96,15 +96,27 @@ function M:PostDuration()
  local d=tonumber(self.db.settings.postDuration)
  return (d==1 or d==2 or d==3) and d or 3
 end
-function M:SuggestPostUnit(row,floor)
+-- Forever's AH refuses regular-item prices with copper (Database Error);
+-- commodities accept copper. Items post in whole silver.
+function M:WholeSilver(unit,up)
+ unit=math.floor(unit)
+ local s=up and math.ceil(unit/100)*100 or math.floor(unit/100)*100
+ return math.max(100,s)
+end
+function M:SuggestPostUnit(row,floor,commodity)
  local unit
  if self:Finite(floor,1,1e12) then
   local cut=tonumber(self.db.settings.sellUndercut) or 1
   cut=self:Finite(cut,0,1e9) and math.floor(cut) or 1
   unit=math.max(1,math.floor(floor)-cut)
  elseif row and self:Finite(row.price,1,1e12) then unit=math.floor(row.price) end
+ -- Items: highest whole silver below the lowest listing (16s -> 15s).
+ if unit and commodity==false then unit=self:WholeSilver(unit) end
  local min=row and row.marketKey and self.db.sellFloors and self.db.sellFloors[row.marketKey]
- if unit and self:Finite(min,1,1e12) and unit<min then return math.ceil(min),true end
+ if unit and self:Finite(min,1,1e12) and unit<min then
+  min=math.ceil(min); if commodity==false then min=self:WholeSilver(min,true) end
+  return min,true
+ end
  return unit
 end
 function M:FormatGoldInput(copper) return ('%0.4f'):format(copper/10000) end

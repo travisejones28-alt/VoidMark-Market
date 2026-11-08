@@ -18,6 +18,7 @@ function M:InitializeDatabase()
     if type(v)=='number' and (root.settings[k]~=root.settings[k] or root.settings[k]<0 or root.settings[k]>1e12) then root.settings[k]=v end
   end
   root.settings.safeMode=nil -- retire only the obsolete switch
+  root.settings.itemPostBid=nil -- 1.9.10 experiment: copper, not the bid, was the cause
   root.settings.ahCut=math.min(0.30,root.settings.ahCut)
   root.settings.riskTolerance=math.min(2,root.settings.riskTolerance)
   root.economies=type(root.economies)=='table' and root.economies or {}

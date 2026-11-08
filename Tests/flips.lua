@@ -31,8 +31,8 @@ check('1.9.8 Green flips pick cheap good-suffix greens and price them under the 
  local rows=M:BuildFlipRows()
  assert(keys(rows)=='Bloodspattered Sash of the Tiger|Willow Vest of Intellect','most profit first, got '..keys(rows))
  local tiger=rows[1]
- assert(tiger.sell==3999,'1c under the next listing')
- assert(tiger.profit==math.floor(3999*0.95)-1200-15,'profit after 5% cut and deposit estimate, got '..tiger.profit)
+ assert(tiger.sell==3900,'whole silver under the next listing (40s -> 39s)')
+ assert(tiger.profit==math.floor(3900*0.95)-1200-15,'profit after 5% cut and deposit estimate, got '..tiger.profit)
  local vest=rows[2]
  assert(vest.guess and vest.sell==3500 and vest.profit==math.floor(3500*0.95)-900-15)
 end)

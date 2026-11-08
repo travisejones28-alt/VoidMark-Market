@@ -99,9 +99,8 @@ check('1.9.10 A search already running is waited for, not replaced by the scan p
  unprint();restore();C_AuctionHouse=oldAH;M.sellDupes=nil;if not ok then error(err,0) end
 end)
 
-check('1.9.10 Database Error on an item post adds a starting bid on the next post',function()
+check('1.9.11 Regular items are priced and posted in whole silver; commodities keep copper',function()
  reset();local printed,unprint=capture()
- local oldEnum=Enum;Enum=setmetatable({AuctionHouseError={DatabaseError=10}},{__index=oldEnum})
  local loc,con=ItemLocation,C_Container
  local old=C_AuctionHouse;local api=setmetatable({},{__index=old});C_AuctionHouse=api
  local ok,err=pcall(function()
@@ -112,22 +111,24 @@ check('1.9.10 Database Error on an item post adds a starting bid on the next pos
   api.GetItemKeyInfo=function() return {isCommodity=false} end
   api.GetAvailablePostCount=function() return 1 end
   api.HasSearchResults=function() return false end;local cur;api.SendSearchQuery=function(k) cur=k end
-  api.HasFullItemSearchResults=function() return true end;api.GetNumItemSearchResults=function() return 0 end
+  api.HasFullItemSearchResults=function() return true end;api.GetNumItemSearchResults=function() return 1 end
+  api.GetItemSearchResultInfo=function() return {auctionID=1,buyoutAmount=1600,quantity=1,itemKey={itemID=9000,itemSuffix=5,itemLevel=0,battlePetSpeciesID=0}} end
   api.CalculateItemDeposit=function() return 10 end
   local calls={};api.PostItem=function(_,d,n,bid,unit) calls[#calls+1]={bid=bid,unit=unit};return false end
-  local row={bag=0,slot=1,itemID=9000,itemLink='belt',name='Willow Belt of Frost Protection',quantity=1,marketKey='9000:s5'}
+  local row={bag=0,slot=1,itemID=9000,itemLink='belt',name='Willow Belt of the Eagle',quantity=1,marketKey='9000:s5'}
   M.sellingRows={row};M:SetView('selling');M.db.settings.confirmPosts=false
   M:SelectSellRow(row,true);for _=1,3 do advance(1);M:PumpQueue();if cur then local k=cur;cur=nil;emit('ITEM_SEARCH_RESULTS_UPDATED',k);jobs() end end
-  assert(M.postQuote and M.postQuote.at,'live price checked')
+  assert(M.postQuote and M.postQuote.at and M.postQuote.floor==1600,'live lowest 16s')
+  assert(M:GetPostPrice()==1500,'item undercut lands on whole silver (15s), got '..tostring(M:GetPostPrice()))
   M:SetPostPrice(1599);M:PostClicked()
-  assert(#calls==1 and calls[1].bid==nil,'first post: buyout only')
-  emit('AUCTION_HOUSE_SHOW_ERROR',10)
-  assert(M.db.settings.itemPostBid==true and printed[#printed]:find('starting bid',1,true))
-  M:CheckPost(row);for _=1,3 do advance(1);M:PumpQueue();if cur then local k=cur;cur=nil;emit('ITEM_SEARCH_RESULTS_UPDATED',k);jobs() end end
-  M:SetPostPrice(1599);M:PostClicked()
-  assert(#calls==2 and calls[2].bid==1598 and calls[2].unit==1599,'second post carries a starting bid 1c under buyout')
+  assert(#calls==1 and calls[1].unit==1500 and calls[1].bid==nil,'typed 15s 99c posts as 15s with no bid')
+  assert(printed[#printed]:find('whole silver',1,true))
+  -- Commodities keep copper precision.
+  assert(M:SuggestPostUnit({marketKey=2589},1600,true)==1599)
+  assert(M:SuggestPostUnit({marketKey=9000},1550,false)==1500)
+  assert(M:WholeSilver(40)==100,'never below 1 silver')
  end)
- Enum=oldEnum;C_AuctionHouse=old;ItemLocation=loc;C_Container=con;M.db.settings.confirmPosts=nil;unprint()
+ C_AuctionHouse=old;ItemLocation=loc;C_Container=con;M.db.settings.confirmPosts=nil;unprint()
  if not ok then error(err,0) end
 end)
 end

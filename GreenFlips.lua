@@ -35,7 +35,7 @@ function M:FlipCandidate(m,words,newest)
  local second=tonumber(l.second); local sell,guess
  -- Scans made before 1.9.8 did not record the next price: wait for a new scan.
  if not second and (tonumber(l.listings) or 0)>=2 then return nil end
- if second and second>buy then sell=second-(tonumber(s.sellUndercut) or 1)
+ if second and second>buy then sell=self:WholeSilver(second-(tonumber(s.sellUndercut) or 1)) -- items: whole silver
  elseif second and second<=buy then return nil -- another listing at the same price: nothing to gain
  else sell=s.flipDefaultSell; guess=true end
  if sell<=buy then return nil end

@@ -80,7 +80,7 @@ function M:CheckPost(row)
   self.sellRetry=nil;self:Print(e);return
  end
  self.sellRetry=nil
- local draft={row=row,k=b.k,deadline=GetTime()+10};self.postQuote=draft
+ local draft={row=row,k=b.k,commodity=b.commodity,deadline=GetTime()+10};self.postQuote=draft
  self:Search(b.k,60,function(result)
   if self.postQuote~=draft or self.view~='selling' then return end
   self.sellDupes=nil
@@ -88,7 +88,7 @@ function M:CheckPost(row)
   local replaceFallback=draft.fallback and draft.fallbackUnit and self:GetPostPrice()==draft.fallbackUnit
   draft.fallback=nil;draft.reason=nil
   draft.at=result.received;draft.floor=result.rows[1] and result.rows[1].unit;draft.listings=result.all or {}
-  local unit,clamped=self:SuggestPostUnit(row,draft.floor);draft.atMinimum=clamped
+  local unit,clamped=self:SuggestPostUnit(row,draft.floor,draft.commodity);draft.atMinimum=clamped
   if (self:PostPriceEmpty() or replaceFallback) and unit then self:SetPostPrice(unit) end
   local now=readBag(self,row);draft.max=now and now.max;draft.commodity=now and now.commodity
   if now and self.postQty and not draft.qtyTouched then self.postQty:SetText(tostring(now.max)) end
@@ -107,7 +107,7 @@ end
 function M:UseScanPrice(draft,reason)
  if self.postQuote~=draft or draft.at then return end
  draft.at=GetTime();draft.fallback=true;draft.reason=reason;draft.listings={}
- local unit,clamped=self:SuggestPostUnit(draft.row,nil);draft.atMinimum=clamped
+ local unit,clamped=self:SuggestPostUnit(draft.row,nil,draft.commodity);draft.atMinimum=clamped
  if unit and self:PostPriceEmpty() then self:SetPostPrice(unit);draft.fallbackUnit=unit end
  local why=reason and (' ('..tostring(reason)..')') or ''
  self:Print(unit and ('Live price did not answer'..why..'; using the last scan price. Check it before posting.')
@@ -131,6 +131,10 @@ end
 function M:ReviewPost(row,n,unit,duration)
  if not row then self:Print('Select a bag item');return end
  local b,e=postTerms(self,row,n,unit,duration);if not b then self:Print(e);return end
+ if not b.commodity and unit%100~=0 then
+  unit=self:WholeSilver(unit);self:SetPostPrice(unit)
+  self:Print('Items post in whole silver on this server; posting at '..self:Money(unit)..'.')
+ end
  local q=self.postQuote
  local market=q.floor and self:Money(q.floor)..' / unit' or 'no competing listings'
  local function post()
@@ -139,12 +143,8 @@ function M:ReviewPost(row,n,unit,duration)
   self.postQuote=nil;self.tradePending='post';self.postingRow=row
   row.postedUnit=unit;row.postedQuantity=n;row.postedDuration=duration
   local A=C_AuctionHouse;local ok,pending
-  -- Forever's server can refuse a regular item posted with buyout only
-  -- (Database Error). Once that happens, items get a starting bid 1c under buyout.
-  local bid=not now.commodity and self.db.settings.itemPostBid==true and math.max(1,unit-1) or nil
-  self.postingTerms={commodity=now.commodity,bid=bid}
   if now.commodity then ok,pending=pcall(A.PostCommodity,now.loc,duration,n,unit)
-  else ok,pending=pcall(A.PostItem,now.loc,duration,n,bid,unit) end
+  else ok,pending=pcall(A.PostItem,now.loc,duration,n,nil,unit) end
   if not ok then self.tradePending=nil;self.postingRow=nil;self:Print('Posting failed: '..tostring(pending));return end
   if pending then
    local f=AuctionHouseFrame and (now.commodity and AuctionHouseFrame.CommoditiesSellFrame or AuctionHouseFrame.ItemSellFrame)
@@ -196,14 +196,7 @@ for _,event in ipairs({'AUCTION_CANCELED','AUCTION_HOUSE_AUCTION_CREATED','AUCTI
   if self.tradePending and e=='AUCTION_HOUSE_SHOW_ERROR' then
    local what=self.tradePending=='post' and self.postingRow and (' posting '..tostring(self.postingRow.name or 'item')) or ''
    self:Print('AH rejected the request'..what..': '..self:AuctionErrorName(code))
-   local dbError=(Enum and Enum.AuctionHouseError and Enum.AuctionHouseError.DatabaseError) or 10
-   local terms=self.postingTerms
-   if self.tradePending=='post' and tonumber(code)==dbError and terms and not terms.commodity and not terms.bid and not self.persistenceBlocked then
-    self.db.settings.itemPostBid=true
-    self:Print('This server wants a starting bid on items. Click Post again: Market now adds a starting bid 1 copper under your price.')
-   end
   end
-  if e=='AUCTION_HOUSE_AUCTION_CREATED' then self.postingTerms=nil end
   if e=='AUCTION_HOUSE_CLOSED' then self.postQuote=nil
    if StaticPopup_Hide then StaticPopup_Hide('VOIDMARKMARKET_TRADE') end
   end

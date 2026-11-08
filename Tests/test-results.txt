@@ -178,7 +178,7 @@ PASS 1.9.7 No live answer: last scan price after 10 s, and a late live answer re
 PASS 1.9.7 A price you typed is never replaced by a late live answer
 PASS 1.9.8 AH errors show the client error name
 PASS 1.9.10 A search already running is waited for, not replaced by the scan price
-PASS 1.9.10 Database Error on an item post adds a starting bid on the next post
+PASS 1.9.11 Regular items are priced and posted in whole silver; commodities keep copper
 PASS 1.9.8 Green flips pick cheap good-suffix greens and price them under the next listing
 PASS 1.9.8 Flip settings: max buy, min profit and suffix list apply from the screen
 PASS 1.9.8 Flips screen lists rows and double-click opens the normal Buy flow
