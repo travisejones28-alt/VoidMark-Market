@@ -5,6 +5,7 @@ local sections = {
   {label='Selling', view='selling'},
   {label='Canceling', view='my auctions'},
   {label='Market', view='market'},
+  {label='Vendor', view='vendor'},
 }
 
 local function dock(self, page, view)
@@ -208,3 +209,4 @@ M:RegisterHandler('AUCTION_HOUSE_SHOW', installAfterOpen)
 if EventUtil and EventUtil.ContinueOnAddOnLoaded then
   EventUtil.ContinueOnAddOnLoaded('Blizzard_AuctionHouseUI', installAfterOpen)
 end
+

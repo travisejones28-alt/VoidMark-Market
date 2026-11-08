@@ -1,5 +1,5 @@
 local _,M=...
-local tabs={{'OVERVIEW','market'},{'BROWSE','browse'},{'SNIPER','opportunities'},{'SHOPPING','shopping'},{'CRAFTING','crafting'},
+local tabs={{'OVERVIEW','market'},{'BROWSE','browse'},{'SNIPER','opportunities'},{'SHOPPING','shopping'},{'VENDOR','vendor'},{'CRAFTING','crafting'},
  {'SYNC','sync'},{'SELL','selling'},{'INVESTMENTS','investments'},{'BANKER','banker'},{'LEDGER','ledger'},{'SETTINGS','settings'}}
 local function label(parent,text,x,y,w,font)
   local f=parent:CreateFontString(nil,'OVERLAY',font or 'GameFontNormalSmall'); f:SetPoint('TOPLEFT',x,y)
@@ -35,7 +35,7 @@ function M:InitializeUI()
   self.modeLabel=label(f,'Manual trading',365,-19,455)
   button(f,'TRANSFER',860,-12,125,function() self:ShowTransferWindow() end)
   button(f,'X',995,-12,26,function() self:CloseMarketWindow() end)
-  for i,v in ipairs(tabs) do local tab=v[2]; button(f,v[1],18+(i-1)*91,-48,89,function() self:SetView(tab) end) end
+  for i,v in ipairs(tabs) do local tab=v[2]; button(f,v[1],18+(i-1)*83,-48,81,function() self:SetView(tab) end) end
   self.syncFrame=CreateFrame('Frame',nil,f);self.syncFrame:SetPoint('TOPLEFT',18,-151);self.syncFrame:SetSize(1000,465)
   self.syncReport=label(self.syncFrame,'',0,-70,960)
   button(self.syncFrame,'RECONNECT',0,0,130,function() self:ReconnectSharing(false) end)
@@ -86,7 +86,8 @@ function M:InitializeUI()
        self.postQuote=nil; self.postUnit:SetText('');self.postQty:SetText(tostring(math.min(row.data.quantity or 1,self.db.sellStacks[row.data.marketKey] or row.data.quantity or 1)))
       end
       self.selectedRow=row.data
-      if self.view=='opportunities' then self:SelectOpportunity(row.data)
+      if self.view=='vendor' then self.quantity:SetText(tostring(row.data.buyQuantity));self:SelectOpportunity(row.data)
+      elseif self.view=='opportunities' then self:SelectOpportunity(row.data)
       elseif self.view=='review' and row.data.opportunity then self:SelectOpportunity(row.data.opportunity)
       elseif self.view=='my auctions' then self:AnalyzeOwnedLive(row.data)
       else self:RefreshUI() end
@@ -304,7 +305,7 @@ function M:RenderUI()
   self.cancelOwned:SetShown(view=='my auctions');self.browseAction:Hide();self.presetButton:SetShown(view=='opportunities')
   self.presetButton:SetText('PRESET: '..(s.sniperPreset or 'balanced'):upper())
   self.toolbar:Show(); self.tableFrame:Hide(); self.detail:Hide(); self.contentScroll:Hide(); self.settingsFrame:Hide(); self.action:Hide(); self.ledgerAction:Hide(); self.ownedRefresh:Hide(); self.reviewRemove:Hide(); self.postReviewRemove:Hide(); self.postReviewBack:Hide(); self.sellAction:Hide(); self.watchFrame:Hide(); self.statsFrame:Hide()
-  self.filter:SetShown(view=='opportunities' or view=='browse' or view=='crafting' or view=='shopping'); self.sortButton:SetShown(view=='opportunities' or view=='browse' or view=='crafting'); self.sortButton:SetText('SORT: '..s.sort:upper())
+  self.filter:SetShown(view=='vendor' or view=='opportunities' or view=='browse' or view=='crafting' or view=='shopping'); self.sortButton:SetShown(view=='opportunities' or view=='browse' or view=='crafting'); self.sortButton:SetText('SORT: '..s.sort:upper())
   if view=='browse' then
     local names={profit='SPREAD',roi='FAIR/ASK',ask='ASK',name='NAME'}
     self.sortButton:SetText('SORT: '..(names[s.sort] or 'NAME'))
@@ -375,7 +376,7 @@ function M:RenderUI()
     local summary=self:GetBankerSummary()
     local banker=summary.scanner or {}
     local scan=summary.latestScan
-    local lines={'|cffffffffBANKER WORKSTATION — PLAYER-CONTROLLED|r','',
+    local lines={'|cffffffffBANKER WORKSTATION - PLAYER-CONTROLLED|r','',
       'Liquid reserve '..self:Money(summary.reserve)..' | Available after reserve/pending '..self:Money(summary.available),
       'Portfolio positions '..summary.portfolio.positions..' | Unpriced cost '..self:Money(summary.portfolio.unvaluedCost),
       'Estimated unrealized net '..self:Money(summary.portfolio.unrealized)..' (fresh models only)',
@@ -397,7 +398,9 @@ function M:RenderUI()
     text=table.concat(lines,'\n')
   else
     local source,headers={},{'Name','Ask','Fair','Net','ROI','Score','Confidence','Liquidity'}
-    if view=='opportunities' then
+    if view=='vendor' then
+      source=self:GetVendorRows(s.filter);headers={'Below vendor','AH/unit','Vendor/unit','Profit/unit','Units','Buy all','Profit all','State'}
+    elseif view=='opportunities' then
       source=self:GetSniperRows(s.filter,s.sort)
       headers={'Item / status','Ask','Model est.','Net est.','ROI','Score','Confidence','Risk'}
     elseif view=='review' then
@@ -446,7 +449,8 @@ function M:RenderUI()
         local icon=self:RowItemIcon(o,id)
         row.icon:SetTexture(icon or 'Interface\\Icons\\INV_Misc_QuestionMark')
         local cells
-        if view=='opportunities' then cells={(o.pass and '' or '|cffff9a9a[BLOCKED]|r ')..(o.kind=='vendor' and '|cff72e7aa[VENDOR]|r ' or '')..o.name,
+        if view=='vendor' then cells={o.name,self:Money(o.floor),self:Money(o.vendorPrice),self:Money(o.vendorPrice-o.floor),o.quantity,self:Money(o.totalCost),self:Money(o.totalProfit),o.status}
+        elseif view=='opportunities' then cells={(o.pass and '' or '|cffff9a9a[BLOCKED]|r ')..(o.kind=='vendor' and '|cff72e7aa[VENDOR]|r ' or '')..o.name,
           self:Money(o.floor),(o.kind=='vendor' or self:CanEstimateResale(self.db.market[o.marketKey])) and self:Money(o.fairValue) or 'Unproven',
           (o.kind=='vendor' or self:CanEstimateResale(self.db.market[o.marketKey])) and self:Money(o.economics.net) or '--',
           (o.kind=='vendor' or self:CanEstimateResale(self.db.market[o.marketKey])) and self:PercentText(o.economics.roi) or '--',
@@ -468,7 +472,8 @@ function M:RenderUI()
       end
     end
     local o=self.selectedRow
-    if view=='opportunities' then self.detail:SetText('Select a row to inspect economics and revalidate live prices. Vendor opportunities have a separate model.\nResale rankings weigh absolute profit, ROI, confidence, inferred liquidity, depth, volatility and capital exposure.\nA snapshot opportunity may fail current limits or disappear before you buy. Live prices expire after 10 seconds.')
+    if view=='vendor' then self.detail:SetText('Click FULL SCAN to find auctions below their vendor sell value. Sorted by total vendor profit; includes small deals regardless of sniper filters.\nUnits and totals include only profitable whole stacks, excluding your own listings. Partial depth totals are a lower bound.\nClick an item, then REVALIDATE to check current prices before buying. Purchase limits still apply.\nNo results? Run a fresh scan; items without a known vendor value are omitted.')
+    elseif view=='opportunities' then self.detail:SetText('Select a row to inspect economics and revalidate live prices. Vendor opportunities have a separate model.\nResale rankings weigh absolute profit, ROI, confidence, inferred liquidity, depth, volatility and capital exposure.\nA snapshot opportunity may fail current limits or disappear before you buy. Live prices expire after 10 seconds.')
     elseif view=='review' then
       self.detail:SetText('This is an advisory purchase REVIEW QUEUE, not a transaction queue.\nItems with REVALIDATE can be clicked to inspect, but the live purchase still needs complete search validation and a permitted user click.\nRECHECK items have stale/blocked/missing market data. They remain saved until you remove them.')
     elseif view=='shopping' then
@@ -552,3 +557,4 @@ function M:ShowTransferWindow()
   end
   self.transferWindow:Show()
 end
+

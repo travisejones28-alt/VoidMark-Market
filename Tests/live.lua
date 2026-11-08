@@ -270,9 +270,9 @@ check('Auction House tabs work with Auctionator disabled and restore the standal
  M.window.GetFrameLevel=function()return 2 end
  M.window.SetFrameLevel=function(frame,n)frame.testLevel=n end
  emit('AUCTION_HOUSE_SHOW')
- local tabs=M.auctionTabs;assert(#tabs==4 and #native.Tabs==3)
+ local tabs=M.auctionTabs;assert(#tabs==5 and #native.Tabs==3)
  M:InstallAuctionTabs();assert(M.auctionTabs==tabs)
- local views={'shopping','selling','my auctions','market'}
+ local views={'shopping','selling','my auctions','market','vendor'}
  for i,tab in ipairs(tabs) do
   tab.button.scripts.OnClick();assert(M.view==views[i] and M.auctionDock.page==tab.page)
   assert(M.window:IsShown() and M.window:GetScale()>0 and M.window.testLevel>native:GetFrameLevel())
@@ -323,3 +323,4 @@ check('Auction House tabs work with Auctionator disabled and restore the standal
  LibStub=nil;CreateFrame=oldCreate;AuctionHouseFrame=nil;M.auctionTabs=nil
 end)
 end
+
