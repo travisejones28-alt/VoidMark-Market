@@ -65,8 +65,12 @@ function M:Journal(key,line)
  if old then j.rows[old]=nil end
  j.seq=j.seq+1;j.rows[j.seq]=line;j.latest[key]=j.seq
 end
-function M:PublishPrice(m)
- if not m or not self:ParseKey(m.marketKey) or not self:MarketFresh(m) or m.cacheUntrusted or m.analysisIncomplete or not m.latest then return end
+-- catchUp publishes an older trusted observation (e.g. scanned before pairing)
+-- so the partner can still use it; its timestamp keeps it labelled stale and
+-- it never replaces a newer observation on the receiving side.
+function M:PublishPrice(m,catchUp)
+ if not m or not self:ParseKey(m.marketKey) or m.cacheUntrusted or m.analysisIncomplete or type(m.latest)~='table' then return end
+ if not self:MarketFresh(m) and not (catchUp and self:Finite(m.lastSeen,time()-self.db.settings.historyDays*86400,time()+60)) then return end
  local floor=m.latest.floor
  if self:Finite(floor,0.000001,1e12) then floor=math.ceil(floor) end
  if not whole(floor,1,1e12) or not whole(m.lastSeen,1,time()+60) then return end
@@ -257,6 +261,9 @@ function M:StartSharing()
   if not self.shareRegistered then self.shareRun.status='Addon-message registration failed (result '..tostring(v)..')' end
  end
  local d=self.db;local j=d.shareJournal
+ -- 1.7: re-run seeding once so trusted prices observed before pairing (or
+ -- older than the freshness window) are offered to the partner.
+ if j.catchUpSeed~=2 then j.seeded=nil;j.catchUpSeed=2 end
  if not j.seeded then
   local cursor;self:AddJob('share-seed',function(start)
    for _=1,32 do
@@ -265,7 +272,7 @@ function M:StartSharing()
      for key,entry in pairs(d.watchlist) do if not d.shoppingEdits[listKey('Shopping',key)] then self:PublishWatch('Shopping',key,entry) end end
      j.seeded=true;return true
     end
-    if type(m)=='table' and (tonumber(m.lastSeen) or 0)<=(d.lastDepthSnapshotAt or 0) then self:PublishPrice(m) end;if debugprofilestop()-start>=3 then return false end
+    if type(m)=='table' and (tonumber(m.lastSeen) or 0)<=(d.lastDepthSnapshotAt or 0) then self:PublishPrice(m,true) end;if debugprofilestop()-start>=3 then return false end
    end
   end)
  end
@@ -346,14 +353,21 @@ function M:PumpSharing()
  local limit=math.min(j.seq,hi+500)
  while hi<limit do
   local line=j.rows[hi+1]
-  if line and #table.concat(rows,';')+#line+#self.economyID+#j.epoch+45>235 then break end
-  hi=hi+1;if line then rows[#rows+1]=line end
+  local overhead=#self.economyID+#j.epoch+45
+  if line and #line+overhead>235 then
+   -- A revision that can never fit one message used to stall the whole
+   -- transfer at this cursor. Skip it (the clipboard transfer still has it).
+   hi=hi+1;r.oversized=(r.oversized or 0)+1;line=nil
+  elseif line and #table.concat(rows,';')+#line+overhead>235 then break
+  else hi=hi+1 end
+  if line then rows[#rows+1]=line end
  end
  if #rows==0 and hi<j.seq then r.skipped=hi;return end
  r.skipped=nil
  if hi>lo then
   r.retry=now+4
-  if send(self,ch,table.concat({'D',j.epoch,lo,hi,table.concat(rows,';')},'\t')) then r.status='Sending changes '..hi..' / '..j.seq end
+  if send(self,ch,table.concat({'D',j.epoch,lo,hi,table.concat(rows,';')},'\t')) then r.status='Sending changes '..hi..' / '..j.seq
+  else r.retry=now+1.5 end -- client throttle: retry the same page shortly
  end
 end
 function M:ReceiveSharing(prefix,msg,ch,sender)

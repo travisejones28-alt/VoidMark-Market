@@ -1,12 +1,31 @@
 local _, M = ...
 
-local sections = {
-  {label='Shopping', view='browse'},
-  {label='Selling', view='selling'},
-  {label='Canceling', view='my auctions'},
-  {label='Market', view='tools'},
-  {label='Vendor', view='vendor'},
-}
+-- One Auction House tab. The Market window has its own section navigation, so
+-- adding a tab per section only crowded/clipped the native row (and
+-- Auctionator's row when both addons are enabled).
+local TAB_LABEL, TAB_ID = 'VoidMark', 'VoidMarkMarketTab'
+local dockViews = {browse=true, selling=true, ['my auctions']=true, market=true, banker=true,
+  vendor=true, crafting=true, settings=true, tools=true, sync=true, shopping=true}
+
+function M:AuctionStartView()
+  local v = self.db and self.db.settings.lastAuctionView
+  return dockViews[v] and v or 'browse'
+end
+function M:RememberAuctionView(view)
+  if self.auctionDock and dockViews[view] and self.db then self.db.settings.lastAuctionView = view end
+end
+
+local function fitDock(self)
+  local state, ah, window = self.auctionDock, AuctionHouseFrame, self.window
+  if not state or not ah then return end
+  -- Scale the fixed 1040x680 layout into the current AH content area so a
+  -- resized/rescaled AH (or MoveAny) never clips the controls.
+  local fit = math.min((ah:GetWidth()-16)/1040, (ah:GetHeight()-44)/680)
+  if not (fit and fit > 0) then error('Auction House dimensions unavailable') end
+  window:ClearAllPoints()
+  window:SetScale(fit)
+  window:SetPoint('CENTER', ah, 'CENTER', 0, -14/fit)
+end
 
 local function dock(self, page, view)
   local window = self.window
@@ -17,8 +36,6 @@ local function dock(self, page, view)
   }
   -- Keep the controls in the same frame hierarchy when the AH is raised or
   -- dragged. Use the AH bounds even if the new page has not laid out yet.
-  local fit = math.min((ah:GetWidth()-16)/1040, (ah:GetHeight()-44)/680)
-  if fit <= 0 then error('Auction House dimensions unavailable') end
   window:SetParent(page)
   window:SetToplevel(false)
   window:SetFrameStrata(ah:GetFrameStrata())
@@ -26,9 +43,7 @@ local function dock(self, page, view)
   if window.SetFixedFrameLevel then window:SetFixedFrameLevel(false) end
   window:SetMovable(false)
   window:SetClampedToScreen(false)
-  window:ClearAllPoints()
-  window:SetScale(fit)
-  window:SetPoint('CENTER', ah, 'CENTER', 0, -14/fit)
+  fitDock(self)
   self.selectedRow = nil
   self:SetView(view)
   self:RenderUI()
@@ -40,6 +55,40 @@ end
 local function moveAnyControls(ah)
   return type(ah.MA_OnMouseDown)=='function' and type(ah.MA_OnMouseUp)=='function'
     and _G.AuctionHouseFrameMove ~= nil
+end
+local function moveAnyLoaded(ah)
+  if moveAnyControls(ah) then return true end
+  return C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded('MoveAny') and true or false
+end
+
+local function savePosition(self, ah)
+  if self.persistenceBlocked or moveAnyLoaded(ah) or not ah.GetPoint then return end
+  local point, relative, relativePoint, x, y = ah:GetPoint()
+  if type(point)~='string' or not self:Finite(x,-1e5,1e5) or not self:Finite(y,-1e5,1e5) then return end
+  if relative and relative~=UIParent then return end -- only store screen-relative anchors
+  self.db.settings.auctionPoint = {point=point, relativePoint=relativePoint or point, x=x, y=y}
+end
+
+function M:RestoreAuctionPosition()
+  local ah = AuctionHouseFrame
+  if not ah or moveAnyLoaded(ah) then return end
+  local p = self.db and self.db.settings.auctionPoint
+  if type(p)=='table' and type(p.point)=='string' and self:Finite(p.x,-1e5,1e5) and self:Finite(p.y,-1e5,1e5) then
+    ah:ClearAllPoints()
+    ah:SetPoint(p.point, UIParent, p.relativePoint or p.point, p.x, p.y)
+  end
+  local saved = self.db and self.db.settings.auctionScale
+  if self:Finite(saved,.5,2.5) then ah:SetScale(saved) end
+end
+
+function M:ResetAuctionLayout()
+  if self.persistenceBlocked then return end
+  self.db.settings.auctionPoint, self.db.settings.auctionScale = nil, nil
+  local ah = AuctionHouseFrame
+  if ah and not moveAnyLoaded(ah) then
+    ah:SetScale(1)
+    if ah.IsShown and ah:IsShown() and ShowUIPanel and HideUIPanel then HideUIPanel(ah); ShowUIPanel(ah) end
+  end
 end
 
 local function beginGesture(self, button)
@@ -53,6 +102,7 @@ local function beginGesture(self, button)
   elseif button=='LeftButton' then
     gesture.wasMovable=ah:IsMovable()
     ah:SetMovable(true)
+    if ah.SetClampedToScreen then ah:SetClampedToScreen(true) end
     ah:StartMoving()
   else
     local startX=GetCursorPosition()
@@ -74,9 +124,11 @@ local function endGesture(self, button)
   elseif gesture.button=='LeftButton' then
     ah:StopMovingOrSizing()
     ah:SetMovable(gesture.wasMovable)
+    savePosition(self, ah)
   else
     self.ahGrip:SetScript('OnUpdate',nil)
     if not self.persistenceBlocked then self.db.settings.auctionScale=ah:GetScale() end
+    if self.auctionDock then pcall(fitDock, self) end
   end
 end
 
@@ -102,9 +154,15 @@ local function installTitleGrip(self, ah)
   grip:SetScript('OnMouseDown',function(_,button) beginGesture(self,button) end)
   grip:SetScript('OnMouseUp',function(_,button) endGesture(self,button) end)
   grip:SetScript('OnHide',function() endGesture(self) end)
-  local saved=self.db.settings.auctionScale
-  local moveAnyLoaded=C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded('MoveAny')
-  if not moveAnyLoaded and not moveAnyControls(ah) and self:Finite(saved,.5,2.5) then ah:SetScale(saved) end
+  -- Any empty part of the Auction House (native tabs included) drags the
+  -- whole window. Hooks add to Blizzard handlers instead of replacing them.
+  if ah.HookScript then
+    ah:HookScript('OnMouseDown',function(_,button) if button=='LeftButton' then beginGesture(self,button) end end)
+    ah:HookScript('OnMouseUp',function(_,button) if button=='LeftButton' then endGesture(self,button) end end)
+    ah:HookScript('OnHide',function() endGesture(self) end)
+    ah:HookScript('OnSizeChanged',function() if self.auctionDock then pcall(fitDock,self) end end)
+  end
+  if not moveAnyLoaded(ah) then self:RestoreAuctionPosition() end
 end
 
 local function undock(self, page)
@@ -149,58 +207,66 @@ function M:InstallAuctionTabs()
     end)
   end
 
-  local previous = ah.Tabs[#ah.Tabs]
-  for _, section in ipairs(sections) do
-    local view, label = section.view, section.label
-    local id = 'VoidMarkMarket'..label
-    local page = CreateFrame('Frame', nil, ah)
-    page:SetPoint('TOPLEFT', ah, 'TOPLEFT', 8, -36)
-    page:SetPoint('BOTTOMRIGHT', ah, 'BOTTOMRIGHT', -8, 8)
-    page:Hide()
-    local errorLabel = page:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
-    errorLabel:SetPoint('CENTER')
-    errorLabel:SetWidth(500)
-    page:SetScript('OnShow', function()
-      errorLabel:SetText('')
-      local ok, reason = pcall(dock, self, page, view)
-      if not ok then
-        undock(self, page)
-        local message = label..' could not open: '..tostring(reason)
-        self:Log('AUCTION TAB', message)
-        errorLabel:SetText(message)
-      end
-    end)
-    page:SetScript('OnHide', function() undock(self, page) end)
-    local title = 'VoidMark Market - '..label
-    local button
-    if lib then
-      -- Share the same row manager when Auctionator (or another host) supplies it.
-      lib:CreateTab(id, page, 'VM '..label, title)
-      button = lib:GetButton(id)
-    else
-      button = CreateFrame('Button', id..'Tab', ah, 'AuctionHouseFrameDisplayModeTabTemplate')
-      button:SetText(label)
-      PanelTemplates_TabResize(button, 14, nil, 70)
-      button:SetPoint('TOPLEFT', previous, 'TOPRIGHT', 3, 0)
-      PanelTemplates_DeselectTab(button)
-      button:SetScript('OnClick', function()
-        ah:SetDisplayMode({})
-        for _, native in ipairs(ah.Tabs) do PanelTemplates_DeselectTab(native) end
-        PanelTemplates_SelectTab(button)
-        ah:SetTitle(title)
-        page:Show()
-      end)
-      previous = button
+  local page = CreateFrame('Frame', nil, ah)
+  page:SetPoint('TOPLEFT', ah, 'TOPLEFT', 8, -36)
+  page:SetPoint('BOTTOMRIGHT', ah, 'BOTTOMRIGHT', -8, 8)
+  page:Hide()
+  -- The margins around the docked window also drag the whole AH.
+  page:EnableMouse(true)
+  page:SetScript('OnMouseDown',function(_,button) if button=='LeftButton' then beginGesture(self,button) end end)
+  page:SetScript('OnMouseUp',function(_,button) if button=='LeftButton' then endGesture(self,button) end end)
+  local errorLabel = page:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+  errorLabel:SetPoint('CENTER')
+  errorLabel:SetWidth(500)
+  page:SetScript('OnShow', function()
+    errorLabel:SetText('')
+    local ok, reason = pcall(dock, self, page, self:AuctionStartView())
+    if not ok then
+      undock(self, page)
+      local message = 'VoidMark Market could not open: '..tostring(reason)
+      self:Log('AUCTION TAB', message)
+      errorLabel:SetText(message)
     end
-    tabs[#tabs+1] = {button=button, page=page}
+  end)
+  page:SetScript('OnHide', function() endGesture(self); undock(self, page) end)
+  local title = 'VoidMark Market'
+  local button
+  if lib then
+    -- Share the same row manager when Auctionator (or another host) supplies it.
+    lib:CreateTab(TAB_ID, page, TAB_LABEL, title)
+    button = lib:GetButton(TAB_ID)
+  else
+    button = CreateFrame('Button', TAB_ID, ah, 'AuctionHouseFrameDisplayModeTabTemplate')
+    button:SetText(TAB_LABEL)
+    PanelTemplates_TabResize(button, 14, nil, 70)
+    button:SetPoint('TOPLEFT', ah.Tabs[#ah.Tabs], 'TOPRIGHT', 3, 0)
+    PanelTemplates_DeselectTab(button)
+    button:SetScript('OnClick', function()
+      ah:SetDisplayMode({})
+      for _, native in ipairs(ah.Tabs) do PanelTemplates_DeselectTab(native) end
+      PanelTemplates_SelectTab(button)
+      ah:SetTitle(title)
+      page:Show()
+    end)
   end
+  tabs[1] = {button=button, page=page}
   self.auctionTabs = tabs
 end
 
 local function installAfterOpen()
   -- Blizzard creates the AH on demand. Let its opening handlers finish first.
-  if C_Timer and C_Timer.After then C_Timer.After(0, function() M:InstallAuctionTabs() end)
-  else M:InstallAuctionTabs() end
+  if C_Timer and C_Timer.After then
+    C_Timer.After(0, function()
+      local first = not M.auctionTabs
+      M:InstallAuctionTabs()
+      -- The UI panel manager re-anchors the AH on every open.
+      if not first and AuctionHouseFrame and not moveAnyLoaded(AuctionHouseFrame) then M:RestoreAuctionPosition() end
+    end)
+  else
+    local first = not M.auctionTabs
+    M:InstallAuctionTabs()
+    if not first and AuctionHouseFrame and not moveAnyLoaded(AuctionHouseFrame) then M:RestoreAuctionPosition() end
+  end
 end
 M:RegisterHandler('AUCTION_HOUSE_SHOW', installAfterOpen)
 
@@ -209,4 +275,3 @@ M:RegisterHandler('AUCTION_HOUSE_SHOW', installAfterOpen)
 if EventUtil and EventUtil.ContinueOnAddOnLoaded then
   EventUtil.ContinueOnAddOnLoaded('Blizzard_AuctionHouseUI', installAfterOpen)
 end
-

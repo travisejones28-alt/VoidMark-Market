@@ -53,24 +53,55 @@ function M:TooltipMarketForLink(link)
  local key=self:LinkIdentity(link)
  return key and self:PriceObservation(key)
 end
-function M:AppendMarketTooltip(tip,link)
- local p=self:TooltipMarketForLink(link);if not p then return end
+local function bindBlocksAuction(link)
+ local info=C_Item and C_Item.GetItemInfo or GetItemInfo
+ if not info then return false end
+ local ok,_,_,_,_,_,_,_,_,_,_,_,_,_,bind=pcall(info,link)
+ return ok and (bind==1 or bind==4) -- bind on pickup / quest items never reach the AH
+end
+function M:TooltipAgeText(at)
+ local age=math.max(0,time()-at)
+ return age>=86400 and math.floor(age/86400)..'d' or age>=3600 and math.floor(age/3600)..'h' or math.max(1,math.floor(age/60))..'m'
+end
+-- Compact: price per unit, optional stack total, one source/age line and the
+-- historical estimate only while the observation is current.
+function M:AppendMarketTooltip(tip,link,count)
+ if not self.db or not tip then return end
+ local key=self:LinkIdentity(link)
+ if not key then return end -- unresolved variant: never borrow another variant's price
+ local p=self:PriceObservation(key)
+ if not p then
+  if self.db.settings.tooltipNoData~=false and not bindBlocksAuction(link) then
+   tip:AddDoubleLine('VoidMark Market','No AH price yet',.76,.56,1,.6,.6,.6)
+  end
+  return
+ end
  local age=math.max(0,time()-p.at)
- local ageText=age>=86400 and math.floor(age/86400)..'d' or age>=3600 and math.floor(age/3600)..'h' or math.floor(age/60)..'m'
- tip:AddLine('VoidMark Market',.76,.56,1)
- tip:AddDoubleLine('Observed AH / unit',self:Money(p.floor),.95,.95,.95,1,.85,.4)
- tip:AddLine(p.source..' | '..ageText..' old | '..self:SyncTime(p.at),.75,.8,.85)
- if age>self.db.settings.maxDataAge or p.unverified then tip:AddLine('STALE / UNVERIFIED',1,.4,.3)
- else
-  if p.fair then tip:AddDoubleLine('Market estimate',self:Money(p.fair),.75,.8,.85,.75,.8,.85) end
-  if p.confidence then
-   tip:AddLine('Model confidence: '..math.floor(p.confidence+0.5)..'%',.75,.8,.85)
-  else
-   tip:AddLine('Model confidence: not yet shared',.75,.8,.85)
-  end
-  if p.developing or not p.confidence then
-   tip:AddLine('Developing Market - estimate is provisional',1,.75,.3)
-  end
+ local stale=age>self.db.settings.maxDataAge or p.unverified
+ tip:AddDoubleLine('VoidMark AH / unit',self:Money(p.floor),.76,.56,1,1,.85,.4)
+ count=tonumber(count)
+ if count and count>1 and count%1==0 and count<=10000 then
+  tip:AddDoubleLine('  Stack of '..count,self:Money(p.floor*count),.75,.8,.85,1,.85,.4)
+ end
+ local state=stale and '|cffff6655STALE / UNVERIFIED|r' or '|cff72e7aaCURRENT|r'
+ tip:AddLine(state..' '..p.source..' | '..self:TooltipAgeText(p.at)..' old',.75,.8,.85)
+ if not stale and p.fair then
+  local note=p.confidence and (' ('..math.floor(p.confidence+0.5)..'%)') or ''
+  if p.developing or not p.confidence then note=note..' provisional' end
+  tip:AddDoubleLine('Market estimate'..note,self:Money(p.fair),.75,.8,.85,.75,.8,.85)
+ end
+end
+-- Stack size of the hovered bag slot, when the tooltip owner is a bag button.
+function M:TooltipStackCount(tip)
+ local owner=tip and tip.GetOwner and tip:GetOwner()
+ if type(owner)~='table' or not owner.GetID then return end
+ local slot=owner:GetID()
+ local bag=owner.GetBagID and owner:GetBagID() or (owner.GetParent and owner:GetParent() and owner:GetParent().GetID and owner:GetParent():GetID())
+ if type(bag)~='number' or type(slot)~='number' then return end
+ if C_Container and C_Container.GetContainerItemInfo then
+  local info=C_Container.GetContainerItemInfo(bag,slot);return type(info)=='table' and info.stackCount or nil
+ elseif GetContainerItemInfo then
+  local _,count=GetContainerItemInfo(bag,slot);return count
  end
 end
 function M:InitializePriceTooltips()
@@ -78,13 +109,17 @@ function M:InitializePriceTooltips()
  self.tooltipHooked=true
  local function append(tip)
   if not tip or not tip.GetItem then return end
-  local _,link=tip:GetItem();if link then self:AppendMarketTooltip(tip,link) end
+  local _,link=tip:GetItem()
+  if link then
+   local ok,count=pcall(self.TooltipStackCount,self,tip)
+   self:AppendMarketTooltip(tip,link,ok and count or nil)
+  end
  end
  if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType and Enum.TooltipDataType.Item then
   TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item,function(tip) pcall(append,tip) end)
  else
   for _,tip in pairs({GameTooltip,ItemRefTooltip,ShoppingTooltip1,ShoppingTooltip2}) do
-   if tip.HookScript then pcall(tip.HookScript,tip,'OnTooltipSetItem',append) end
+   if tip.HookScript then pcall(tip.HookScript,tip,'OnTooltipSetItem',function(t) pcall(append,t) end) end
   end
  end
 end

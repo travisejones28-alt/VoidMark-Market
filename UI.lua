@@ -1,6 +1,6 @@
 local _,M=...
-local tabs={{'SHOPPING','browse'},{'SELLING','selling'},{'CANCELING','my auctions'},
- {'VENDOR DEALS','vendor'},{'CRAFTING','crafting'},{'TOOLS','tools'}}
+local tabs={{'SHOPPING','browse'},{'SELLING','selling'},{'CANCELING','my auctions'},{'SCANNING','market'},
+ {'HISTORY','banker'},{'VENDOR','vendor'},{'CRAFTING','crafting'},{'SETTINGS','settings'},{'TOOLS','tools'}}
 local function label(parent,text,x,y,w,font)
   local f=parent:CreateFontString(nil,'OVERLAY',font or 'GameFontNormalSmall'); f:SetPoint('TOPLEFT',x,y)
   if w then f:SetWidth(w) end; f:SetJustifyH('LEFT'); f:SetText(text); return f
@@ -15,6 +15,7 @@ end
 function M:SetView(view)
   if self.view~=view and view~='shopping' then self.selectedRow=nil end
   self.view=view; self.page=1; if self.window then self.window:Show() end
+  if self.RememberAuctionView then self:RememberAuctionView(view) end
   if view=='goldmaking' and self.RebuildGoldmaking then self:RebuildGoldmaking() end
   if view=='selling' or view=='post review' then self:RefreshInventory()
   elseif view=='browse' then self:BuildBrowseRows(self.db.settings.filter or '') end; self:RefreshUI()
@@ -36,7 +37,7 @@ function M:InitializeUI()
   button(f,'TRANSFER',860,-12,125,function() self:ShowTransferWindow() end)
   button(f,'X',995,-12,26,function() self:CloseMarketWindow() end)
   self.navigation={}
-  for i,v in ipairs(tabs) do local tab=v[2];self.navigation[tab]=button(f,v[1],18+(i-1)*166,-48,160,function() self:SetView(tab) end) end
+  for i,v in ipairs(tabs) do local tab=v[2];self.navigation[tab]=button(f,v[1],18+(i-1)*111,-48,107,function() self:SetView(tab) end) end
   self.syncFrame=CreateFrame('Frame',nil,f);self.syncFrame:SetPoint('TOPLEFT',18,-151);self.syncFrame:SetSize(1000,465)
   self.syncReport=label(self.syncFrame,'',0,-70,960)
   button(self.syncFrame,'RECONNECT',0,0,130,function() self:ReconnectSharing(false) end)
@@ -240,7 +241,10 @@ function M:InitializeUI()
   self.settingsFrame=CreateFrame('Frame',nil,f); self.settingsFrame:SetPoint('TOPLEFT',18,-151); self.settingsFrame:SetSize(998,460)
   button(self.settingsFrame,'SCALE -',0,-425,100,function() self:ChangeWindowScale(-0.05) end)
   button(self.settingsFrame,'SCALE +',108,-425,100,function() self:ChangeWindowScale(0.05) end)
-  button(self.settingsFrame,'RESET WINDOW',216,-425,150,function() if self.auctionDock then return end;self.db.settings.window=nil;self.window:ClearAllPoints();self.window:SetPoint('CENTER');self:ChangeWindowScale(0,true) end)
+  button(self.settingsFrame,'RESET WINDOW',216,-425,150,function()
+    if self.auctionDock then self:ResetAuctionLayout();return end
+    self.db.settings.window=nil;self.window:ClearAllPoints();self.window:SetPoint('CENTER');self:ChangeWindowScale(0,true)
+  end)
   local settings={
     {'maxTransaction','Maximum transaction (gold)',10000},{'maxItemSpend','Maximum per-item exposure (gold)',10000},
     {'maxExposure','Maximum portfolio exposure (gold)',10000},{'maxQuantity','Maximum quantity',1},
@@ -373,13 +377,13 @@ function M:RenderUI()
     text=text..self:FinancialSummaryText()..'\n\n'
     text=text..'Cost-matched realized '..self:Money(totals.realized)..' | verified net sale revenue '..self:Money(totals.revenue)..'\n'..
       'Portfolio liquidation uses fresh models with sufficient history/confidence. Unproven positions remain unpriced.\n'..
-      'Scan results are advisory. Select SNIPER for live revalidation; SELL lets you review and post bag items.\n'..
-      'Use BANKER to review scan changes and SHOPPING for saved price targets. /vmm report opens diagnostics.'
+      'Scan results are advisory. SHOPPING checks live prices before buying; SELLING reviews and posts bag items.\n'..
+      'HISTORY shows scan changes and watch alerts. /vmm report opens diagnostics.'
   elseif view=='banker' then
     local summary=self:GetBankerSummary()
     local banker=summary.scanner or {}
     local scan=summary.latestScan
-    local lines={'|cffffffffBANKER WORKSTATION - PLAYER-CONTROLLED|r','',
+    local lines={'|cffffffffPRICE HISTORY|r','',
       'Liquid reserve '..self:Money(summary.reserve)..' | Available after reserve/pending '..self:Money(summary.available),
       'Portfolio positions '..summary.portfolio.positions..' | Unpriced cost '..self:Money(summary.portfolio.unvaluedCost),
       'Estimated unrealized net '..self:Money(summary.portfolio.unrealized)..' (fresh models only)',
@@ -387,7 +391,7 @@ function M:RenderUI()
       'Latest published snapshot: '..(scan and date('%Y-%m-%d %H:%M',scan.completedAt or time()) or 'none'),
       'New passing opportunities since previous FRESH completed scan: '..#(banker.new or {})}
     for i,o in ipairs(banker.new or {}) do
-      if i>12 then lines[#lines+1]='...more candidates on SNIPER';break end
+      if i>12 then lines[#lines+1]='...more candidates in Tools > Flip opportunities';break end
       lines[#lines+1]=tostring(o.name)..' | rank '..tostring(o.score)
     end
     lines[#lines+1]=''
@@ -397,7 +401,7 @@ function M:RenderUI()
       lines[#lines+1]=tostring(a.name)..' | '..self:PercentText(a.change)..' | '..self:Money(a.price)..(a.target and ' TARGET CROSSED' or '')
     end
     lines[#lines+1]='Cached analyses do not create independent history or new opportunity alerts.'
-    lines[#lines+1]='No unattended scans or transactions. Open AH and click FULL SCAN when cooldown permits.'
+    lines[#lines+1]='No unattended transactions. Open the AH and click SCAN AUCTION HOUSE when the cooldown permits.'
     text=table.concat(lines,'\n')
   else
     local source,headers={},{'Name','Ask','Fair','Net','ROI','Score','Confidence','Liquidity'}
@@ -475,10 +479,10 @@ function M:RenderUI()
       end
     end
     local o=self.selectedRow
-    if view=='vendor' then self.detail:SetText('Click FULL SCAN to find auctions below their vendor sell value. Sorted by total vendor profit; includes small deals regardless of sniper filters.\nUnits and totals include only profitable whole stacks, excluding your own listings. Partial depth totals are a lower bound.\nClick an item, then REVALIDATE to check current prices before buying. Purchase limits still apply.\nNo results? Run a fresh scan; items without a known vendor value are omitted.')
+    if view=='vendor' then self.detail:SetText('Click SCAN AUCTION HOUSE to find auctions below their vendor sell value. Sorted by total vendor profit; includes small deals regardless of sniper filters.\nUnits and totals include only profitable whole stacks, excluding your own listings. Partial depth totals are a lower bound.\nClick an item, then CHECK PRICE to see current listings before buying. Purchase limits still apply.\nNo results? Run a fresh scan; items without a known vendor value are omitted.')
     elseif view=='opportunities' then self.detail:SetText('Select a row to inspect economics and revalidate live prices. Vendor opportunities have a separate model.\nResale rankings weigh absolute profit, ROI, confidence, inferred liquidity, depth, volatility and capital exposure.\nA snapshot opportunity may fail current limits or disappear before you buy. Live prices expire after 10 seconds.')
     elseif view=='review' then
-      self.detail:SetText('This is an advisory purchase REVIEW QUEUE, not a transaction queue.\nItems with REVALIDATE can be clicked to inspect, but the live purchase still needs complete search validation and a permitted user click.\nRECHECK items have stale/blocked/missing market data. They remain saved until you remove them.')
+      self.detail:SetText('This is an advisory purchase REVIEW QUEUE, not a transaction queue.\nItems marked REVALIDATE can be clicked to inspect, but the live purchase still needs complete search validation and a permitted user click.\nRECHECK items have stale/blocked/missing market data. They remain saved until you remove them.')
     elseif view=='shopping' then
       self.detail:SetText('List: '..self.activeList..' | Select an item to update or remove its target. Enter a base item ID and target in gold below.\nTargets only flag fresh cached asking prices; no automatic purchases.')
     elseif view=='investments' then

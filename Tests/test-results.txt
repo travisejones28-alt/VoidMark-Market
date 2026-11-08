@@ -144,4 +144,8 @@ PASS Shared stack prices round up fractional copper and publish scan-completion 
 PASS Sync accepts realm display spaces but rejects another realm or faction
 PASS Simple trading uses item-name search, list sidebar, useful empty states and separate tools
 PASS Saved shopping results use received prices and keep target-based buying available
-ALL 145 TESTS PASSED
+PASS 1.7 tooltip shows per-unit, stack total, current/stale state and a no-data line
+PASS 1.7 sync catch-up offers older trusted prices and re-seeds existing journals once
+PASS 1.7 sync skips a revision too large for one message instead of stalling, and retries throttled pages
+PASS 1.7 navigation exposes Shopping, Selling, Scanning, History and Settings; Safe Mode is gone
+ALL 149 TESTS PASSED
