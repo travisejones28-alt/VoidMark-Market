@@ -157,4 +157,13 @@ M:RegisterHandler('TRADE_SKILL_SHOW',function(self) self:CaptureProfession() end
 M:RegisterHandler('TRADE_SKILL_LIST_UPDATE',function(self) self:CaptureProfession() end)
 M:RegisterHandler('TRADE_SKILL_CLOSE',function(self) self:CancelJob('recipes') end)
 M:RegisterHandler('MERCHANT_SHOW',function(self) self:CaptureVendorMaterials() end)
-M:RegisterHandler('BAG_UPDATE_DELAYED',function(self) if self.db then self:RebuildCrafting() end end)
+-- Bag changes (looting, gathering) used to rebuild every recipe each time.
+-- Now crafting is only marked stale; it rebuilds when a crafting screen shows.
+local craftViews={crafting=true,goldmaking=true,materials=true}
+M:RegisterHandler('BAG_UPDATE_DELAYED',function(self)
+ if not self.db then return end
+ if craftViews[self.view] and self.window and self.window:IsShown() then self:RebuildCrafting() else self.craftingStale=true end
+end)
+function M:RebuildCraftingIfStale(view)
+ if craftViews[view] and self.craftingStale then self.craftingStale=nil;self:RebuildCrafting() end
+end

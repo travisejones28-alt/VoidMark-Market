@@ -281,16 +281,25 @@ function M:WarmItemNames()
 end
 function M:ItemNameTick()
  local w=self.nameWarm
- if w and GetTime()>=w.nextAt then
-  w.nextAt=GetTime()+0.2
+ local shown=self.window and self.window:IsShown()
+ -- Loading item data makes the game (and other addons) do work per item, so
+ -- names load only while Shopping is open and out of combat: 5 every 0.5s,
+ -- each item asked for at most once per session.
+ local allowed=shown and self.view=='browse' and not (InCombatLockdown and InCombatLockdown())
+ if w and allowed and GetTime()>=w.nextAt then
+  w.nextAt=GetTime()+0.5
   local load=C_Item and C_Item.RequestLoadItemDataByID
-  for _=1,20 do
+  self.nameAsked=self.nameAsked or {}
+  local sent=0
+  while sent<5 do
    w.i=w.i+1;local id=w.ids[w.i]
    if not id then self.nameWarm=nil;break end
-   if not self:ItemName(id) and load then pcall(load,id);w.requested=w.requested+1 end
+   if not self.nameAsked[id] and not self:ItemName(id) and load then
+    self.nameAsked[id]=true;pcall(load,id);w.requested=w.requested+1;sent=sent+1
+   end
   end
  end
- if self.browseNamesDirty and GetTime()>=self.browseNamesDirty then
+ if self.browseNamesDirty and GetTime()>=self.browseNamesDirty and shown then
   self.browseNamesDirty=nil
   if self.view=='browse' and not self.shoppingListMode and (self.db.settings.filter or '')~='' and not self.queue.dedupe['browse-name'] then
    self:BuildBrowseRows(self.db.settings.filter)

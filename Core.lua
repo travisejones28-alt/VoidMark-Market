@@ -1,6 +1,6 @@
 local addonName, M = ...
 _G.VoidMarkMarket = M
-M.name, M.version = addonName or 'VoidMarkMarket', '1.9.3'
+M.name, M.version = addonName or 'VoidMarkMarket', '1.9.4'
 M.eventHandlers, M.runtimeLog, M.jobs = {}, {}, {}
 M.ahOpen = false
 M.scanState = {running=false, phase='idle', status='No scan yet', progress=0}
@@ -141,28 +141,58 @@ M.eventFrame:SetScript('OnEvent',function(_,event,...)
   end
   if event=='AUCTION_HOUSE_DISABLED' then event='AUCTION_HOUSE_CLOSED' end
   local args={...}
+  local t0=M.perf and debugprofilestop()
   for _,fn in ipairs(M.eventHandlers[event] or {}) do
     local ok,err=pcall(fn,M,event,unpack(args)); if not ok then M:Log('EVENT ERROR',event..': '..tostring(err)) end
   end
+  if t0 then M:PerfAdd(event,debugprofilestop()-t0) end
 end)
+-- /vmm perf: 10 seconds of VoidMark Market CPU use by event and update step.
+function M:PerfAdd(name,ms)
+  local p=self.perf;if not p then return end
+  local e=p.items[name] or {total=0,max=0,count=0};p.items[name]=e
+  e.total=e.total+ms;e.count=e.count+1;if ms>e.max then e.max=ms end
+end
+function M:StartPerf(seconds)
+  self.perf={items={},started=GetTime(),until_=GetTime()+(seconds or 10)}
+  self:Print('Measuring VoidMark Market CPU for '..(seconds or 10)..' seconds...')
+end
+function M:FinishPerf()
+  local p=self.perf;self.perf=nil;if not p then return end
+  local list,total={},0
+  for k,e in pairs(p.items) do list[#list+1]={k,e};total=total+e.total end
+  table.sort(list,function(a,b) return a[2].total>b[2].total end)
+  local span=math.max(1,GetTime()-p.started)
+  self:Print(('CPU: %.1f ms/s total over %ds'):format(total/span,span))
+  for i=1,math.min(6,#list) do
+    local k,e=list[i][1],list[i][2]
+    self:Print(('  %s: %.1f ms/s, worst %.1f ms, %d calls'):format(k,e.total/span,e.max,e.count))
+  end
+end
 local tick=0
 M.eventFrame:SetScript('OnUpdate',function(_,elapsed)
   if not M.db then return end
-  if next(M.jobs) then M:RunJobs() end; tick=tick+elapsed
+  local p=M.perf;local t=p and debugprofilestop()
+  local function mark(name) if p then local now=debugprofilestop();M:PerfAdd(name,now-t);t=now end end
+  if next(M.jobs) then M:RunJobs();mark('jobs') end; tick=tick+elapsed
   if tick<0.1 then return end; tick=0
-  M:PumpQueue(); M:ExecutionTick(); M:PumpSharing()
+  M:PumpQueue(); M:ExecutionTick();mark('queue'); M:PumpSharing();mark('sync')
   if M.liveBrowse and M.liveBrowse.received and not M.liveBrowse.expired and GetTime()-M.liveBrowse.received>10 then
     M.liveBrowse.expired=true;M:RefreshUI()
   end
-  if M.bagsDirty and M.view=='selling' then M.bagsDirty=false; M:RefreshInventory() end
-  if M.ItemNameTick then M:ItemNameTick() end
-  if M.uiDirty and M.RenderUI then M:RenderUI() end
+  -- Bag pricing only while Selling is on screen (it used to re-run with the
+  -- window closed whenever item data loaded).
+  if M.bagsDirty and M.view=='selling' and M.window and M.window:IsShown() then M.bagsDirty=false; M:RefreshInventory();mark('bags') end
+  if M.ItemNameTick then M:ItemNameTick();mark('names') end
+  if M.uiDirty and M.RenderUI then M:RenderUI();mark('render') end
+  if p and GetTime()>=p.until_ then M:FinishPerf() end
 end)
 SLASH_VOIDMARKMARKET1='/vmm'; SLASH_VOIDMARKMARKET2='/voidmarkmarket'
 SlashCmdList.VOIDMARKMARKET=function(msg)
   local raw=(msg or ''):match('^%s*(.-)%s*$')
   msg=raw:lower()
   if msg=='peer' or msg:match('^peer%s') then M:Print(M:PairPeer(raw:match('^%S+%s+(.+)$')))
+  elseif msg=='perf' then M:StartPerf(10)
   elseif msg=='version' then M:Print('Version '..M.version..' | sync partner: '..tostring(M.db.syncPeer or 'not paired'))
   elseif msg=='scan' then M:RequestFreshScan()
   elseif msg=='cached' then M:AnalyzeCachedSnapshot()

@@ -1,3 +1,11 @@
+## 1.9.4
+Low-FPS fix.
+- **Item-name lookups** (1.9.0) asked the game for 100 items a second in the background, all the time. Each one makes the game and other addons do work, and each also re-priced your whole bag list. Now names load only while the Shopping screen is open and you're out of combat, 5 every half second, each item once per session.
+- **Bag pricing** re-ran with the window closed whenever item data loaded, if Selling was the last screen. It now runs only while Selling is on screen.
+- **Crafting** rebuilt every recipe on every bag change (looting, gathering). It now waits until a crafting screen is opened.
+- **`/vmm perf`** measures VoidMark Market's CPU use for 10 seconds and prints the busiest parts.
+- 171 regressions.
+
 ## 1.9.3
 - **Live-search prices sync too.** A price seen in a live search (shopping, selling check, undercut check, name search) is sent to the partner like a scan price, without an estimate, so the partner's history and its age are unchanged. Unchanged prices repeat at most every 30 minutes. Settings key `shareLivePrices=false` turns it off.
 - **Optional one-click posting.** Selling has an "Ask before posting" box (ticked by default). Untick it and Post posts straight away, like Auctionator; the slot, quantity, price-check and deposit checks still run.

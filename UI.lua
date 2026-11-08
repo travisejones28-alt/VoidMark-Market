@@ -16,6 +16,7 @@ function M:SetView(view)
   if self.view~=view and view~='shopping' then self.selectedRow=nil end
   self.view=view; self.page=1; if self.window then self.window:Show() end
   if self.RememberAuctionView then self:RememberAuctionView(view) end
+  if self.RebuildCraftingIfStale then self:RebuildCraftingIfStale(view) end
   if view=='goldmaking' and self.RebuildGoldmaking then self:RebuildGoldmaking() end
   if view=='selling' or view=='post review' then self:RefreshInventory()
   elseif view=='browse' then self:BuildBrowseRows(self.db.settings.filter or '') end; self:RefreshUI()

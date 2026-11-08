@@ -104,7 +104,13 @@ function M:AnalyzeOwnedLive(row)
   end)
 end
 M:RegisterHandler('BAG_UPDATE_DELAYED',function(self) self.bagsDirty=true end)
-M:RegisterHandler('GET_ITEM_INFO_RECEIVED',function(self) self.bagsDirty=true end)
+M:RegisterHandler('GET_ITEM_INFO_RECEIVED',function(self,_,id)
+  if self.view~='selling' or not (self.window and self.window:IsShown()) then return end
+  id=tonumber(id)
+  for _,r in ipairs(self.sellingRows or {}) do
+    if r.itemID==id and type(r.name)=='string' and r.name:match('^Item %d') then self.bagsDirty=true;return end
+  end
+end)
 M:RegisterHandler('AUCTION_CANCELED',function(self,_,id)
   self:AddLedger('cancelled',{auctionID=id,status='observed',evidence='Observed AUCTION_CANCELED; lost deposit unknown'})
 end)

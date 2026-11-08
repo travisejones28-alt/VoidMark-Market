@@ -213,4 +213,36 @@ check('1.9.3 live-search prices reach the partner without touching its estimate;
  M.sellScreen.confirm:SetChecked(false);M.sellScreen.confirm.scripts.OnClick(M.sellScreen.confirm);assert(M.db.settings.confirmPosts==false)
  M.sellScreen.confirm:SetChecked(true);M.sellScreen.confirm.scripts.OnClick(M.sellScreen.confirm);assert(M.db.settings.confirmPosts==true)
 end)
+
+check('1.9.4 no background bag, crafting or item-name work while the window is closed; /vmm perf reports',function()
+ reset();M.view='selling';M.window:Hide()
+ local inv,craft=0,0;local oldInv,oldCraft=M.RefreshInventory,M.RebuildCrafting
+ M.RefreshInventory=function() inv=inv+1 end;M.RebuildCrafting=function() craft=craft+1 end
+ M.sellingRows={{itemID=5,name='Item 5'}}
+ emit('GET_ITEM_INFO_RECEIVED',5,true);emit('BAG_UPDATE_DELAYED')
+ for _=1,5 do advance(0.2);M.eventFrame.scripts.OnUpdate(M.eventFrame,0.2) end
+ assert(inv==0 and craft==0 and M.craftingStale)
+ -- Opening a crafting screen rebuilds once.
+ M:SetView('crafting');assert(craft==1 and not M.craftingStale)
+ -- Selling on screen: an unnamed bag item loading refreshes bags; others don't.
+ M:SetView('selling');inv=0;M.sellingRows={{itemID=5,name='Item 5'},{itemID=6,name='Ore'}};M.bagsDirty=false
+ emit('GET_ITEM_INFO_RECEIVED',6,true);assert(not M.bagsDirty)
+ emit('GET_ITEM_INFO_RECEIVED',5,true);assert(M.bagsDirty)
+ M.RefreshInventory,M.RebuildCrafting=oldInv,oldCraft
+ -- Name lookups wait for the Shopping screen and ask for each item once.
+ local asked=0;local oldItem=C_Item;C_Item={GetItemNameByID=function() return nil end,RequestLoadItemDataByID=function() asked=asked+1 end}
+ for i=1,12 do M.db.sharedPrices[80000+i]={id=80000+i,key=80000+i,floor=1,at=time()} end
+ M.nameWarm=nil;M.nameAsked=nil;M:WarmItemNames();M.window:Hide()
+ for _=1,4 do advance(1);M:ItemNameTick() end;assert(asked==0)
+ M:SetView('browse')
+ advance(1);M:ItemNameTick();assert(asked==5)
+ advance(0.2);M:ItemNameTick();assert(asked==5) -- paced
+ for _=1,5 do advance(1);M:ItemNameTick() end;assert(asked==12)
+ M:WarmItemNames();for _=1,5 do advance(1);M:ItemNameTick() end;assert(asked==12) -- never asked twice
+ C_Item=oldItem
+ -- /vmm perf collects and reports.
+ local printed={};local oldPrint=M.Print;M.Print=function(_,s) printed[#printed+1]=s end
+ M:StartPerf(1);emit('BAG_UPDATE_DELAYED');advance(2);M.eventFrame.scripts.OnUpdate(M.eventFrame,0.2)
+ M.Print=oldPrint;assert(not M.perf and table.concat(printed,'\n'):find('ms/s',1,true))
+end)
 end
