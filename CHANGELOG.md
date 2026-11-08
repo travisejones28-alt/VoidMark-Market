@@ -1,3 +1,10 @@
+## 1.9.5
+Selling fixes from in-game testing.
+- **Posts everything in your bags, not one stack.** Quantity and Max now use every unit of the item across your bags (e.g. 3 x 20 Linen = 60), the same way Auctionator does; non-stacking items become several auctions in one post. Previously non-commodity items were capped at the first stack. An old saved stack size (from the removed "save stack" box) no longer limits it. Typing a quantity keeps it.
+- **No more "Bag slot changed, locked or bound" right after a post.** Market waits for the bags to update, selects the next item, then checks its price. A slot that is still locked is retried quietly.
+- **Closing the AH during a price check** no longer leaves "Checking live price..." on screen.
+- 172 regressions.
+
 ## 1.9.4
 Low-FPS fix.
 - **Item-name lookups** (1.9.0) asked the game for 100 items a second in the background, all the time. Each one makes the game and other addons do work, and each also re-priced your whole bag list. Now names load only while the Shopping screen is open and you're out of combat, 5 every half second, each item once per session.

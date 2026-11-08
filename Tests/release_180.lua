@@ -98,9 +98,9 @@ check('1.8 selecting a bag item checks the live price, fills the undercut and po
   M:SelectSellRow(row,true);assert(M.postQuote and M.postQty:GetText()=='20')
   serve()
   assert(M.postQuote.floor==1200 and M:GetPostPrice()==1199 and M.postSilver:GetText()=='11' and M.postCopper:GetText()=='99' and M.postQty:GetText()=='55')
-  -- A saved stack preference is kept.
+  -- 1.9.5: an old saved stack size (no longer editable) no longer caps the post.
   M.db.sellStacks[9601]=10;M.selectedRow=nil;M:SelectSellRow(row,true);serve()
-  assert(M.postQty:GetText()=='10')
+  assert(M.postQty:GetText()=='55')
  end)
  ItemLocation=loc;C_Container=con
 end)
@@ -111,7 +111,12 @@ check('1.8 after a post the next bag item is selected and checked',function()
  M.sellingRows={a,b};M.postingRow=a
  local checked;local old=M.CheckPost;M.CheckPost=function(_,r) checked=r end
  local refresh=M.RefreshInventory;M.RefreshInventory=function(self) self:AfterPostRefresh({b}) end
+ M.ahOpen=true;M.window:Show()
  emit('AUCTION_HOUSE_AUCTION_CREATED',5)
+ assert(M.bagsDirty and not checked) -- 1.9.5: waits for the bags to settle
+ M.eventFrame.scripts.OnUpdate(M.eventFrame,0.2)
+ assert(M.selectedRow==b and not checked) -- selected now, price checked a moment later
+ advance(1);M.eventFrame.scripts.OnUpdate(M.eventFrame,0.2)
  M.CheckPost=old;M.RefreshInventory=refresh
  assert(M.selectedRow==b and checked==b and not M.postingRow)
  -- No post in flight: creation events never move the selection.

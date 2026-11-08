@@ -1,6 +1,6 @@
 local addonName, M = ...
 _G.VoidMarkMarket = M
-M.name, M.version = addonName or 'VoidMarkMarket', '1.9.4'
+M.name, M.version = addonName or 'VoidMarkMarket', '1.9.5'
 M.eventHandlers, M.runtimeLog, M.jobs = {}, {}, {}
 M.ahOpen = false
 M.scanState = {running=false, phase='idle', status='No scan yet', progress=0}
@@ -184,6 +184,7 @@ M.eventFrame:SetScript('OnUpdate',function(_,elapsed)
   -- window closed whenever item data loaded).
   if M.bagsDirty and M.view=='selling' and M.window and M.window:IsShown() then M.bagsDirty=false; M:RefreshInventory();mark('bags') end
   if M.ItemNameTick then M:ItemNameTick();mark('names') end
+  if M.SellTick then M:SellTick() end
   if M.uiDirty and M.RenderUI then M:RenderUI();mark('render') end
   if p and GetTime()>=p.until_ then M:FinishPerf() end
 end)

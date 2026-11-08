@@ -245,4 +245,39 @@ check('1.9.4 no background bag, crafting or item-name work while the window is c
  M:StartPerf(1);emit('BAG_UPDATE_DELAYED');advance(2);M.eventFrame.scripts.OnUpdate(M.eventFrame,0.2)
  M.Print=oldPrint;assert(not M.perf and table.concat(printed,'\n'):find('ms/s',1,true))
 end)
+
+check('1.9.5 three stacks post as one 60-unit post, a locked slot is retried, closing the AH ends "Checking"',function()
+ reset();M:InitializeUI();M:SetView('selling');M.ahOpen=true
+ local rows={{bag=0,slot=1,itemID=2589,itemLink='linen',name='Linen Cloth',quantity=20,marketKey=2589},
+  {bag=0,slot=2,itemID=2589,itemLink='linen',name='Linen Cloth',quantity=20,marketKey=2589},
+  {bag=0,slot=3,itemID=2589,itemLink='linen',name='Linen Cloth',quantity=20,marketKey=2589}}
+ M.sellingRows=rows
+ local loc,con=ItemLocation,C_Container;local locked=true
+ ItemLocation={CreateFromBagAndSlot=function() return {} end}
+ C_Container={GetContainerItemInfo=function(_,slot) return {itemID=2589,hyperlink='linen',stackCount=20,isLocked=locked and slot==1} end}
+ local old=C_AuctionHouse;local api=setmetatable({},{__index=old});C_AuctionHouse=api
+ local cur;api.IsThrottledMessageSystemReady=function() return true end
+ api.GetItemKeyFromItem=function() return {itemID=2589,itemSuffix=0,itemLevel=0,battlePetSpeciesID=0} end
+ api.GetItemKeyInfo=function() return {isCommodity=false} end
+ api.GetAvailablePostCount=function() return 60 end
+ api.HasSearchResults=function() return false end;api.SendSearchQuery=function(k) cur=k end
+ api.HasFullItemSearchResults=function() return true end;api.GetNumItemSearchResults=function() return 0 end
+ api.CalculateItemDeposit=function(_,_,n) return n end
+ local posted;api.PostItem=function(_,d,n,bid,unit) posted={d,n,unit};return false end
+ local printed={};local oldPrint=M.Print;M.Print=function(_,s) printed[#printed+1]=s end
+ local ok,err=pcall(function()
+  M:SelectSellRow(rows[1],true)
+  assert(M.postQty:GetText()=='60' and not M.postQuote and M.sellCheckAt and #printed==0) -- locked: retry, no error
+  locked=false;advance(1);M.eventFrame.scripts.OnUpdate(M.eventFrame,0.2)
+  assert(M.postQuote and not M.postQuote.at)
+  for _=1,5 do advance(1);M:PumpQueue();if cur then local k=cur;cur=nil;emit('ITEM_SEARCH_RESULTS_UPDATED',k);jobs() end end
+  assert(M.postQuote.at and M.postQty:GetText()=='60')
+  M:SetPostPrice(500);M.db.settings.confirmPosts=false;M:PostClicked()
+  assert(posted and posted[2]==60 and posted[3]==500)
+  -- Closing the AH mid-check leaves no stuck "Checking live price".
+  M.tradePending=nil;M.postQuote={row=rows[1]};emit('AUCTION_HOUSE_CLOSED');assert(M.postQuote==nil)
+ end)
+ M.Print=oldPrint;C_AuctionHouse=old;ItemLocation=loc;C_Container=con;M.db.settings.confirmPosts=nil
+ if not ok then error(err,0) end
+end)
 end

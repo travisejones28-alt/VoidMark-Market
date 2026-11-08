@@ -134,6 +134,10 @@ function M:InitializeSellScreen(f)
   e:SetScript('OnTextChanged',function() if self.sellScreen:IsShown() then self:UpdateSellSummary() end end)
   e:SetScript('OnEnterPressed',function(x) x:ClearFocus();self:PostClicked() end)
  end
+ self.postQty:SetScript('OnTextChanged',function(e,user)
+  if user and self.postQuote then self.postQuote.qtyTouched=true end
+  if self.sellScreen:IsShown() then self:UpdateSellSummary() end
+ end)
  label(h,'Duration',350,-14,80,'GameFontHighlight')
  s.durations={}
  for i,hours in ipairs({2,8,24}) do

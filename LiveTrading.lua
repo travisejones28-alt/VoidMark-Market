@@ -134,7 +134,7 @@ function M:SelectSellRow(row,check)
  if changed then
   self.postQuote=nil;self.sellListPage=1
   self:SetPostPrice(nil)
-  if self.postQty then self.postQty:SetText(tostring(math.min(row.quantity or 1,self.db.sellStacks[row.marketKey] or row.quantity or 1))) end
+  if self.postQty then self.postQty:SetText(tostring(math.max(1,tonumber(row.quantity) or 1,self:BagCount(row.marketKey,row.itemID)))) end
  end
  if check and changed and self.ahOpen and self.view=='selling' then self:CheckPost(row) end
  self:RefreshUI()
@@ -146,7 +146,22 @@ function M:AfterPostRefresh(rows)
  if #tiles==0 then return end
  self.selectedRow=nil
  local t=tiles[math.min(next,#tiles)]
- self:SelectSellRow(t.row or t,true)
+ -- Select now, check the price a moment later (bags settle after a post).
+ self:SelectSellRow(t.row or t,false)
+ self.sellCheckAt=GetTime()+0.75;self.sellCheckRow=t.row or t
+end
+function M:BagCount(key,itemID)
+ local n=0
+ for _,r in ipairs(self.sellingRows or {}) do
+  if (key~=nil and r.marketKey==key) or (key==nil and r.itemID==itemID) then n=n+(tonumber(r.quantity) or 0) end
+ end
+ return n
+end
+function M:SellTick()
+ if self.sellCheckAt and GetTime()>=self.sellCheckAt then
+  local row=self.sellCheckRow;self.sellCheckAt=nil;self.sellCheckRow=nil
+  if row and row==self.selectedRow and self.ahOpen and self.view=='selling' then self:CheckPost(row);self:RefreshUI() end
+ end
 end
 M:RegisterHandler('AUCTION_HOUSE_AUCTION_CREATED',function(self)
  local posted=self.postingRow;self.postingRow=nil
@@ -166,10 +181,14 @@ M:RegisterHandler('AUCTION_HOUSE_AUCTION_CREATED',function(self)
  self.selectAfterRefresh=self.selectAfterRefresh or 1
  self.selectedRow=nil;self.postQuote=nil
  self:SetPostPrice(nil)
- self:RefreshInventory()
+ self.bagsDirty=true -- refreshed on the next tick while Selling is shown
 end)
 for _,event in ipairs({'AUCTION_HOUSE_SHOW_ERROR','AUCTION_HOUSE_CLOSED'}) do
- M:RegisterHandler(event,function(self) self.postingRow=nil;self.selectAfterRefresh=nil end)
+ M:RegisterHandler(event,function(self,ev)
+  self.postingRow=nil;self.selectAfterRefresh=nil;self.sellCheckAt=nil
+  -- A price check cut off by closing the AH must not stay "Checking...".
+  if ev=='AUCTION_HOUSE_CLOSED' and self.postQuote and not self.postQuote.at then self.postQuote=nil;self:RefreshUI() end
+ end)
 end
 
 -- Cancelling ------------------------------------------------------------------

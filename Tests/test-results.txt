@@ -170,4 +170,5 @@ PASS 1.9.1 a minimum can be saved for an item this account never scanned; owned 
 PASS 1.9.1 sync keeps several pages in flight, rate-limits bytes and resends after a lost page
 PASS 1.9.3 live-search prices reach the partner without touching its estimate; one-click posting is opt-in
 PASS 1.9.4 no background bag, crafting or item-name work while the window is closed; /vmm perf reports
-ALL 171 TESTS PASSED
+PASS 1.9.5 three stacks post as one 60-unit post, a locked slot is retried, closing the AH ends "Checking"
+ALL 172 TESTS PASSED

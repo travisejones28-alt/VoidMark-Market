@@ -63,12 +63,23 @@ local function readBag(self,r)
  if commodity==nil then return nil,'Waiting for item classification' end
  local n=A.GetAvailablePostCount and A.GetAvailablePostCount(loc)
  if not whole(n,1e9) then return nil,'Item cannot currently be posted' end
- return {loc=loc,k=k,commodity=commodity,max=commodity and n or math.min(b.stackCount or 1,n)}
+ -- Like Auctionator: one post can use every unit in the bags (items become
+ -- several auctions), capped by what the AH says can be posted.
+ local total=self:BagCount(r.marketKey,b.itemID)
+ return {loc=loc,k=k,commodity=commodity,max=math.max(1,math.min(n,total>0 and total or n))}
 end
 M.readBag=readBag
 function M:CheckPost(row)
  self.postQuote=nil
- local b,e=readBag(self,row);if not b then self:Print(e);return end
+ local b,e=readBag(self,row)
+ if not b then
+  -- Right after a post the slot is briefly locked; try again shortly.
+  if e and e:find('locked',1,true) and (self.sellRetry or 0)<5 then
+   self.sellRetry=(self.sellRetry or 0)+1;self.sellCheckAt=GetTime()+0.5;self.sellCheckRow=row;return
+  end
+  self.sellRetry=nil;self:Print(e);return
+ end
+ self.sellRetry=nil
  local draft={row=row,k=b.k};self.postQuote=draft
  self:Search(b.k,60,function(result)
   if self.postQuote~=draft or self.view~='selling' then return end
@@ -76,7 +87,7 @@ function M:CheckPost(row)
   local unit,clamped=self:SuggestPostUnit(row,draft.floor);draft.atMinimum=clamped
   if self:PostPriceEmpty() and unit then self:SetPostPrice(unit) end
   local now=readBag(self,row);draft.max=now and now.max;draft.commodity=now and now.commodity
-  if now and now.commodity and not self.db.sellStacks[row.marketKey] and self.postQty then self.postQty:SetText(tostring(now.max)) end
+  if now and self.postQty and not draft.qtyTouched then self.postQty:SetText(tostring(now.max)) end
   self:RefreshUI()
  end,function(e) if self.postQuote==draft then self.postQuote=nil;self:Print(e) end end)
 end
