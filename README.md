@@ -17,18 +17,22 @@ Use `/vmm peer` for status, or `/vmm peer off` to unpair. Initial catch-up takes
 
 **Offline:** In **Transfer**, choose **Export Prices**, then copy and **Import Pasted Text** on the other client. Use **Next Prices** for additional pages (100 item keys per page). **Export Shopping** exports the active list; **Import Shopping** adds missing entries and preserves existing targets. You can move the text between PCs while either account is offline. Keep the two accounts’ SavedVariables separate.
 
-## Trade from Market
+## Trade from Market (1.6)
+
+The main navigation is **Shopping, Selling, Canceling, Vendor Deals, Crafting, Tools**.
 
 | Screen | What to do |
 |---|---|
-| **Browse** | Search cached items by name or ID. At the AH, **Search Live** searches by name; narrow broad results. **Live Compare** inspects current listings. **Buy Item** opens a manual purchase review. |
-| **Shopping** | Add an item ID even before your first scan, or select a variant in Browse and switch to Shopping. Set a target in gold per unit. **Buy Selected** enforces that target at live review. |
-| **Execution** | Choose quantity and **Revalidate**. Regular items buy one whole listing after confirmation. Commodities request a quote and require **Confirm Quote**. Stale or higher quotes cannot execute. Spending, quantity, reserve and affordability limits still apply. Only **Sniper** purchases require a profitable investment model. |
-| **Sell** | Select a bag stack, choose quantity and duration, then **Check Price**. Enter **gold per unit** or review the suggested price. **Post…** shows competition, total proceeds before fees, and the current deposit. Confirmation submits the selected quantity once. |
-| **My Auctions** | **Refresh My Auctions**, then select your listing to compare fresh competing prices, excluding your own. **Cancel Selected…** displays the current fee; confirm to cancel that auction. Reposting is a separate action. |
-| **Crafting** | Capture an open profession, or click **Nexus** to read supported learned recipes from the current character’s Nexus cache. Rankings and material plans use local, validated input depth. Nexus is optional. |
+| **Shopping** | Type an item name and press Enter or **Search** for current AH results. Saved lists are on the left. Select an item, then **Buy Item**, **Compare Listings**, or **Add to List**. Bank scan prices are searchable even away from the AH. |
+| **Buy Item** | Choose quantity and **Check Price**, then **Buy**. Commodities require **Confirm Buy** after the price quote. Regular items buy one complete listing per confirmation. |
+| **Selling** | Choose a bag item, check its current price, enter quantity and gold per unit, then review and confirm the posting. |
+| **Canceling** | Refresh your auctions, select a listing, and review its cancellation fee before confirming. |
+| **Vendor Deals** | Scan the AH for buyouts below vendor sell value. The list includes small profits regardless of flip filters. Select a result to check its live price. An empty state explains when no eligible deals were found. |
+| **Tools** | Bank sync, saved lists and targets, scan overview, flip opportunities, history, investments, purchase queue, ledger, settings, and diagnostics. |
 
-The overview, banker dashboard, Sniper, post and purchase review queues, investments, ledger, crafting projects, and price history remain available. **Full Scan** requests an independent AH snapshot; **Cached** does not create fresh historical evidence. **Settings** controls spending and model limits. If a purchase outcome is unknown, check the mailbox and ledger before reconciling it.
+The status bar distinguishes waiting, processing, calculating, stopped, and failed scans. A countdown after a failed request is a cooldown, not an ongoing scan. Detailed request logs are under **Tools > Diagnostics**.
+
+Bank sync runs while both accounts are online; no party is required. Both characters must have the updated addon loaded. The status bar reports waiting, sending, receiving, or connected; **Tools > Bank sync** shows completed transfer times and received prices. Realm display spacing is normalized for incoming messages. Fractional stack unit prices are rounded up to the next copper for the price-only feed. Synced prices appear in item tooltips and Shopping, and purchases still check live listings. The price feed does not transfer complete historical scan series or transaction records.
 
 ## Verify on the live client
 

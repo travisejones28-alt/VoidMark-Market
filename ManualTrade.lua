@@ -28,9 +28,10 @@ function M:LiveNameSearch(text)
  text=(text or ''):match('^%s*(.-)%s*$')
  if #text<2 or not self.ahOpen then self:Print('Open the AH and enter at least two characters');return end
  if not C_AuctionHouse.GetBrowseResults then self:Print('Live browse unavailable');return end
+ self.shoppingListMode=false;self.shoppingSearchStatus='Searching the Auction House for '..text..'...';self.browseRows={};self:RefreshUI()
  local q={searchString=text,sorts={},filters={},itemClassFilters={}}
  self:QueueRequest({id='browse-name',kind='browse',query=q,priority=50,done=function()
-  if self.view~='browse' or self.db.settings.filter~=text then return end
+  if self.view~='browse' or (self.db.settings.filter or ''):match('^%s*(.-)%s*$')~=text then return end
   local result=C_AuctionHouse.GetBrowseResults() or {};local out={}
   for i=1,math.min(300,#result) do
    local b=result[i];local k=b.itemKey
@@ -41,8 +42,9 @@ function M:LiveNameSearch(text)
      floor=b.minPrice or 0,fair=m and m.fairValue or 0,modelReady=self:CanEstimateResale(m),confidence=m and m.confidence or 'Unknown',status='LIVE BROWSE'}
    end
   end
+  self.shoppingSearchStatus=#out==0 and ('No auctions found for '..text..'. Try another name.') or nil
   self:CancelJob('browse');self.browseRows=out;self.selectedRow=nil;self.page=1;self:SortBrowseRows();self:RefreshUI()
- end,fail=function(e) self:Print(e) end})
+ end,fail=function(e) self.shoppingSearchStatus='Search failed: '..tostring(e);self:Print(e);self:RefreshUI() end})
 end
 local function readBag(self,r)
  if not usable(self) or not r or not r.slot or not ItemLocation or not C_Container then return nil,'Open the AH and select a bag item' end

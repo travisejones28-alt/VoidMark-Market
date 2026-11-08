@@ -1,3 +1,12 @@
+## 1.6.0
+- Replaced twelve main tabs with Shopping, Selling, Canceling, Vendor Deals, Crafting, and Tools.
+- Added item-name search with Enter, saved-list sidebar, readable price columns, and contextual empty states.
+- Moved detailed scan reports into Diagnostics; simplified scan and connection status.
+- Fixed sharing across spaced/normalized names for the same realm and faction.
+- Included fractional per-unit stack prices in the shared price feed, rounded up to integer copper.
+- Announced scan metadata after publication completes; sped up acknowledged price sharing.
+- Reconnect now reseeds locally available prices without resetting financial records.
+
 ## 1.5.8 - Automatic account sync dashboard
 - Add SYNC tab, automatic named pairing, automatic eligible bank-character AH scans,
   reconnect/full replay, peer scan metadata, persisted completion diagnostics.

@@ -68,6 +68,7 @@ end
 function M:PublishPrice(m)
  if not m or not self:ParseKey(m.marketKey) or not self:MarketFresh(m) or m.cacheUntrusted or m.analysisIncomplete or not m.latest then return end
  local floor=m.latest.floor
+ if self:Finite(floor,0.000001,1e12) then floor=math.ceil(floor) end
  if not whole(floor,1,1e12) or not whole(m.lastSeen,1,time()+60) then return end
  local fair=self:CanEstimateResale(m) and m.fairValue or 0
  local j=self.db.shareJournal;local index='P'..m.marketKey
@@ -203,7 +204,7 @@ function M:QueueScanSharing(at)
    local m=d.market[key];if m and m.lastSeen==at then self:PublishPrice(m) end
    if debugprofilestop()-start>=3 then break end
   end
- end)
+ end,function() self.shareRun.infoPending=true;self.shareRun.next=0 end)
 end
 -- Restrict the filter to the exact character specified by /vmm peer.
 -- Filtering unrelated Blizzard system notices would hide useful errors.
@@ -312,7 +313,7 @@ function M:PumpSharing()
  if not self.db.syncPeer or self.persistenceBlocked or not self.shareRegistered then return end
  local r=self.shareRun;local now=GetTime()
  if self.view=='sync' and now>=(r.uiAt or 0) then r.uiAt=now+1;self:RefreshUI() end
- if now<(r.next or 0) then return end;r.next=now+0.5
+ if now<(r.next or 0) then return end;r.next=now+0.15
  if (InCombatLockdown and InCombatLockdown()) or (C_ChatInfo.InChatMessagingLockdown and C_ChatInfo.InChatMessagingLockdown()) then r.status='Paused by client restrictions';return end
  local j=self.db.shareJournal
  if not r.reply and not (r.infoPending and r.lastContact) and r.hello and now<r.hello and (not r.cursor or r.cursor>=j.seq or now<(r.retry or 0)) then return end
@@ -360,11 +361,11 @@ function M:ReceiveSharing(prefix,msg,ch,sender)
  if prefix~=PREFIX or not self.db or self.persistenceBlocked or not self.db.syncPeer or canonical(sender)~=self.db.syncPeer or
   (ch~='WHISPER' and ch~='PARTY' and ch~='RAID' and ch~='INSTANCE_CHAT') or type(msg)~='string' or #msg>240 then return end
  local f=fields(msg,'\t')
- if f[1]~=self.economyID then self.shareRun.status='Rejected peer: realm/faction mismatch';self:RefreshUI();return end
+ if (f[1] or ''):gsub('%s',''):lower()~=self.economyID:gsub('%s',''):lower() then self.shareRun.status='Rejected peer: realm/faction mismatch';self:RefreshUI();return end
  if not f[3] or not f[3]:match('^%d+%-%d+$') then return end
  local r=self.shareRun;local j=self.db.shareJournal;local db=self.db.shareReceived
  local peer=self.db.syncPeer;local rx=db[peer]
- local function ack() r.reply=table.concat({'Q',rx.epoch,rx.seq},'\t') end
+ local function ack() r.reply=table.concat({'Q',rx.epoch,rx.seq},'\t');r.next=0 end
  if f[2]=='H' and #f==3 then
   if not r.lastContact then r.hello=nil end
   r.lastContact=GetTime();r.probeDelay=nil;r.offlineUntil=nil
@@ -417,6 +418,8 @@ function M:AutomaticBankScan(now)
 end
 function M:ReconnectSharing(force)
  if self.persistenceBlocked then return end
+ -- Re-publish any locally available prices if a previous journal missed them.
+ self.db.shareJournal.seeded=nil
  self.shareRun={};self.shareRegistered=nil
  if force then
   self.db.shareJournal.epoch=tostring(time())..'-'..math.random(1000,999999)

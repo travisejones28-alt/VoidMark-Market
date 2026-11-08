@@ -1,10 +1,10 @@
 local _, M = ...
 
 local sections = {
-  {label='Shopping', view='shopping'},
+  {label='Shopping', view='browse'},
   {label='Selling', view='selling'},
   {label='Canceling', view='my auctions'},
-  {label='Market', view='market'},
+  {label='Market', view='tools'},
   {label='Vendor', view='vendor'},
 }
 

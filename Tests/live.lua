@@ -272,7 +272,7 @@ check('Auction House tabs work with Auctionator disabled and restore the standal
  emit('AUCTION_HOUSE_SHOW')
  local tabs=M.auctionTabs;assert(#tabs==5 and #native.Tabs==3)
  M:InstallAuctionTabs();assert(M.auctionTabs==tabs)
- local views={'shopping','selling','my auctions','market','vendor'}
+ local views={'browse','selling','my auctions','tools','vendor'}
  for i,tab in ipairs(tabs) do
   tab.button.scripts.OnClick();assert(M.view==views[i] and M.auctionDock.page==tab.page)
   assert(M.window:IsShown() and M.window:GetScale()>0 and M.window.testLevel>native:GetFrameLevel())

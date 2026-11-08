@@ -7,7 +7,7 @@ end
 function M:SelectOpportunity(o)
   if self:HasUnresolvedPurchase() or self.execution.state=='quoting' or self.execution.state=='quoted' then self:Print('Resolve the current transaction first'); return end
   self.executionToken=(self.executionToken or 0)+1
-  self.execution={state='selected',opportunity=o,market=self.db.market[o.marketKey] or o.shoppingMarket,token=self.executionToken,message='Snapshot estimate; click REVALIDATE'}
+  self.execution={state='selected',opportunity=o,market=self.db.market[o.marketKey] or o.shoppingMarket,token=self.executionToken,message='Choose a quantity, then click CHECK PRICE.'}
   self:SetView('execution')
 end
 function M:RevalidateSelected(quantity)
