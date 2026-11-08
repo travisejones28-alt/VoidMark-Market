@@ -27,7 +27,7 @@ function M:ShopSearch(text)
  self.shoppingListMode=false;self.selectedRow=nil;self.page=1
  self.db.settings.filter=text
  if self.shopSearch and self.shopSearch:GetText()~=text then self.shopSearch:SetText(text) end
- self:AddRecentSearch(text)
+ self:AddRecentSearch(text);self:WarmItemNames()
  self:BuildBrowseRows(text)
  if self.ahOpen then self:LiveNameSearch(text) else self.shoppingSearchStatus='Showing saved prices. Open the Auction House for live results.';self:RefreshUI() end
 end
@@ -154,12 +154,14 @@ function M:RenderShopScreen()
  end
  local empty=''
  if #source==0 then
-  empty=self.shoppingSearchStatus or (self.shoppingListMode and 'This list is empty. Search for an item, select it and click Add to list.' or 'Type an item name and press Enter.')
+  local f=self.db.settings.filter or ''
+  empty=self.shoppingSearchStatus or (self.shoppingListMode and 'This list is empty. Search for an item, select it and click Add to list.')
+   or (f~='' and ('No saved prices match "'..f..'".'..(self.ahOpen and ' Press Search to check the Auction House.' or ' Open the Auction House to search it live.')))
+   or 'Type an item name and press Enter.'
  end
  s.empty:SetText(empty);s.empty:SetShown(empty~='')
  s.pageText:SetText(#source>0 and (#source..' results  |  page '..self.page..' / '..pages) or '')
  s.buy:SetEnabled(self.selectedRow~=nil and self.ahOpen and true or false)
  s.searchList:SetShown(self.shoppingListMode);s.searchList:SetEnabled(self.ahOpen and true or false)
  s.removeButton:SetShown(self.shoppingListMode)
- s.addButton:SetText(self.shoppingListMode and 'Add to list' or ('Add to '..self.activeList):sub(1,16))
 end

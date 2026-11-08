@@ -155,6 +155,7 @@ M.eventFrame:SetScript('OnUpdate',function(_,elapsed)
     M.liveBrowse.expired=true;M:RefreshUI()
   end
   if M.bagsDirty and M.view=='selling' then M.bagsDirty=false; M:RefreshInventory() end
+  if M.ItemNameTick then M:ItemNameTick() end
   if M.uiDirty and M.RenderUI then M:RenderUI() end
 end)
 SLASH_VOIDMARKMARKET1='/vmm'; SLASH_VOIDMARKMARKET2='/voidmarkmarket'

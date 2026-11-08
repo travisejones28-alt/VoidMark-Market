@@ -140,7 +140,7 @@ function M:BuildBrowseRows(query)
       if i>#keys then
        local key,s=next(self.db.sharedPrices,sharedCursor);sharedCursor=key;if not key then return true end
        if type(s)=='table' and not self.db.market[key] then
-        local name=(GetItemInfo and GetItemInfo(s.id)) or ('Item '..tostring(s.id))
+        local name=self:ItemName(s.id) or ('Item '..tostring(s.id))
         if needle=='' or tostring(s.id)==needle or name:lower():find(needle,1,true) then
          local fresh=self:Finite(s.at,time()-(self.db.settings.maxDataAge or 7200),time()+60)
          out[#out+1]={marketKey=key,itemID=s.id,name=name,floor=s.floor or 0,fair=s.fair or 0,

@@ -163,4 +163,5 @@ PASS 1.9 listings show every price with your own marked; clicking one sets the p
 PASS 1.9 live searches keep every listing, including your own
 PASS 1.9 Skip moves to the next item and a post is recorded in Your history
 PASS 1.9 shopping screen searches by name, keeps recent searches and opens lists
-ALL 164 TESTS PASSED
+PASS 1.9 synced prices become searchable by name once the client learns the item name
+ALL 165 TESTS PASSED

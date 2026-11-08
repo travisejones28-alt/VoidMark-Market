@@ -97,4 +97,21 @@ check('1.9 shopping screen searches by name, keeps recent searches and opens lis
  r.scripts.OnClick(r);assert(M.selectedRow.marketKey==61)
  M:ShopAddSelected();assert(M:ListBook(M.activeList)[61])
 end)
+
+check('1.9 synced prices become searchable by name once the client learns the item name',function()
+ reset();M:SetView('browse');M.ahOpen=false
+ local known={};local requested={}
+ local oldItem,oldInfo=C_Item,GetItemInfo
+ C_Item={GetItemNameByID=function(id) return known[id] end,RequestLoadItemDataByID=function(id) requested[#requested+1]=id end}
+ M.db.sharedPrices[2589]={id=2589,key=2589,floor=40,at=time()}
+ M:ShopSearch('linen cloth');jobs();M:RenderUI()
+ assert(#M.browseRows==0 and M.shoppingSearchStatus:find('Open the Auction House',1,true))
+ M.shoppingSearchStatus=nil;M:RenderUI();assert(M.shopScreen.empty:GetText():find('No saved prices match',1,true))
+ advance(1);M:ItemNameTick();assert(requested[1]==2589)
+ known[2589]='Linen Cloth';emit('GET_ITEM_INFO_RECEIVED',2589,true);assert(M.db.itemNames[2589]=='Linen Cloth')
+ advance(2);M:ItemNameTick();jobs()
+ assert(M.browseRows[1] and M.browseRows[1].name=='Linen Cloth' and M.browseRows[1].floor==40)
+ known[2589]=nil;assert(M:ItemName(2589)=='Linen Cloth') -- remembered after the client forgets it
+ C_Item,GetItemInfo=oldItem,oldInfo
+end)
 end

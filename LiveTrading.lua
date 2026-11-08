@@ -251,3 +251,46 @@ M:RegisterHandler('AUCTION_CANCELED',function(self,_,id)
  end
  self:RefreshUI()
 end)
+
+-- Item names for prices received from the partner account -------------------
+-- The receiving account may never have seen an item, so the client has no name
+-- for it and a name search would miss it. Names are requested slowly in the
+-- background and remembered; a pending name search refreshes when they arrive.
+function M:ItemName(id)
+ id=tonumber(id);if not id then return end
+ local info=C_Item and C_Item.GetItemNameByID or GetItemInfo
+ local ok,n=false,nil;if info then ok,n=pcall(info,id) end
+ if ok and type(n)=='string' and n~='' then
+  if self.db.itemNames[id]~=n and not self.persistenceBlocked then self.db.itemNames[id]=n end
+  return n
+ end
+ local cached=self.db.itemNames[id];return type(cached)=='string' and cached or nil
+end
+function M:WarmItemNames()
+ if self.nameWarm or not self.db then return end
+ self.nameWarm={cursor=nil,nextAt=0,requested=0}
+end
+function M:ItemNameTick()
+ local w=self.nameWarm
+ if w and GetTime()>=w.nextAt then
+  w.nextAt=GetTime()+0.2
+  local load=C_Item and C_Item.RequestLoadItemDataByID
+  for _=1,20 do
+   local k,s=next(self.db.sharedPrices,w.cursor);w.cursor=k
+   if k==nil then self.nameWarm=nil;break end
+   local id=type(s)=='table' and tonumber(s.id)
+   if id and not self:ItemName(id) and load then pcall(load,id);w.requested=w.requested+1 end
+  end
+ end
+ if self.browseNamesDirty and GetTime()>=self.browseNamesDirty then
+  self.browseNamesDirty=nil
+  if self.view=='browse' and not self.shoppingListMode and (self.db.settings.filter or '')~='' and not self.queue.dedupe['browse-name'] then
+   self:BuildBrowseRows(self.db.settings.filter)
+  end
+ end
+end
+M:RegisterHandler('GET_ITEM_INFO_RECEIVED',function(self,_,id,success)
+ id=tonumber(id)
+ if not id or success==false or not self.db or self.db.itemNames[id] then return end
+ if self:ItemName(id) then self.browseNamesDirty=self.browseNamesDirty or GetTime()+1 end
+end)
