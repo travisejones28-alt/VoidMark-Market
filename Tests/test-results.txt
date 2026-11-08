@@ -171,4 +171,6 @@ PASS 1.9.1 sync keeps several pages in flight, rate-limits bytes and resends aft
 PASS 1.9.3 live-search prices reach the partner without touching its estimate; one-click posting is opt-in
 PASS 1.9.4 no background bag, crafting or item-name work while the window is closed; /vmm perf reports
 PASS 1.9.5 three stacks post as one 60-unit post, a locked slot is retried, closing the AH ends "Checking"
-ALL 172 TESTS PASSED
+PASS 1.9.6 Bank sync header updates on every view without a full redraw
+PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
+ALL 174 TESTS PASSED

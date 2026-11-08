@@ -1,3 +1,8 @@
+## 1.9.6
+Bank sync status fix from in-game testing.
+- **"Bank sync: waiting for partner" now clears as soon as the characters connect, on every screen.** The header line was only redrawn on a full window refresh, so Selling, Buy and other views could keep showing "waiting" long after the link was up (the Bank sync tools page refreshed every second, which is why it looked instant there). It now updates once a second on every view, and also switches back when the partner goes quiet.
+- **Faster reconnect when the partner logs in later.** Unanswered probes now retry at most every 60 seconds (was up to 5 minutes), the quiet "partner offline" wait is 1 minute (was 5), and Market probes again right after a loading screen or a friend-list change.
+
 ## 1.9.5
 Selling fixes from in-game testing.
 - **Posts everything in your bags, not one stack.** Quantity and Max now use every unit of the item across your bags (e.g. 3 x 20 Linen = 60), the same way Auctionator does; non-stacking items become several auctions in one post. Previously non-commodity items were capped at the first stack. An old saved stack size (from the removed "save stack" box) no longer limits it. Typing a quantity keeps it.

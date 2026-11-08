@@ -251,10 +251,10 @@ function M:HandlePeerOfflineNotice(message)
  if not match then return false end
  local r=self.shareRun or {}
  self.shareRun=r
- r.offlineUntil=GetTime()+300
+ r.offlineUntil=GetTime()+60
  r.cursor=nil;r.reply=nil;r.lastContact=nil
  r.hello=nil;r.retry=nil;r.skipped=nil;r.sentHi=nil;r.pages=nil
- r.status='Partner offline; quietly checking again in 5m'
+ r.status='Partner offline; quietly checking again in 1m'
  self:RefreshUI()
  return true
 end
@@ -353,6 +353,14 @@ local function dataReady(r,j,now)
 end
 function M:PumpSharing()
  if self.db then self:AutomaticBankScan(GetTime()) end
+ -- Keep the header's "Bank sync" line live on every view. It used to change
+ -- only on a full redraw, so it could show "waiting for partner" long after
+ -- the handshake succeeded (or "connected" after the partner left).
+ if self.connectionLabel and self.window and self.window:IsShown() and GetTime()>=(self.syncLabelAt or 0) then
+  self.syncLabelAt=GetTime()+1
+  local text=self:SimpleSyncStatus()
+  if text~=self.syncLabelText then self.syncLabelText=text;self.connectionLabel:SetText(text) end
+ end
  if not self.db.syncPeer or self.persistenceBlocked or not self.shareRegistered then return end
  local r=self.shareRun;local now=GetTime()
  if self.view=='sync' and now>=(r.uiAt or 0) then r.uiAt=now+1;self:RefreshUI() end
@@ -377,7 +385,9 @@ function M:PumpSharing()
   local sent=send(self,ch,'H\t'..j.epoch)
   if sent then r.infoPending=true end
   local unconfirmed=ch=='WHISPER' and not r.lastContact
-  r.probeDelay=unconfirmed and math.min(300,(r.probeDelay or 10)*2) or 20
+  -- Unanswered probes back off to at most 60 s, so a partner who logs in
+  -- later is found within a minute even if its own hello was lost.
+  r.probeDelay=unconfirmed and math.min(60,(r.probeDelay or 10)*2) or 20
   r.hello=now+r.probeDelay
   if unconfirmed and sent then r.status='Whisper queued; waiting for partner reply (delivery unconfirmed)'
   elseif not sent then r.status='Message rejected on '..ch..' (result '..tostring(r.lastSendError)..'); retrying' end
@@ -470,6 +480,12 @@ function M:ReceiveSharing(prefix,msg,ch,sender)
 end
 M:RegisterHandler('CHAT_MSG_ADDON',function(self,_,...) self:ReceiveSharing(...) end)
 M:RegisterHandler('GROUP_ROSTER_UPDATE',function(self) if self.shareRun then self.shareRun.hello=nil end end)
+-- Probe right away after loading screens and when a friend comes online.
+M:RegisterHandler('PLAYER_ENTERING_WORLD',function(self) if self.shareRun and not self.shareRun.lastContact then self.shareRun.hello=nil;self.shareRun.offlineUntil=nil end end)
+M:RegisterHandler('FRIENDLIST_UPDATE',function(self)
+ local r=self.shareRun;local now=GetTime()
+ if r and not r.lastContact and now>=(r.friendProbeAt or 0) then r.friendProbeAt=now+15;r.hello=nil;r.offlineUntil=nil end
+end)
 -- Backup detection when a chat-frame filter is unavailable on the client.
 M:RegisterHandler('CHAT_MSG_SYSTEM',function(self,_,msg) self:HandlePeerOfflineNotice(msg) end)
 
