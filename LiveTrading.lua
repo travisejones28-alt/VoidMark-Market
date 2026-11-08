@@ -267,8 +267,16 @@ function M:ItemName(id)
  local cached=self.db.itemNames[id];return type(cached)=='string' and cached or nil
 end
 function M:WarmItemNames()
- if self.nameWarm or not self.db then return end
- self.nameWarm={cursor=nil,nextAt=0,requested=0}
+ if not self.db then return end
+ -- Snapshot ids (sync may add prices while names load). A running warm-up
+ -- picks up ids received since it started.
+ local w=self.nameWarm or {ids={},i=0,nextAt=0,requested=0}
+ local set=self.nameWarm and self.sharedIdSet or {}
+ for _,s in pairs(self.db.sharedPrices) do
+  local id=type(s)=='table' and tonumber(s.id)
+  if id and not set[id] then set[id]=true;w.ids[#w.ids+1]=id end
+ end
+ self.sharedIdSet=set;self.nameWarm=w
 end
 function M:ItemNameTick()
  local w=self.nameWarm
@@ -276,10 +284,9 @@ function M:ItemNameTick()
   w.nextAt=GetTime()+0.2
   local load=C_Item and C_Item.RequestLoadItemDataByID
   for _=1,20 do
-   local k,s=next(self.db.sharedPrices,w.cursor);w.cursor=k
-   if k==nil then self.nameWarm=nil;break end
-   local id=type(s)=='table' and tonumber(s.id)
-   if id and not self:ItemName(id) and load then pcall(load,id);w.requested=w.requested+1 end
+   w.i=w.i+1;local id=w.ids[w.i]
+   if not id then self.nameWarm=nil;break end
+   if not self:ItemName(id) and load then pcall(load,id);w.requested=w.requested+1 end
   end
  end
  if self.browseNamesDirty and GetTime()>=self.browseNamesDirty then
@@ -291,6 +298,6 @@ function M:ItemNameTick()
 end
 M:RegisterHandler('GET_ITEM_INFO_RECEIVED',function(self,_,id,success)
  id=tonumber(id)
- if not id or success==false or not self.db or self.db.itemNames[id] then return end
+ if not id or success==false or not self.db or self.db.itemNames[id] or not (self.sharedIdSet and self.sharedIdSet[id]) then return end
  if self:ItemName(id) then self.browseNamesDirty=self.browseNamesDirty or GetTime()+1 end
 end)

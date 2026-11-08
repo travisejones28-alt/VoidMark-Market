@@ -122,7 +122,7 @@ check('Posting rechecks slot, quantity, live quote, deposit and requires a confi
  for _,v in ipairs({false,true}) do com=v;quote();M:ReviewPost(row,3,100,2);assert(callback);callback();callback()
   assert(M.tradePending=='post');emit('AUCTION_HOUSE_AUCTION_CREATED',85)
  end
- assert(posts==2);quote();advance(16);M:ReviewPost(row,3,100,2);assert(not callback)
+ assert(posts==2);quote();advance(61);M:ReviewPost(row,3,100,2);assert(not callback)
  C_AuctionHouse=old;ItemLocation=loc;C_Container=con;M.AskTrade=ask
 end)
 check('Cancellation validates exact ownership and fee again after confirmation',function()

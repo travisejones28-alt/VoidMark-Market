@@ -1,3 +1,11 @@
+## 1.9.1
+Review fixes.
+- **Post no longer fails after 15 seconds.** A checked price stays valid for a minute; after that, Post re-checks the live price (your typed price is kept) and asks you to click Post again.
+- **"Never below" works on items this account hasn't scanned** (common on the receiving account).
+- **Cancelling:** auctions of items you haven't scanned show their real name, icon and tooltip instead of "Item 12345".
+- **Name lookup for synced prices** no longer walks the price table while sync is writing to it (that could stop the lookup or throw errors mid-sync), and only learns names for synced items.
+- 168 regressions.
+
 ## 1.9.0
 Auctionator-style screens (own code and VoidMark styling, Forever rules).
 - **Selling:** bag items as icon tiles grouped by type, Favourites first (right-click a tile). Header with item, Quantity + Max, gold/silver/copper price boxes, 2h/8h/24h, Deposit and Total, Post and Skip. A "Never below" minimum per item. The listings table shows every live price with your own marked; click a row to price just under it (or match your own). Sub-tabs: Current prices, Price history, Your history (last 20 posts per item).

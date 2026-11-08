@@ -83,7 +83,7 @@ end
 local function postTerms(self,row,n,unit,duration)
  if self.tradePending then return nil,'A previous request is awaiting its result' end
  local q=self.postQuote
- if not q or not q.at or GetTime()-q.at>15 or self.view~='selling' or not self.selectedRow or
+ if not q or not q.at or GetTime()-q.at>60 or self.view~='selling' or not self.selectedRow or
   self.selectedRow.bag~=row.bag or self.selectedRow.slot~=row.slot or self.selectedRow.itemLink~=row.itemLink or
   q.row.bag~=row.bag or q.row.slot~=row.slot or q.row.itemLink~=row.itemLink then return nil,'Select the item and check its live price again' end
  local b,e=readBag(self,row);if not b then return nil,e end

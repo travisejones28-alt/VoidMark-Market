@@ -32,8 +32,14 @@ check('1.9 price boxes round-trip copper and Post sends exact copper, quantity a
  M:SetPostPrice(nil);assert(M:PostPriceEmpty())
  local sent;local old=M.ReviewPost;M.ReviewPost=function(_,row,n,unit,d) sent={row,n,unit,d} end
  local row=bagRow(1,5,'Ore',10);M.selectedRow=row;M.postQty:SetText('7');M:SetPostPrice(99);M:SetDuration(2)
+ M.postQuote={row=row,at=GetTime()}
  M:PostClicked();assert(sent[1]==row and sent[2]==7 and sent[3]==99 and sent[4]==2 and M.db.settings.postDuration==2)
  sent=nil;M:SetPostPrice(nil);M:PostClicked();assert(not sent)
+ -- A quote older than a minute is refreshed instead of posting; the typed price stays.
+ local rechecked;local oldCheck=M.CheckPost;M.CheckPost=function(_,r) rechecked=r end
+ M:SetPostPrice(99);advance(61);M:PostClicked()
+ assert(not sent and rechecked==row and M:GetPostPrice()==99 and M.postQuote==nil)
+ M.CheckPost=oldCheck
  M.ReviewPost=old
 end)
 
@@ -139,5 +145,18 @@ check('1.9 the shopping list column scrolls when there are more lists than fit',
  M.shopScreen.left.scripts.OnMouseWheel(M.shopScreen.left,-1);M:RenderUI()
  assert(M.shopLeftOffset==4 and M.shopScreen.leftRows[1].value=='List04')
  M.shopLeftOffset=99;M:RenderUI();assert(M.shopLeftOffset==5 and M.shopScreen.leftRows[16].value=='List20')
+end)
+
+check('1.9.1 a minimum can be saved for an item this account never scanned; owned rows carry ids and names',function()
+ reset()
+ assert(M.db.market[7777]==nil and M:SetSellFloor(7777,12345) and M.db.sellFloors[7777]==12345)
+ assert(M:SetSellFloor(7777,nil) and M.db.sellFloors[7777]==nil)
+ assert(not M:SetSellFloor('bad key',5))
+ local old=C_AuctionHouse;local api=setmetatable({},{__index=old});C_AuctionHouse=api
+ local oldItem=C_Item;C_Item={GetItemNameByID=function(id) return id==7777 and 'Silk Cloth' or nil end}
+ api.GetOwnedAuctions=function() return {{auctionID=5,itemKey={itemID=7777,itemSuffix=0,itemLevel=0,battlePetSpeciesID=0},quantity=2,unitPrice=10,status=0}} end
+ M:CaptureOwnedAuctions();jobs()
+ C_AuctionHouse=old;C_Item=oldItem
+ local r=M.ownedRows[1];assert(r and r.itemID==7777 and r.name=='Silk Cloth' and r.status==0)
 end)
 end

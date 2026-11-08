@@ -100,6 +100,11 @@ function M:SellDeposit()
  if good and self:Finite(v,0,1e12) then return v end
 end
 function M:PostClicked()
+ local r,q=self.selectedRow,self.postQuote
+ if r and self.ahOpen and (not q or q.row~=r or (q.at and GetTime()-q.at>60)) then
+  -- Quote missing or older than a minute: refresh it; your typed price is kept.
+  self.postQuote=nil;self:CheckPost(r);self:Print('Live price re-checked. Click Post again.');return
+ end
  local unit=self:GetPostPrice()
  if not unit or unit<1 then self:Print('Enter a price of at least 1 copper');return end
  self:ReviewPost(self.selectedRow,tonumber(self.postQty:GetText()),unit,self.postDuration)

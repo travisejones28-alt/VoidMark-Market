@@ -13,7 +13,7 @@ function M:SetSellStrategy(strategy)
 end
 function M:SetSellFloor(key,copper)
   if self.persistenceBlocked then return false,'Newer database schema; changes disabled' end
-  if not self.db.market[key] then return false,'Market variant unavailable' end
+  if not self.db.market[key] and not self:ParseKey(key) then return false,'Market variant unavailable' end
   if copper~=nil and (not self:Finite(copper,1,1e12) or copper%1~=0) then
     return false,'Enter a positive price in copper'
   end

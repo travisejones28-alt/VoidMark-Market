@@ -166,4 +166,5 @@ PASS 1.9 shopping screen searches by name, keeps recent searches and opens lists
 PASS 1.9 synced prices become searchable by name once the client learns the item name
 PASS 1.9 Cancelling screen lists undercut auctions first and enables the right buttons
 PASS 1.9 the shopping list column scrolls when there are more lists than fit
-ALL 167 TESTS PASSED
+PASS 1.9.1 a minimum can be saved for an item this account never scanned; owned rows carry ids and names
+ALL 168 TESTS PASSED

@@ -68,7 +68,7 @@ function M:CaptureOwnedAuctions()
         local key=self:Key(info.itemKey.itemID,info.itemKey.itemSuffix,info.itemKey.itemLevel,info.itemKey.battlePetSpeciesID)
         local m=self.db.market[key]; local qty=tonumber(info.quantity) or 1
         local unit=tonumber(info.unitPrice) or (tonumber(info.buyoutAmount) or 0)/math.max(1,qty)
-        rows[#rows+1]={auctionID=info.auctionID,itemKey=info.itemKey,marketKey=key,name=m and m.name or ('Item '..info.itemKey.itemID),quantity=qty,
+        rows[#rows+1]={auctionID=info.auctionID,itemKey=info.itemKey,itemID=info.itemKey.itemID,marketKey=key,name=m and m.name or self:ItemName(info.itemKey.itemID) or ('Item '..info.itemKey.itemID),quantity=qty,
           unit=unit,timeLeft=info.timeLeftSeconds or info.timeLeft,status=info.status,action='INSPECT',deposit=info.depositAmount,
           floor=m and m.latest and m.latest.meaningfulFloor,reason='Snapshot comparison only; refresh item before deciding'}
       end
