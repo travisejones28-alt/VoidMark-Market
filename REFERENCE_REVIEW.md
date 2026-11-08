@@ -1,4 +1,10 @@
-# Auctionator reference — Forever Live 1.5
+# Auctionator reference — Market 1.8.0
+
+Re-checked against the user-supplied Auctionator **342** (Interface 16001 among others). On Forever (build 1.x, `WOW_PROJECT_CAMELOT`) Auctionator treats the client as modern AH (`Source_ModernAH`), the same `C_AuctionHouse` path Market uses. Its Forever-specific branches confirm: copper prices post without silver rounding, the minimum price is 1 copper, durations are 2/8/24 hours, and the retail expansion/tier search filters are hidden.
+
+Behaviors adopted in 1.8.0 (independent Lua, no Auctionator code, art or SavedVariables): live search of a whole shopping list, recording prices from ordinary searches (Auctionator's incremental scan), auto price check on bag selection with a configurable undercut, full-bag commodity quantity, remembered duration, select-next after posting, and a cancel-undercut check with one confirmed cancel per click. Market keeps its own confirm dialogs and never buys, posts or cancels without a click.
+
+## Auctionator reference — Forever Live 1.5 (historical)
 
 Inspected the supplied installed Auctionator v341 (Interface 16001), by plusmouse and Borjamacare, copyright 2020–2025, All Rights Reserved. Reviewed its shopping-list and tooltip flows, full-scan and search adapters, bag selection, posting, cancellation, and Forever durations. Market uses independently implemented UI and Lua; no Auctionator code, images, libraries, or SavedVariables are shipped.
 

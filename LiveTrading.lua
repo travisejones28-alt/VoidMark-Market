@@ -1,0 +1,221 @@
+local _,M=...
+-- Auctionator-style live trading helpers (behavior reference: Auctionator 342,
+-- Source_ModernAH shopping/selling/cancelling; independent implementation).
+--  * Every complete live search records the competitor floor (incremental prices).
+--  * Shopping lists can be searched live, item by item.
+--  * Selling suggests lowest competitor minus a small undercut, posts whole
+--    commodity quantities, remembers duration and moves to the next bag item.
+--  * Cancelling checks every listing for undercuts and cancels one per click.
+local LIVE_CAP,LIVE_DAYS=5000,7
+
+-- Incremental live prices --------------------------------------------------
+function M:LiveSeenBook()
+ if type(self.db.liveSeen)~='table' then self.db.liveSeen={} end
+ return self.db.liveSeen
+end
+function M:PruneLiveSeen()
+ local t=self:LiveSeenBook();local cutoff=time()-LIVE_DAYS*86400;local keep={}
+ for k,e in pairs(t) do
+  if type(e)~='table' or not self:Finite(e.floor,1,1e12) or not self:Finite(e.at,cutoff,time()+60) then t[k]=nil
+  else keep[#keep+1]={k,e.at} end
+ end
+ if #keep>LIVE_CAP then
+  table.sort(keep,function(a,b) return a[2]<b[2] end)
+  for i=1,#keep-math.floor(LIVE_CAP*0.8) do t[keep[i][1]]=nil end
+  self.liveSeenCount=math.floor(LIVE_CAP*0.8)
+ else self.liveSeenCount=#keep end
+end
+function M:RecordLiveFloor(key,floor,quantity)
+ if self.persistenceBlocked or not self.db or key==nil or not self:Finite(floor,1,1e12) then return end
+ local t=self:LiveSeenBook()
+ if t[key]==nil then self.liveSeenCount=(self.liveSeenCount or 0)+1 end
+ t[key]={floor=math.ceil(floor),quantity=self:Finite(quantity,1,1e9) and math.floor(quantity) or nil,at=time()}
+ if self.liveSeenCount>LIVE_CAP then self:PruneLiveSeen() end
+end
+function M:RecordSearchResult(result)
+ if type(result)~='table' or not result.key or not result.rows or not result.rows[1] then return end
+ local k=result.key;local key=self:Key(k.itemID,k.itemSuffix,k.itemLevel,k.battlePetSpeciesID)
+ local qty=0;for _,r in ipairs(result.rows) do qty=qty+(tonumber(r.quantity) or 0) end
+ self:RecordLiveFloor(key,result.rows[1].unit,qty)
+end
+-- A live observation newer than the stored one wins; history estimates stay.
+function M:PriceObservation(key)
+ local p=self:StoredPriceObservation(key)
+ local l=self.db and type(self.db.liveSeen)=='table' and self.db.liveSeen[key]
+ if type(l)~='table' or not self:Finite(l.floor,1,1e12) or not self:Finite(l.at,1,time()+60) then return p end
+ if p and p.at>=l.at and not p.unverified then return p end
+ return {floor=l.floor,at=l.at,quantity=l.quantity,fair=p and p.fair,confidence=p and p.confidence,developing=true,source='Live search'}
+end
+
+-- Shopping list live search -------------------------------------------------
+local function marketFor(self,key,row)
+ local k,id,s,l,p=self:ParseKey(key)
+ if not k then return end
+ return self.db.market[k] or {marketKey=k,itemID=id,itemSuffix=s,itemLevel=l,battlePetSpeciesID=p,name=row and row.name or ('Item '..id)}
+end
+function M:SearchShoppingList()
+ if not self.ahOpen or not self:CanUseAuctionHouse() then self:Print('Open the Auction House to search a list');return false end
+ local rows=self:GetWatchRows()
+ if #rows==0 then self:Print('This shopping list is empty');return false end
+ local run={list=self.activeList,total=0,done=0,found=0,none=0,failed=0}
+ self.listSearch=run;self.listEmpty=self.listEmpty or {}
+ local function finish()
+  run.done=run.done+1
+  if run.live and run.done>=run.total and self.listSearch==run then
+   run.finished=true
+   self:Print(('List search: %d found, %d not listed%s'):format(run.found,run.none,run.failed>0 and (', '..run.failed..' failed') or ''))
+  end
+  self:RefreshUI()
+ end
+ for _,row in ipairs(rows) do
+  local m=marketFor(self,row.marketKey,row)
+  local key=row.marketKey
+  if m then
+   local queued=self:Search(m,20,function(result)
+    if self.listSearch~=run then return end
+    if result.rows[1] then run.found=run.found+1;self.listEmpty[key]=nil
+    else run.none=run.none+1;self.listEmpty[key]=time() end
+    finish()
+   end,function() if self.listSearch==run and run.live then run.failed=run.failed+1;finish() end end,
+   function() return self.listSearch==run end)
+   if queued then run.total=run.total+1 end
+  end
+ end
+ run.live=true
+ if run.total==0 then self.listSearch=nil;self:Print('No list items could be searched yet; try again in a moment');return false end
+ self:RefreshUI();return true
+end
+function M:ListSearchStatus()
+ local r=self.listSearch
+ if r and not r.finished then return 'Searching list '..r.list..': '..r.done..' / '..r.total..' | Keep the AH open' end
+end
+
+-- Selling -------------------------------------------------------------------
+function M:PostDuration()
+ local d=tonumber(self.db.settings.postDuration)
+ return (d==1 or d==2 or d==3) and d or 3
+end
+function M:SuggestPostUnit(row,floor)
+ local unit
+ if self:Finite(floor,1,1e12) then
+  local cut=tonumber(self.db.settings.sellUndercut) or 1
+  cut=self:Finite(cut,0,1e9) and math.floor(cut) or 1
+  unit=math.max(1,math.floor(floor)-cut)
+ elseif row and self:Finite(row.price,1,1e12) then unit=math.floor(row.price) end
+ local min=row and row.marketKey and self.db.sellFloors and self.db.sellFloors[row.marketKey]
+ if unit and self:Finite(min,1,1e12) and unit<min then return math.ceil(min),true end
+ return unit
+end
+function M:FormatGoldInput(copper) return ('%0.4f'):format(copper/10000) end
+-- Selecting a bag item fills quantity and starts the live price check.
+function M:SelectSellRow(row,check)
+ if not row then return end
+ local changed=self.selectedRow~=row
+ self.selectedRow=row
+ if changed then
+  self.postQuote=nil
+  if self.postUnit then self.postUnit:SetText('') end
+  if self.postQty then self.postQty:SetText(tostring(math.min(row.quantity or 1,self.db.sellStacks[row.marketKey] or row.quantity or 1))) end
+ end
+ if check and changed and self.ahOpen and self.view=='selling' then self:CheckPost(row) else self:RefreshUI() end
+end
+function M:AfterPostRefresh(rows)
+ local next=self.selectAfterRefresh;self.selectAfterRefresh=nil
+ if not next or self.view~='selling' or #rows==0 then return end
+ self.selectedRow=nil
+ self:SelectSellRow(rows[math.min(next,#rows)],true)
+end
+M:RegisterHandler('AUCTION_HOUSE_AUCTION_CREATED',function(self)
+ local posted=self.postingRow;self.postingRow=nil
+ if not posted or self.view~='selling' then return end
+ for i,r in ipairs(self.sellingRows or {}) do
+  if r.bag==posted.bag and r.slot==posted.slot then self.selectAfterRefresh=i;break end
+ end
+ self.selectedRow=nil;self.postQuote=nil
+ if self.postUnit then self.postUnit:SetText('') end
+ self:RefreshInventory()
+end)
+for _,event in ipairs({'AUCTION_HOUSE_SHOW_ERROR','AUCTION_HOUSE_CLOSED'}) do
+ M:RegisterHandler(event,function(self) self.postingRow=nil;self.selectAfterRefresh=nil end)
+end
+
+-- Cancelling ------------------------------------------------------------------
+local bands={'Short','Medium','Long','Very long'}
+function M:FormatTimeLeft(v)
+ v=tonumber(v)
+ if not v then return '?' end
+ if v>=60 then
+  local h=math.floor(v/3600);local m=math.floor(v%3600/60)
+  return h>0 and (h..'h '..m..'m') or (m..'m')
+ end
+ return bands[v+1] or '?'
+end
+function M:OwnedSold(row)
+ return Enum and Enum.AuctionStatus and row.status==Enum.AuctionStatus.Sold or row.status==1
+end
+function M:OwnedState(o)
+ if self:OwnedSold(o) then return '|cff72e7aaSOLD|r' end
+ if o.undercut then return '|cffff6655UNDERCUT|r' end
+ if o.liveAt then return o.competition and '|cff72e7aaLOWEST|r' or 'NO COMPETITION' end
+ if o.action=='CHECKING' then return 'CHECKING' end
+ return 'Not checked'
+end
+function M:ApplyOwnedCompetition(row,competitor)
+ row.liveAt=time();row.competition=competitor
+ row.undercut=competitor~=nil and row.unit~=nil and competitor<row.unit or false
+end
+function M:CheckAllUndercuts()
+ if not self.ahOpen or not self:CanUseAuctionHouse() then self:Print('Open the Auction House first');return false end
+ local groups,order={},{}
+ for _,row in ipairs(self.ownedRows or {}) do
+  if row.marketKey~=nil and row.itemKey and not self:OwnedSold(row) then
+   if not groups[row.marketKey] then groups[row.marketKey]={};order[#order+1]=row.marketKey end
+   table.insert(groups[row.marketKey],row);row.action='CHECKING'
+  end
+ end
+ if #order==0 then self:Print('No active listings to check. Click REFRESH MY AUCTIONS.');return false end
+ local run={total=0,done=0};self.undercutRun=run
+ for _,key in ipairs(order) do
+  local rows=groups[key]
+  local market=self.db.market[key] or rows[1].itemKey
+  local queued=self:Search(market,25,function(result)
+   if self.undercutRun~=run then return end
+   local competitor=result.rows[1] and result.rows[1].unit
+   for _,row in ipairs(rows) do self:ApplyOwnedCompetition(row,competitor);row.action='INSPECT' end
+   run.done=run.done+1;self:RefreshUI()
+  end,function(e)
+   for _,row in ipairs(rows) do row.action='HOLD';row.reason='Live check failed: '..tostring(e) end
+   if run.live then run.done=run.done+1 end;self:RefreshUI()
+  end,function() return self.undercutRun==run end)
+  if queued then run.total=run.total+1 else for _,row in ipairs(rows) do if row.action=='CHECKING' then row.action='INSPECT' end end end
+ end
+ run.live=true
+ self:RefreshUI();return run.total>0
+end
+function M:UndercutSummary()
+ local u,l,n=0,0,0
+ for _,o in ipairs(self.ownedRows or {}) do
+  if not self:OwnedSold(o) then
+   if o.undercut then u=u+1 elseif o.liveAt then l=l+1 else n=n+1 end
+  end
+ end
+ return u,l,n
+end
+function M:CancelNextUndercut()
+ for _,row in ipairs(self.ownedRows or {}) do
+  if row.undercut and not self:OwnedSold(row) then
+   self.selectedRow=row;self:ReviewCancel(row);self:RefreshUI();return true
+  end
+ end
+ self:Print('No undercut listings found. Click CHECK UNDERCUTS first.');return false
+end
+M:RegisterHandler('AUCTION_CANCELED',function(self,_,id)
+ local rows=self.ownedRows or {}
+ for i=#rows,1,-1 do
+  if rows[i].auctionID==id then
+   if self.selectedRow==rows[i] then self.selectedRow=nil end
+   table.remove(rows,i)
+  end
+ end
+ self:RefreshUI()
+end)

@@ -26,7 +26,7 @@ function M:LinkIdentity(link,expectedID)
  elseif tonumber(fields[13] or 0) and tonumber(fields[13] or 0)>0 then return end
  return self:Key(id,suffix,level,0),id,suffix,level,0
 end
-function M:PriceObservation(key)
+function M:StoredPriceObservation(key)
  if not self.db or not key then return end
  local m=self.db.market[key];local localPrice
  if m and type(m.latest)=='table' and self:Finite(m.latest.floor,1,1e12) and self:Finite(m.lastSeen,1,time()+60) then

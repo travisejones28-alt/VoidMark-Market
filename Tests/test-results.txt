@@ -148,4 +148,13 @@ PASS 1.7 tooltip shows per-unit, stack total, current/stale state and a no-data 
 PASS 1.7 sync catch-up offers older trusted prices and re-seeds existing journals once
 PASS 1.7 sync skips a revision too large for one message instead of stalling, and retries throttled pages
 PASS 1.7 navigation exposes Shopping, Selling, Scanning, History and Settings; Safe Mode is gone
-ALL 149 TESTS PASSED
+PASS 1.8 complete live searches record the competitor floor for tooltips without touching scan history
+PASS 1.8 live name search shows available quantity and records each result
+PASS 1.8 searching a shopping list fetches every item and marks found and not-listed rows
+PASS 1.8 sell price is lowest minus undercut, never below the saved minimum
+PASS 1.8 selecting a bag item checks the live price, fills the undercut and posts all commodity units
+PASS 1.8 after a post the next bag item is selected and checked
+PASS 1.8 cancelling checks every listing for undercuts and cancels one per confirmed click
+PASS 1.8 time left reads as hours/minutes or a duration band
+PASS 1.8 live price cache drops old entries and stays bounded
+ALL 158 TESTS PASSED

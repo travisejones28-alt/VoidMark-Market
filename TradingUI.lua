@@ -8,6 +8,7 @@ function M:PriceAge(at)
  return math.floor(age/86400)..' days ago'
 end
 function M:SimpleScanStatus()
+ local list=self.ListSearchStatus and self:ListSearchStatus();if list then return list end
  local s=self.scanState;local cooldown=self:GetSecondsUntilFreshScanAllowed()
  local retry=cooldown>0 and (' | Next scan in '..self:FormatDuration(cooldown)) or ''
  if s.running then
@@ -53,10 +54,18 @@ function M:InitializeSimpleTradingUI(f,button,label)
  end)
  self.listButtons={}
  for i=1,10 do
-  local b=button(self.shoppingSidebar,'',8,-75-(i-1)*31,178,function(b)
-   if b.listName then self:SetList(b.listName);self.shoppingListMode=true;self:RefreshUI() end
+  local b=button(self.shoppingSidebar,'',8,-75-(i-1)*29,178,function(b)
+   if b.listName then
+    self:SetList(b.listName);self.shoppingListMode=true
+    if self.ahOpen then self:SearchShoppingList() end -- like Auctionator: opening a list searches it
+    self:RefreshUI()
+   end
   end);self.listButtons[i]=b
  end
+ self.searchListButton=button(self.shoppingSidebar,'Search this list',8,-370,178,function()
+  if not self.shoppingListMode then self:Print('Choose a shopping list first');return end
+  self:SearchShoppingList()
+ end)
  button(self.shoppingSidebar,'Manage lists',8,-405,178,function() self:SetView('shopping') end)
  -- Clear, task-specific purchase controls under the shopping results.
 
@@ -67,6 +76,7 @@ function M:RenderSimpleTradingUI(view)
  self.shoppingSidebar:SetShown(view=='browse')
  if view=='browse' then
   local names={'Shopping'};for name in pairs(self.db.shoppingLists) do names[#names+1]=name end;table.sort(names)
+  self.searchListButton:SetEnabled(self.shoppingListMode and self.ahOpen and true or false)
   for i,b in ipairs(self.listButtons) do b.listName=names[i];b:SetShown(names[i]~=nil);if names[i] then b:SetText((self.shoppingListMode and self.activeList==names[i] and '> ' or '')..names[i]) end end
  end
  local paged=view=='browse' or view=='vendor' or view=='shopping' or view=='opportunities' or view=='selling' or view=='my auctions' or view=='ledger' or view=='review' or view=='post review' or view=='investments' or view=='crafting'
@@ -124,9 +134,11 @@ function M:ShoppingResultRows()
  local out={};local needle=(self.db.settings.filter or ''):lower()
  for _,row in ipairs(self:GetWatchRows()) do
   if needle=='' or row.name:lower():find(needle,1,true) or tostring(row.itemID)==needle then
-   local p=self:PriceObservation(row.marketKey);row.at=p and p.at
+   local p=self:PriceObservation(row.marketKey);row.at=p and p.at;row.quantity=p and p.quantity
    local fresh=p and not p.unverified and time()-p.at<=self.db.settings.maxDataAge
-   row.status=p and (p.source=='Synced account' and (fresh and 'SYNCED' or 'SYNC STALE') or (fresh and 'CACHED' or 'STALE')) or 'Unknown'
+   row.status=p and (p.source=='Live search' and (fresh and 'LIVE' or 'STALE') or p.source=='Synced account' and (fresh and 'SYNCED' or 'SYNC STALE') or (fresh and 'CACHED' or 'STALE')) or 'Unknown'
+   local none=self.listEmpty and self.listEmpty[row.marketKey]
+   if none and (not p or none>=p.at) then row.status='NONE';row.floor=0;row.quantity=0;row.at=none end
    out[#out+1]=row
   end
  end

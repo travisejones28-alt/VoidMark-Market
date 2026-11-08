@@ -37,9 +37,10 @@ function M:LiveNameSearch(text)
    local b=result[i];local k=b.itemKey
    local key=k and self:Key(k.itemID,k.itemSuffix,k.itemLevel,k.battlePetSpeciesID)
    if key then
+    if self.RecordLiveFloor then self:RecordLiveFloor(key,b.minPrice,b.totalQuantity) end
     local m=self.db.market[key];local info=C_AuctionHouse.GetItemKeyInfo and C_AuctionHouse.GetItemKeyInfo(k)
     out[#out+1]={marketKey=key,itemID=k.itemID,name=(info and info.itemName) or (m and m.name) or ('Item '..k.itemID),
-     floor=b.minPrice or 0,fair=m and m.fairValue or 0,modelReady=self:CanEstimateResale(m),confidence=m and m.confidence or 'Unknown',status='LIVE BROWSE'}
+     floor=b.minPrice or 0,quantity=tonumber(b.totalQuantity),fair=m and m.fairValue or 0,modelReady=self:CanEstimateResale(m),confidence=m and m.confidence or 'Unknown',status='LIVE BROWSE'}
    end
   end
   self.shoppingSearchStatus=#out==0 and ('No auctions found for '..text..'. Try another name.') or nil
@@ -61,7 +62,7 @@ local function readBag(self,r)
  if commodity==nil then return nil,'Waiting for item classification' end
  local n=A.GetAvailablePostCount and A.GetAvailablePostCount(loc)
  if not whole(n,1e9) then return nil,'Item cannot currently be posted' end
- return {loc=loc,k=k,commodity=commodity,max=math.min(b.stackCount or 1,n)}
+ return {loc=loc,k=k,commodity=commodity,max=commodity and n or math.min(b.stackCount or 1,n)}
 end
 function M:CheckPost(row)
  self.postQuote=nil
@@ -70,8 +71,10 @@ function M:CheckPost(row)
  self:Search(b.k,60,function(result)
   if self.postQuote~=draft or self.view~='selling' then return end
   draft.at=result.received;draft.floor=result.rows[1] and result.rows[1].unit
-  local unit=row.price or draft.floor
-  if self.postUnit:GetText()=='' and unit then self.postUnit:SetText(('%0.4f'):format(unit/10000)) end
+  local unit,clamped=self:SuggestPostUnit(row,draft.floor);draft.atMinimum=clamped
+  if self.postUnit:GetText()=='' and unit then self.postUnit:SetText(self:FormatGoldInput(unit)) end
+  local now=readBag(self,row)
+  if now and now.commodity and not self.db.sellStacks[row.marketKey] and self.postQty then self.postQty:SetText(tostring(now.max)) end
   self:RefreshUI()
  end,function(e) if self.postQuote==draft then self.postQuote=nil;self:Print(e) end end)
 end
@@ -97,11 +100,11 @@ function M:ReviewPost(row,n,unit,duration)
  self:AskTrade(('Post %d x %s at %s each (%s total)?\nCompetition: %s. Deposit: %s. Duration: %dh.'):format(n,row.name,self:Money(unit),self:Money(n*unit),market,self:Money(b.deposit),({2,8,24})[duration]),function()
   local now,reason=postTerms(self,row,n,unit,duration)
   if not now or self.postQuote~=q or now.deposit~=b.deposit then self:Print(reason or 'Quote changed; review again');return end
-  self.postQuote=nil;self.tradePending='post'
+  self.postQuote=nil;self.tradePending='post';self.postingRow=row
   local A=C_AuctionHouse;local ok,pending
   if now.commodity then ok,pending=pcall(A.PostCommodity,now.loc,duration,n,unit)
   else ok,pending=pcall(A.PostItem,now.loc,duration,n,nil,unit) end
-  if not ok then self.tradePending=nil;self:Print('Posting failed: '..tostring(pending));return end
+  if not ok then self.tradePending=nil;self.postingRow=nil;self:Print('Posting failed: '..tostring(pending));return end
   if pending then
    local f=AuctionHouseFrame and (now.commodity and AuctionHouseFrame.CommoditiesSellFrame or AuctionHouseFrame.ItemSellFrame)
    if f and f.CachePendingPost then

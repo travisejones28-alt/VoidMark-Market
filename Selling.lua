@@ -44,7 +44,9 @@ function M:RefreshInventory()
       if (a.price~=nil)~=(b.price~=nil) then return a.price~=nil end
       return tostring(a.name)<tostring(b.name)
     end)
-    self.sellingRows=rows;self:RefreshUI()
+    self.sellingRows=rows
+    if self.AfterPostRefresh then self:AfterPostRefresh(rows) end
+    self:RefreshUI()
   end)
 end
 function M:RequestOwnedAuctionsDiagnostic()
@@ -90,7 +92,7 @@ function M:AnalyzeOwnedLive(row)
       local ok,value=pcall(A.GetCancelCost,row.auctionID)
       if ok and self:Finite(value,0,1e12) then cost=value end
     end
-    row.liveAt=time();row.competition=competitor
+    self:ApplyOwnedCompetition(row,competitor)
     row.cancelCost=cost
     local outcome=self:AssessOwnedRepost(row,competitor,cost)
     row.action=outcome.action;row.reason=outcome.reason

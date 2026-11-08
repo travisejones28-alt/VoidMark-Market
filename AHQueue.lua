@@ -148,6 +148,7 @@ function M:ReadSearch(event,key)
     if self.queue.active~=r then return end
     if result.incomplete then self:FinishRequest(r,false,'Incomplete search rows; revalidate again'); return end
     table.sort(result.rows,function(a,b) return a.unit<b.unit end)
+    if self.RecordSearchResult then pcall(self.RecordSearchResult,self,result) end
     self:FinishRequest(r,true,result)
   end)
 end

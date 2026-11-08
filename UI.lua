@@ -89,9 +89,7 @@ function M:InitializeUI()
     for i,w in ipairs(widths) do b.cols[i]=label(b,'',cx+(i==1 and 26 or 0),-6,w-(i==1 and 31 or 5),'GameFontHighlight'); cx=cx+w end
     b:SetScript('OnClick',function(row)
       if not row.data then return end
-      if self.view=='selling' and self.selectedRow~=row.data then
-       self.postQuote=nil; self.postUnit:SetText('');self.postQty:SetText(tostring(math.min(row.data.quantity or 1,self.db.sellStacks[row.data.marketKey] or row.data.quantity or 1)))
-      end
+      if self.view=='selling' then self:SelectSellRow(row.data,true);return end
       self.selectedRow=row.data
       if self.view=='vendor' then self.quantity:SetText(tostring(row.data.buyQuantity));self:SelectOpportunity(row.data)
       elseif self.view=='opportunities' then self:SelectOpportunity(row.data)
@@ -116,9 +114,10 @@ function M:InitializeUI()
   end)
   label(self.stackFrame,'Qty:',342,-6,32);self.postQty=edit(self.stackFrame,375,-1,52,'1')
   label(self.stackFrame,'Gold/unit:',438,-6,64);self.postUnit=edit(self.stackFrame,505,-1,88,'')
-  self.postDuration=3
-  self.durationButton=button(self.stackFrame,'24h',601,0,62,function(b)
+  self.postDuration=self:PostDuration()
+  self.durationButton=button(self.stackFrame,({2,8,24})[self.postDuration]..'h',601,0,62,function(b)
    self.postDuration=self.postDuration%3+1;b:SetText(({2,8,24})[self.postDuration]..'h')
+   if not self.persistenceBlocked then self.db.settings.postDuration=self.postDuration end
   end)
   button(self.stackFrame,'CHECK PRICE',674,0,132,function() self:CheckPost(self.selectedRow) end)
   button(self.stackFrame,'POST...',816,0,110,function()
@@ -230,6 +229,8 @@ function M:InitializeUI()
   button(self.sellAction,'POST QUEUE',885,0,111,function()self:SetView('post review')end)
   self.ownedRefresh=button(f,'REFRESH MY AUCTIONS',18,-628,210,function() self:RequestOwnedAuctionsDiagnostic() end)
   self.cancelOwned=button(f,'CANCEL SELECTED...',238,-628,180,function() self:ReviewCancel(self.selectedRow) end)
+  self.checkUndercuts=button(f,'CHECK UNDERCUTS',428,-628,170,function() self:CheckAllUndercuts() end)
+  self.cancelNextUndercut=button(f,'CANCEL NEXT UNDERCUT...',608,-628,210,function() self:CancelNextUndercut() end)
   self.postReviewRemove=button(f,'REMOVE POST INTENT',18,-628,200,function()
     local row=self.selectedRow
     if row and row.marketKey then self:RemovePostingReview(row.marketKey);self.selectedRow=nil
@@ -256,12 +257,12 @@ function M:InitializeUI()
     {'riskTolerance','Maximum volatility (%)',0.01},{'depositReserve','Resale deposit allowance/unit (silver)',100},
     {'ahCut','AH cut (%) - verify current AH',0.01},{'maxDataAge','Maximum model age (minutes)',60},
     {'minGoldReserve','Minimum liquid gold reserve (gold)',10000},
-    {'sellMinMargin','Known-cost minimum margin (%)',0.01}}
+    {'sellMinMargin','Known-cost minimum margin (%)',0.01},{'sellUndercut','Selling undercut (copper)',1}}
   self.settingFields={}
   for i,s in ipairs(settings) do
     local col=(i-1)%2; local row=math.floor((i-1)/2); local x=col*495
-    label(self.settingsFrame,s[2],x,-row*52,355)
-    local e=edit(self.settingsFrame,x+365,-row*52+3,100,tostring(self.db.settings[s[1]]/s[3]))
+    label(self.settingsFrame,s[2],x,-row*44,355)
+    local e=edit(self.settingsFrame,x+365,-row*44+3,100,tostring(self.db.settings[s[1]]/s[3]))
     self.settingFields[#self.settingFields+1]={edit=e,key=s[1],factor=s[3]}
   end
   button(self.settingsFrame,'APPLY LIMITS',0,-352,155,function()
@@ -273,7 +274,7 @@ function M:InitializeUI()
     end
     if values.ahCut>0.30 or values.minConfidence>100 or values.minLiquidity>100 or values.riskTolerance>2 or values.maxDataAge>86400*7 then self:Print('One or more limits exceed supported ranges'); return end
     if values.sellMinMargin>2 then self:Print('Sell margin must be 0%-200%');return end
-    values.maxQuantity=math.floor(values.maxQuantity)
+    values.maxQuantity=math.floor(values.maxQuantity);values.sellUndercut=math.floor(values.sellUndercut)
     for k,v in pairs(values) do self.db.settings[k]=v end
     if self.execution.state=='quoted' then self:InvalidateQuote('Limits changed; revalidate')
     elseif self.execution.state=='ready' then self.execution.state='stale'; self.execution.message='Limits changed; revalidate' end
@@ -313,7 +314,7 @@ function M:RenderUI()
   self.status:SetText(self:SimpleScanStatus())
   self.connectionLabel:SetText(self:SimpleSyncStatus())
   self.historyAction:SetShown(view=='investments' or view=='banker' or view=='market');self.stackFrame:SetShown(view=='selling')
-  self.cancelOwned:SetShown(view=='my auctions');self.browseAction:Hide();self.presetButton:SetShown(view=='opportunities')
+  self.cancelOwned:SetShown(view=='my auctions');self.checkUndercuts:SetShown(view=='my auctions');self.cancelNextUndercut:SetShown(view=='my auctions');self.browseAction:Hide();self.presetButton:SetShown(view=='opportunities')
   self.presetButton:SetText('PRESET: '..(s.sniperPreset or 'balanced'):upper())
   self.toolbar:Show(); self.tableFrame:Hide(); self.detail:Hide(); self.contentScroll:Hide(); self.settingsFrame:Hide(); self.action:Hide(); self.ledgerAction:Hide(); self.ownedRefresh:Hide(); self.reviewRemove:Hide(); self.postReviewRemove:Hide(); self.postReviewBack:Hide(); self.sellAction:Hide(); self.watchFrame:Hide(); self.statsFrame:Hide()
   self.filter:SetShown(view=='vendor' or view=='opportunities' or view=='browse' or view=='crafting' or view=='shopping'); self.sortButton:SetShown(view=='opportunities' or view=='browse' or view=='crafting'); self.sortButton:SetText('SORT: '..s.sort:upper())
@@ -429,7 +430,7 @@ function M:RenderUI()
     elseif view=='post review' then
       source=self:GetPostingReviewRows();self.postReviewRemove:Show();self.postReviewBack:Show()
       headers={'Posting intent','In bag','Old quote','Current quote','Fair','','','State'}
-    elseif view=='my auctions' then source=self.ownedRows; self.ownedRefresh:Show(); headers={'My listing','Quantity','My unit','Competitor','Time left','','',''}
+    elseif view=='my auctions' then source=self.ownedRows; self.ownedRefresh:Show(); headers={'My listing','Quantity','My unit','Lowest other','Time left','State','',''}
     elseif view=='ledger' then
       self.ledgerAction:Show(); headers={'Event / item','Quantity','Cost','Revenue','State','ID','Evidence',''}
       for i=#self.db.ledger,1,-1 do source[#source+1]=self.db.ledger[i] end
@@ -468,15 +469,15 @@ function M:RenderUI()
           o.score,o.confidence,o.risk}
         elseif view=='review' then cells={o.name,self:Money(o.snapshotAsk),o.ask>0 and self:Money(o.ask) or 'Missing',
           self:Money(o.fair),self:PercentText(o.roi),'',o.confidence,o.status}
-        elseif view=='browse' then cells={o.name,o.floor>0 and self:Money(o.floor) or 'Unknown',o.quantity or '--',o.status=='LIVE BROWSE' and 'Just now' or self:PriceAge(o.at),o.status=='LIVE BROWSE' and 'Live search' or o.status=='SYNCED' and 'Bank scan' or o.status=='SYNC STALE' and 'Bank scan (old)' or o.status=='STALE' and 'Old scan' or 'Local scan','','',''}
+        elseif view=='browse' then cells={o.name,o.floor>0 and self:Money(o.floor) or (o.status=='NONE' and 'None listed' or 'Unknown'),o.quantity or '--',o.status=='LIVE BROWSE' and 'Just now' or self:PriceAge(o.at),(o.status=='LIVE BROWSE' or o.status=='LIVE' or o.status=='NONE') and 'Live search' or o.status=='SYNCED' and 'Bank scan' or o.status=='SYNC STALE' and 'Bank scan (old)' or o.status=='STALE' and 'Old scan' or 'Local scan','','',''}
         elseif view=='shopping' then cells={o.name,o.itemID,self:Money(o.floor),self:Money(o.fair),o.target and self:Money(o.target) or 'Any','',o.confidence,o.status}
         elseif view=='investments' then cells={o.name,o.quantity,self:Money(o.cost),o.estimatedNet and self:Money(o.estimatedNet) or 'Unknown',
           o.unrealized and self:Money(o.unrealized) or 'Unknown',o.roi and self:PercentText(o.roi) or 'N/A',o.ageDays and (o.ageDays..'d') or 'Unknown age',o.status}
         elseif view=='selling' then cells={o.name,o.quantity,o.price and self:Money(o.price) or 'No quote',o.fair and self:Money(o.fair) or '--',o.basisUnit and self:Money(o.basisUnit) or 'Unknown',o.estimatedNet and self:Money(o.estimatedNet) or '--',o.confidence,o.status}
         elseif view=='post review' then cells={o.name,o.quantity,o.snapshotUnit and self:Money(o.snapshotUnit) or '--',
           o.price and self:Money(o.price) or '--',o.fair and self:Money(o.fair) or '--','','',o.status}
-        elseif view=='my auctions' then cells={o.name,o.quantity,self:Money(o.unit),o.competition and self:Money(o.competition) or '?',
-          tostring(o.timeLeft or '?'),o.action or 'INSPECT','',''}
+        elseif view=='my auctions' then cells={o.name,o.quantity,self:Money(o.unit),o.competition and self:Money(o.competition) or (o.liveAt and 'None' or '?'),
+          self:FormatTimeLeft(o.timeLeft),self:OwnedState(o),'',''}
         else cells={(o.kind or '')..': '..tostring(o.name or o.auctionID or ''),o.quantity or '',o.cost and self:Money(o.cost) or '',o.gross and self:Money(o.gross) or '',o.booked and 'booked' or o.status,o.id,o.evidence or '',''} end
         for j=1,8 do row.cols[j]:SetText(tostring(cells[j] or '')) end
       end
@@ -503,14 +504,16 @@ function M:RenderUI()
         self.detail:SetText('Bag '..o.bag..' / slot '..o.slot..' | '..tostring(o.status)..' | '..tostring(o.strategy or 'No strategy')..
           '\n'..(o.price and ('Price per unit '..self:Money(o.price)..' | Gross '..self:Money(o.gross)..' | estimated AH cut '..self:Money(o.estimatedCut)..' | deposit allowance '..self:Money(o.depositAllowance)) or 'No reliable pricing available')..
           '\n'..(o.profit and ('Estimated net profit '..self:Money(o.profit)..' | ROI '..self:PercentText(o.roi or 0)) or 'Profit unavailable: basis is not fully known')..
-          '\n'..tostring(o.reason or '')..'\n'..self:StackPlanText(o)..'\n'..(self.postQuote and self.postQuote.at and ('Live competitor: '..(self.postQuote.floor and self:Money(self.postQuote.floor) or 'none')) or 'Check price, choose quantity and gold/unit, then post.'))
+          '\n'..tostring(o.reason or '')..'\n'..self:StackPlanText(o)..'\n'..(self.postQuote and self.postQuote.at and ('Live lowest: '..(self.postQuote.floor and self:Money(self.postQuote.floor) or 'none')..(self.postQuote.atMinimum and ' | price held at your minimum' or ' | price = lowest minus '..self:Money(self.db.settings.sellUndercut or 1))) or (self.postQuote and 'Checking live price...' or 'Click an item to check its live price, then POST.')))
       else self.detail:SetText('Select a bag item for its price, cost basis and risk. Choose Check Price to compare live listings.') end
     elseif view=='my auctions' then
-      self.detail:SetText(o and ('Own auction #'..tostring(o.auctionID)..' | '..tostring(o.action or 'INSPECT')..
+      local u,l,n=self:UndercutSummary()
+      local summary=u..' undercut | '..l..' lowest | '..n..' not checked. CHECK UNDERCUTS searches each item; CANCEL NEXT UNDERCUT asks before each cancel.'
+      self.detail:SetText(summary..'\n'..(o and ('Own auction #'..tostring(o.auctionID)..' | '..tostring(o.action or 'INSPECT')..
         '\n'..tostring(o.reason or 'Select a row to fetch live competition.')..
         '\n'..(o.repriceDifference and ('Gross reduction on reprice '..self:Money(o.repriceDifference)) or 'No repricing economics available')..
         '\nCancel Selected shows the current fee before you confirm.') or
-        'Select an auction to inspect the live competitors. No cancel/post action is automatic.')
+        'Select an auction to inspect the live competitors. No cancel/post action is automatic.'))
     elseif view=='browse' then
       self.detail:SetText(o and (o.name..'\n'..self:LiveMarketText(o.marketKey)..'\nChoose BUY ITEM to check the current price and quantity.') or 'Type an item name and press Enter or SEARCH. Full scans and bank prices are also searchable here.\nSelect an item to compare its current listings or buy it.')
     elseif view=='ledger' then

@@ -229,7 +229,7 @@ check('UI builds and every terminal tab renders',function()
 end)
 
 check('Banker watch targets are fresh-only and remain economy-local',function()
-  local m=mk()
+  local m=mk();M.db.liveSeen={} -- earlier live searches would otherwise count as a fresh price
   local ok=M:SetWatch(m.marketKey,1000);assert(ok)
   local items=M:GetWatchRows();local seen
   for _,row in ipairs(items) do if row.marketKey==m.marketKey then seen=row end end
@@ -829,4 +829,5 @@ assert(loadfile(addon..'Tests/live.lua'))()(M,check,jobs,advance,emit)
 assert(loadfile(addon..'Tests/sync_auto.lua'))()(M,check,jobs,advance)
 assert(loadfile(addon..'Tests/usability_sync.lua'))()(M,check,jobs,advance)
 assert(loadfile(addon..'Tests/release_170.lua'))()(M,check,jobs,advance)
+assert(loadfile(addon..'Tests/release_180.lua'))()(M,check,jobs,advance,emit)
 print('ALL '..total..' TESTS PASSED')

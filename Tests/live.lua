@@ -115,7 +115,7 @@ check('Posting rechecks slot, quantity, live quote, deposit and requires a confi
  M.AskTrade=function(_,msg,cb)callback=cb;confirms=confirms+1 end
  api.PostItem=function(_,d,n,bid,unit)assert(d==2 and n==3 and bid==nil and unit==100);posts=posts+1;return false end
  api.PostCommodity=function(_,d,n,unit)assert(d==2 and n==3 and unit==100);posts=posts+1;return false end
- local function quote()M.postQuote={row=row,k=k,at=GetTime(),floor=105};callback=nil end
+ local function quote()M.selectedRow=row;M.postQuote={row=row,k=k,at=GetTime(),floor=105};callback=nil end -- 1.8 clears the selection after a post
  quote();M:ReviewPost(row,5,100,2);assert(not callback)
  quote();M:ReviewPost(row,3,100,2);assert(confirms==1 and posts==0);bag.hyperlink='moved';callback();assert(posts==0)
  bag.hyperlink='test';quote();M:ReviewPost(row,3,100,2);deposit=20;callback();assert(posts==0)
