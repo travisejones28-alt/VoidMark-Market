@@ -245,12 +245,18 @@ function TTB:BuildMarketObservation(group, scanID, completedAt)
   local spreadRatio = 0
   if q10 > 0 and q90 > 0 then spreadRatio = q90 / q10 end
 
+  -- Next posted price above the lowest one (the lowest again if it is listed twice).
+  local second = nil
+  if floorQty >= 2 or (tonumber(group.listings) or 0) >= 2 and #prices == 1 then second = floor
+  elseif prices[2] then second = math.ceil(prices[2]) end
+
   return {
     scanID = scanID,
     at = completedAt,
     listings = tonumber(group.listings) or 0,
     quantity = qty,
     floor = floor,
+    second = second,
     floorQuantity = floorQty,
     meaningfulFloor = q10,
     tiers = #prices,
