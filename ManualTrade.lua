@@ -83,6 +83,7 @@ function M:CheckPost(row)
  local draft={row=row,k=b.k,deadline=GetTime()+10};self.postQuote=draft
  self:Search(b.k,60,function(result)
   if self.postQuote~=draft or self.view~='selling' then return end
+  self.sellDupes=nil
   -- A late live answer replaces a price we filled from the last scan.
   local replaceFallback=draft.fallback and draft.fallbackUnit and self:GetPostPrice()==draft.fallbackUnit
   draft.fallback=nil;draft.reason=nil
@@ -92,7 +93,14 @@ function M:CheckPost(row)
   local now=readBag(self,row);draft.max=now and now.max;draft.commodity=now and now.commodity
   if now and self.postQty and not draft.qtyTouched then self.postQty:SetText(tostring(now.max)) end
   self:RefreshUI()
- end,function(e) if self.postQuote==draft then self:UseScanPrice(draft,e) end end,nil,true)
+ end,function(e)
+  if self.postQuote~=draft then return end
+  -- An earlier search for this item is still running: re-check when it ends.
+  if type(e)=='string' and e:find('already running',1,true) and (self.sellDupes or 0)<10 then
+   self.sellDupes=(self.sellDupes or 0)+1;self.sellCheckAt=GetTime()+1;self.sellCheckRow=row;return
+  end
+  self:UseScanPrice(draft,e)
+ end,nil,true)
 end
 -- The live check failed or did not answer: price from the last scan instead of
 -- leaving the item stuck on "Checking live price..." with an empty price.
@@ -131,8 +139,12 @@ function M:ReviewPost(row,n,unit,duration)
   self.postQuote=nil;self.tradePending='post';self.postingRow=row
   row.postedUnit=unit;row.postedQuantity=n;row.postedDuration=duration
   local A=C_AuctionHouse;local ok,pending
+  -- Forever's server can refuse a regular item posted with buyout only
+  -- (Database Error). Once that happens, items get a starting bid 1c under buyout.
+  local bid=not now.commodity and self.db.settings.itemPostBid==true and math.max(1,unit-1) or nil
+  self.postingTerms={commodity=now.commodity,bid=bid}
   if now.commodity then ok,pending=pcall(A.PostCommodity,now.loc,duration,n,unit)
-  else ok,pending=pcall(A.PostItem,now.loc,duration,n,nil,unit) end
+  else ok,pending=pcall(A.PostItem,now.loc,duration,n,bid,unit) end
   if not ok then self.tradePending=nil;self.postingRow=nil;self:Print('Posting failed: '..tostring(pending));return end
   if pending then
    local f=AuctionHouseFrame and (now.commodity and AuctionHouseFrame.CommoditiesSellFrame or AuctionHouseFrame.ItemSellFrame)
@@ -184,7 +196,14 @@ for _,event in ipairs({'AUCTION_CANCELED','AUCTION_HOUSE_AUCTION_CREATED','AUCTI
   if self.tradePending and e=='AUCTION_HOUSE_SHOW_ERROR' then
    local what=self.tradePending=='post' and self.postingRow and (' posting '..tostring(self.postingRow.name or 'item')) or ''
    self:Print('AH rejected the request'..what..': '..self:AuctionErrorName(code))
+   local dbError=(Enum and Enum.AuctionHouseError and Enum.AuctionHouseError.DatabaseError) or 10
+   local terms=self.postingTerms
+   if self.tradePending=='post' and tonumber(code)==dbError and terms and not terms.commodity and not terms.bid and not self.persistenceBlocked then
+    self.db.settings.itemPostBid=true
+    self:Print('This server wants a starting bid on items. Click Post again: Market now adds a starting bid 1 copper under your price.')
+   end
   end
+  if e=='AUCTION_HOUSE_AUCTION_CREATED' then self.postingTerms=nil end
   if e=='AUCTION_HOUSE_CLOSED' then self.postQuote=nil
    if StaticPopup_Hide then StaticPopup_Hide('VOIDMARKMARKET_TRADE') end
   end
