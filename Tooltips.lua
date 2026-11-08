@@ -75,7 +75,7 @@ end
 function M:AppendMarketTooltip(tip,link,count)
  if not self.db or not tip then return end
  count=tonumber(count);if not (count and count>1 and count%1==0 and count<=10000) then count=nil end
- if self.db.settings.tooltipVendor~=false then
+ if self.db.settings.tooltipVendor==true then
   local v=vendorPrice(link)
   if v then tip:AddDoubleLine(count and ('Vendor x'..count) or 'Vendor',self:Coins(v*(count or 1)),1,.82,0,1,1,1) end
  end
