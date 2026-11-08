@@ -10,7 +10,11 @@ check('Shared stack prices round up fractional copper and publish scan-completio
  local j=M.db.shareJournal;local line=j.rows[j.latest.P81234]
  assert(line and line:find(',13,0,0',1,true))
  local seq=j.seq;advance(1);m.lastSeen=time();M:PublishPrice(m)
+ assert(j.seq==seq) -- 1.9.1: an unchanged price is re-stamped at most every 30 minutes
+ advance(1800);m.lastSeen=time();M:PublishPrice(m)
  assert(j.seq==seq+1 and j.rows[j.seq]:sub(1,2)=='U,')
+ local stampSeq=j.seq;advance(60);m.lastSeen=time();M:PublishPrice(m);assert(j.seq==stampSeq)
+ advance(1800);m.lastSeen=time();M:PublishPrice(m);assert(j.seq==stampSeq+1 and j.rows[j.seq]:match(',(%d+)$')==tostring(time()))
  M.shareRun.infoPending=nil;M:QueueScanSharing(m.lastSeen);jobs()
  assert(M.shareRun.infoPending and M.shareRun.next==0)
  reset()

@@ -1,3 +1,10 @@
+## 1.9.2
+Faster bank-to-main sync.
+- The bank used to send one page (about 8 prices) and wait for the main's reply before the next. It now keeps up to 8 pages in flight, paced to about 1.2 KB/s (burst 3 KB) to stay clear of chat disconnects. A lost page is resent from the last confirmed point; a throttled send waits 1.5 s and keeps its place. The main's side is unchanged, so no data format changed.
+- An unchanged price is re-stamped at most every 30 minutes instead of after every scan. Repeat scans send far fewer messages; prices on the main can show up to 30 minutes older than the bank's last scan (still well inside the 2-hour fresh window).
+- The main no longer rebuilds Shopping results for every page received; it refreshes once a second at most.
+- 169 regressions.
+
 ## 1.9.1
 Review fixes.
 - **Post no longer fails after 15 seconds.** A checked price stays valid for a minute; after that, Post re-checks the live price (your typed price is kept) and asks you to click Post again.

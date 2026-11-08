@@ -159,4 +159,39 @@ check('1.9.1 a minimum can be saved for an item this account never scanned; owne
  C_AuctionHouse=old;C_Item=oldItem
  local r=M.ownedRows[1];assert(r and r.itemID==7777 and r.name=='Silk Cloth' and r.status==0)
 end)
+
+check('1.9.1 sync keeps several pages in flight, rate-limits bytes and resends after a lost page',function()
+ local old=C_ChatInfo;local sent={}
+ C_ChatInfo={RegisterAddonMessagePrefix=function()return 0 end,SendAddonMessage=function(_,msg,ch,target) sent[#sent+1]=msg;return 0 end}
+ local ok,err=pcall(function()
+  reset();M:PairPeer('Bank');jobs()
+  local j=M.db.shareJournal;local r=M.shareRun
+  j.seq=0;j.rows={};j.latest={}
+  for i=1,300 do j.seq=i;j.rows[i]='P,'..(50000+i)..','..time()..','..(100+i)..',0,0' end
+  M.shareRegistered=true;r.lastContact=GetTime();r.hello=GetTime()+100;r.cursor=0;r.next=0
+  local function page(msg) local f={};for v in (msg..'\t'):gmatch('([^\t]*)\t') do f[#f+1]=v end;return tonumber(f[4]),tonumber(f[5]),f[2] end
+  local function ack(n) M:ReceiveSharing('VMMkt2',M.economyID..'\tQ\t'..j.epoch..'\t'..n,'WHISPER','Bank-TestRealm') end
+  M:PumpSharing()
+  assert(#sent==8) -- several pages at once instead of one per reply
+  local prev=0;for _,m in ipairs(sent) do local lo,hi,kind=page(m);assert(kind=='D' and lo==prev and hi>lo);prev=hi end
+  local bytes=0;for _,m in ipairs(sent) do bytes=bytes+#m+1 end;assert(bytes<=3000)
+  r.next=0;M:PumpSharing();assert(#sent==8) -- window full
+  local _,third=page(sent[3]);ack(third);assert(r.cursor==third and #r.pages==5)
+  advance(1);r.next=0;M:PumpSharing();assert(#sent>8 and #sent<=11) -- refilled budget only
+  local lo=page(sent[9]);assert(lo==prev)
+  -- The receiver repeats the same reply when a page went missing: resend from there.
+  ack(third);assert(r.sentHi==third and #r.pages==0)
+  advance(1);r.next=0;local before=#sent;M:PumpSharing();assert(#sent>before and page(sent[before+1])==third)
+  -- No reply at all: after the 4s deadline the unconfirmed pages are sent again.
+  local _,top=page(sent[#sent]);advance(5);r.next=0;before=#sent;M:PumpSharing()
+  assert(#sent>before and page(sent[before+1])==third and r.sentHi>third)
+  -- A throttled send waits briefly and keeps its place.
+  C_ChatInfo.SendAddonMessage=function() return 3 end
+  advance(5);r.next=0;local hi=r.sentHi;M:PumpSharing();assert(r.throttleUntil and r.throttleUntil>GetTime())
+  -- Everything confirmed: done.
+  C_ChatInfo.SendAddonMessage=function(_,msg) sent[#sent+1]=msg;return 0 end
+  ack(j.seq);assert(r.cursor==j.seq and #r.pages==0);advance(3);r.next=0;before=#sent;M:PumpSharing();assert(#sent==before)
+ end)
+ C_ChatInfo=old;if not ok then error(err,0) end
+end)
 end

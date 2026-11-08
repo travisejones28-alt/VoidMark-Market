@@ -2,6 +2,7 @@ local _,M=...
 -- Latest-state journal: one pending revision per variant/list entry, not one
 -- historical row per change. A receiver advances only after validating a page.
 local PREFIX='VMMkt2'
+local STAMP_EVERY=1800
 local function secret(v) return issecretvalue and issecretvalue(v) end
 local function unitCharacter(unit)
  -- Forever returns first name and surname separately. A surname is not a realm.
@@ -82,7 +83,11 @@ function M:PublishPrice(m,catchUp)
  -- A saved legacy entry without confidence is published in the new format.
  local confidence=whole(m.confidenceScore,0,100) and m.confidenceScore or 0
  if tonumber(b)==floor and tonumber(c)==fair and tonumber(d)==confidence then
-  if m.lastSeen>tonumber(a) then self:Journal('U'..m.marketKey,table.concat({'U',m.marketKey,a,m.lastSeen},',')) end
+  local stampRow=j.latest['U'..m.marketKey] and j.rows[j.latest['U'..m.marketKey]]
+  local stamped=tonumber(stampRow and stampRow:match(',(%d+)$')) or tonumber(a)
+  -- Freshness-only rows were most of the traffic after each scan; an unchanged
+  -- price is re-stamped at most every 30 minutes (well inside the 2h window).
+  if m.lastSeen>tonumber(a) and m.lastSeen-stamped>=STAMP_EVERY then self:Journal('U'..m.marketKey,table.concat({'U',m.marketKey,a,m.lastSeen},',')) end
  else
   local u='U'..m.marketKey;if j.latest[u] then j.rows[j.latest[u]]=nil;j.latest[u]=nil end
   self:Journal(index,table.concat({'P',m.marketKey,m.lastSeen,floor,fair,confidence},','))
@@ -229,7 +234,7 @@ function M:HandlePeerOfflineNotice(message)
  self.shareRun=r
  r.offlineUntil=GetTime()+300
  r.cursor=nil;r.reply=nil;r.lastContact=nil
- r.hello=nil;r.retry=nil;r.skipped=nil
+ r.hello=nil;r.retry=nil;r.skipped=nil;r.sentHi=nil;r.pages=nil
  r.status='Partner offline; quietly checking again in 5m'
  self:RefreshUI()
  return true
@@ -315,6 +320,18 @@ local function send(self,ch,body)
  else self.shareRun.lastSendError=nil end
  return sent
 end
+local WINDOW,RATE,BURST=8,1200,3000 -- pages in flight, bytes/second, burst bytes
+local function refill(r,now)
+ local last=r.bucketAt or now;r.bucketAt=now
+ r.bucket=math.min(BURST,(r.bucket or BURST)+(now-last)*RATE)
+end
+local function goBack(r) r.sentHi=r.cursor;r.pages={};r.skipped=nil end
+local function inFlight(r) return r.pages and #r.pages or 0 end
+local function dataReady(r,j,now)
+ if r.cursor==nil or now<(r.throttleUntil or 0) then return false end
+ if r.sentHi and r.sentHi>r.cursor and now>=(r.retry or 0) then return true end -- timed out: resend
+ return math.max(r.cursor,r.sentHi or r.cursor)<j.seq and inFlight(r)<WINDOW
+end
 function M:PumpSharing()
  if self.db then self:AutomaticBankScan(GetTime()) end
  if not self.db.syncPeer or self.persistenceBlocked or not self.shareRegistered then return end
@@ -323,12 +340,12 @@ function M:PumpSharing()
  if now<(r.next or 0) then return end;r.next=now+0.15
  if (InCombatLockdown and InCombatLockdown()) or (C_ChatInfo.InChatMessagingLockdown and C_ChatInfo.InChatMessagingLockdown()) then r.status='Paused by client restrictions';return end
  local j=self.db.shareJournal
- if not r.reply and not (r.infoPending and r.lastContact) and r.hello and now<r.hello and (not r.cursor or r.cursor>=j.seq or now<(r.retry or 0)) then return end
+ if not r.reply and not (r.infoPending and r.lastContact) and r.hello and now<r.hello and not dataReady(r,j,now) then return end
  local ch=channel(self)
  if ch=='WHISPER' and r.offlineUntil and now<r.offlineUntil then return end
  if ch~='WHISPER' then r.offlineUntil=nil end
  if ch=='WHISPER' and r.lastContact and now-r.lastContact>65 then
-  r.cursor=nil;r.reply=nil;r.lastContact=nil;r.hello=nil
+  r.cursor=nil;r.reply=nil;r.lastContact=nil;r.hello=nil;r.sentHi=nil;r.pages=nil
  end
  if r.reply then
   if send(self,ch,r.reply) then r.reply=nil else r.next=now+5 end;return
@@ -347,27 +364,39 @@ function M:PumpSharing()
   elseif not sent then r.status='Message rejected on '..ch..' (result '..tostring(r.lastSendError)..'); retrying' end
   return
  end
- if r.cursor==nil or r.cursor>=j.seq or now<(r.retry or 0) then return end
- local lo=r.cursor;local hi=math.max(lo,r.skipped or lo);local rows={}
- -- Skip superseded revisions without blocking the frame or padding the wire.
- local limit=math.min(j.seq,hi+500)
- while hi<limit do
-  local line=j.rows[hi+1]
-  local overhead=#self.economyID+#j.epoch+45
-  if line and #line+overhead>235 then
-   -- A revision that can never fit one message used to stall the whole
-   -- transfer at this cursor. Skip it (the clipboard transfer still has it).
-   hi=hi+1;r.oversized=(r.oversized or 0)+1;line=nil
-  elseif line and #table.concat(rows,';')+#line+overhead>235 then break
-  else hi=hi+1 end
-  if line then rows[#rows+1]=line end
- end
- if #rows==0 and hi<j.seq then r.skipped=hi;return end
- r.skipped=nil
- if hi>lo then
-  r.retry=now+4
-  if send(self,ch,table.concat({'D',j.epoch,lo,hi,table.concat(rows,';')},'\t')) then r.status='Sending changes '..hi..' / '..j.seq
-  else r.retry=now+1.5 end -- client throttle: retry the same page shortly
+ refill(r,now)
+ -- Pipelined pages: keep up to WINDOW pages in flight instead of waiting for
+ -- each reply. The receiver applies pages strictly in order and replies with
+ -- what it has; a lost page is resent from the confirmed point (go-back-N).
+ for _=1,WINDOW do
+  if not dataReady(r,j,now) then return end
+  if r.sentHi and r.sentHi>r.cursor and now>=(r.retry or 0) then goBack(r) end -- no progress: resend
+  local lo=math.max(r.cursor,r.sentHi or r.cursor);local hi=math.max(lo,r.skipped or lo);local rows={}
+  local limit=math.min(j.seq,hi+500)
+  while hi<limit do
+   local line=j.rows[hi+1]
+   local overhead=#self.economyID+#j.epoch+45
+   if line and #line+overhead>235 then
+    -- A revision that can never fit one message used to stall the whole
+    -- transfer at this cursor. Skip it (the clipboard transfer still has it).
+    hi=hi+1;r.oversized=(r.oversized or 0)+1;line=nil
+   elseif line and #table.concat(rows,';')+#line+overhead>235 then break
+   else hi=hi+1 end
+   if line then rows[#rows+1]=line end
+  end
+  if #rows==0 and hi<j.seq then r.skipped=hi;return end
+  r.skipped=nil
+  if hi<=lo then return end
+  local body=table.concat({'D',j.epoch,lo,hi,table.concat(rows,';')},'\t')
+  if (r.bucket or 0)<#body+#self.economyID+1 then return end
+  if send(self,ch,body) then
+   r.bucket=r.bucket-(#body+#self.economyID+1)
+   if not r.sentHi or r.sentHi<=r.cursor then r.retry=now+4 end -- progress deadline
+   r.sentHi=hi;r.pages=r.pages or {};r.pages[#r.pages+1]=hi
+   r.status='Sending changes '..hi..' / '..j.seq
+  else
+   r.throttleUntil=now+1.5;return -- client throttle: retry the same page shortly
+  end
  end
 end
 function M:ReceiveSharing(prefix,msg,ch,sender)
@@ -395,8 +424,14 @@ function M:ReceiveSharing(prefix,msg,ch,sender)
  elseif f[2]=='Q' and f[3]==j.epoch and #f==4 then
   local n=tonumber(f[4]);if not whole(n,0,j.seq) then return end
   r.lastContact=GetTime();r.probeDelay=nil;r.offlineUntil=nil
+  local progressed=n>(r.cursor or -1)
   if r.cursor~=n then r.skipped=nil end
-  r.cursor=n;r.retry=0
+  r.cursor=n
+  if r.sentHi and r.sentHi>n then
+   local keep={};for _,h in ipairs(r.pages or {}) do if h>n then keep[#keep+1]=h end end;r.pages=keep
+   if progressed then r.retry=GetTime()+4
+   elseif r.pages[1] and r.lastAck==n then goBack(r) end -- repeated reply: a page was lost
+  else r.sentHi=n;r.pages={};r.retry=0 end
   if n==j.seq and r.lastAck~=n then self.db.syncLastSentAt=time() end
   r.lastAck=n;r.status=n==j.seq and 'Up to date' or 'Sending changes'
  elseif f[2]=='D' and #f==6 and rx and f[3]==rx.epoch then
@@ -410,7 +445,7 @@ function M:ReceiveSharing(prefix,msg,ch,sender)
   for _,p in ipairs(staged) do if not apply(self,p) then r.status='Shopping list limit reached; transfer paused';self:RefreshUI();return end end
   r.lastContact=GetTime();r.offlineUntil=nil;rx.seq=hi;self.db.syncLastReceivedAt=time();ack()
   if rx.total and hi>=rx.total then self.db.syncLastReceivedCompleteAt=time() end
-  if self.view=='browse' then self:BuildBrowseRows(self.db.settings.filter or '') end
+  if self.view=='browse' then self.browseNamesDirty=self.browseNamesDirty or GetTime()+1 end
   r.status='Received through change '..hi;self:RefreshUI()
  end
 end

@@ -89,7 +89,7 @@ check('Ungrouped accounts resume lost data and ACKs after reload; unchanged floo
  local previous=M.db.sharedPrices[65];endpoints.Main.shareRun={};selectClient('Main')
  -- Finish recovery through targeted whispers after leaving the shared party.
  GetNumGroupMembers=function()return 0 end
- selectClient('Bank');advance(1000);m.lastSeen=time();M:PublishPrice(m);assert(M:SetWatch(65,150))
+ selectClient('Bank');advance(2000);m.lastSeen=time();M:PublishPrice(m);assert(M:SetWatch(65,150))
  for i=1,60 do step() end
  selectClient('Main');assert(updates>0 and M.db.sharedPrices[65].at==m.lastSeen and M:ListBook('Mats')[65].target==150)
  local rx=M.db.shareReceived['bank-testrealm'];assert(rx.seq>seq)
