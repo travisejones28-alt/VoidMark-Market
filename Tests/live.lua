@@ -300,7 +300,7 @@ check('Auction House tabs work with Auctionator disabled and restore the standal
   end
   if views[i]=='selling' then assert(M.sellScreen:IsShown() and not M.tableFrame:IsShown() and not M.shopScreen:IsShown()) end
   if views[i]=='browse' then assert(M.shopScreen:IsShown() and not M.tableFrame:IsShown() and not M.sellScreen:IsShown()) end
-  if views[i]=='my auctions' then assert(M.ownedRefresh:IsShown() and M.tableFrame:IsShown()) end
+  if views[i]=='my auctions' then assert(M.cancelScreen:IsShown() and not M.ownedRefresh:IsShown() and not M.tableFrame:IsShown()) end
  end
  local tab=tabs[4]
  M.navigation.settings.scripts.OnClick();M:RenderUI();assert(M.settingsFrame:IsShown() and M.db.settings.lastAuctionView=='settings')

@@ -3,10 +3,12 @@ Auctionator-style screens (own code and VoidMark styling, Forever rules).
 - **Selling:** bag items as icon tiles grouped by type, Favourites first (right-click a tile). Header with item, Quantity + Max, gold/silver/copper price boxes, 2h/8h/24h, Deposit and Total, Post and Skip. A "Never below" minimum per item. The listings table shows every live price with your own marked; click a row to price just under it (or match your own). Sub-tabs: Current prices, Price history, Your history (last 20 posts per item).
 - **Shopping:** lists on the left with a search icon each, a Recent searches tab (last 20), New list and Import / Export. Search box with Search, Add to list and Remove. Results show Price, Name, Available and how fresh the price is. Double-click or Buy... to buy.
 - **Tooltip:** Auction line plus the stack total; old prices are grey with their age. The Vendor line is off by default because Forever already shows Sell Price. `/vmm version` prints the loaded version and sync partner.
+- **Cancelling:** rebuilt in the same style: item icons, undercut listings sorted to the top, coin prices, a summary line (undercut / lowest / not checked) and buttons that only light up when they can be used. Click a row to check it live.
+- Shopping lists scroll with the mouse wheel when you have more than 16.
 - Prices synced from the other account are now searchable by name: names the client doesn't know yet are fetched in the background and remembered. A search with no saved match says so.
 - Money shows coin icons instead of 0g 1s 0c text.
 - Posting queue moved to the VoidMark tab > Tools. Full scan stays on the VoidMark tab (Scanning), like Auctionator.
-- 165 regressions.
+- 167 regressions.
 
 ## 1.8.0
 Auctionator 342 used as the behavior reference (independent code; nothing copied).

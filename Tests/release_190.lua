@@ -114,4 +114,30 @@ check('1.9 synced prices become searchable by name once the client learns the it
  known[2589]=nil;assert(M:ItemName(2589)=='Linen Cloth') -- remembered after the client forgets it
  C_Item,GetItemInfo=oldItem,oldInfo
 end)
+
+check('1.9 Cancelling screen lists undercut auctions first and enables the right buttons',function()
+ reset();M:SetView('my auctions');M.ahOpen=true
+ local k={itemID=1}
+ M.ownedRows={{auctionID=1,itemKey=k,name='B',quantity=1,unit=50,liveAt=1,competition=60},
+  {auctionID=2,itemKey=k,name='A',quantity=1,unit=50,liveAt=1,competition=40,undercut=true},
+  {auctionID=3,itemKey=k,name='C',quantity=1,unit=50},{auctionID=4,itemKey=k,name='D',quantity=1,unit=50,status=1}}
+ local order={};for _,o in ipairs(M:CancelRows()) do order[#order+1]=o.auctionID end
+ assert(table.concat(order,',')=='2,3,1,4')
+ M:RenderUI();local s=M.cancelScreen
+ assert(s:IsShown() and s.rows[1].c[1]:GetText()=='A' and s.rows[1].c[6]:GetText():find('UNDERCUT',1,true))
+ assert(s.next.enabled and not s.cancel.enabled and s.summary:GetText():find('1 undercut',1,true))
+ local analyzed;local old=M.AnalyzeOwnedLive;M.AnalyzeOwnedLive=function(_,r) analyzed=r end
+ s.rows[2].scripts.OnClick(s.rows[2]);M.AnalyzeOwnedLive=old
+ assert(M.selectedRow.auctionID==3 and analyzed==M.selectedRow);M:RenderUI();assert(s.cancel.enabled)
+ M.ownedRows={};M.ahOpen=false;M:RenderUI();assert(s.empty:GetText():find('Open the Auction House',1,true) and not s.refresh.enabled)
+end)
+
+check('1.9 the shopping list column scrolls when there are more lists than fit',function()
+ reset();M:SetView('browse')
+ for i=1,20 do M:SetList(('List%02d'):format(i)) end
+ M.shopLeft='lists';M.shopLeftOffset=0;M:RenderUI();assert(M.shopScreen.leftRows[1].value=='Shopping')
+ M.shopScreen.left.scripts.OnMouseWheel(M.shopScreen.left,-1);M:RenderUI()
+ assert(M.shopLeftOffset==4 and M.shopScreen.leftRows[1].value=='List04')
+ M.shopLeftOffset=99;M:RenderUI();assert(M.shopLeftOffset==5 and M.shopScreen.leftRows[16].value=='List20')
+end)
 end

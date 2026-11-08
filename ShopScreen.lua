@@ -55,8 +55,8 @@ end
 function M:InitializeShopScreen(f)
  local s=CreateFrame('Frame',nil,f);s:SetPoint('TOPLEFT',18,-108);s:SetSize(1004,554);s:Hide();self.shopScreen=s
  local left=self.panel(s,0,0,300,554);s.left=left
- s.tabLists=button(left,'Shopping lists',8,-8,138,function() self.shopLeft='lists';self:RefreshUI() end)
- s.tabRecent=button(left,'Recent searches',152,-8,138,function() self.shopLeft='recent';self:RefreshUI() end)
+ s.tabLists=button(left,'Shopping lists',8,-8,138,function() self.shopLeft='lists';self.shopLeftOffset=0;self:RefreshUI() end)
+ s.tabRecent=button(left,'Recent searches',152,-8,138,function() self.shopLeft='recent';self.shopLeftOffset=0;self:RefreshUI() end)
  s.leftRows={}
  for i=1,16 do
   local r=CreateFrame('Button',nil,left);r:SetPoint('TOPLEFT',8,-40-(i-1)*26);r:SetSize(250,24)
@@ -72,6 +72,8 @@ function M:InitializeShopScreen(f)
   r.go:SetScript('OnClick',function() if r.value then if self.shopLeft=='recent' then self:ShopSearch(r.value) else self:OpenShoppingList(r.value) end end end)
   s.leftRows[i]=r
  end
+ left:EnableMouseWheel(true)
+ left:SetScript('OnMouseWheel',function(_,d) self.shopLeftOffset=math.max(0,(self.shopLeftOffset or 0)-(d>0 and 4 or -4));self:RefreshUI() end)
  label(left,'New list',10,-468,80,'GameFontHighlight')
  s.newList=edit(left,72,-462,140)
  local function create()
@@ -128,8 +130,9 @@ function M:RenderShopScreen()
  local recent=self.shopLeft=='recent'
  s.tabLists:SetEnabled(recent);s.tabRecent:SetEnabled(not recent)
  local values=recent and self.db.recentSearches or self:ShopListNames()
+ local off=math.max(0,math.min(self.shopLeftOffset or 0,#values-#s.leftRows));self.shopLeftOffset=off
  for i,r in ipairs(s.leftRows) do
-  local v=values[i];r.value=v;r:SetShown(v~=nil);r.go:SetShown(v~=nil)
+  local v=values[i+off];r.value=v;r:SetShown(v~=nil);r.go:SetShown(v~=nil)
   if v then
    r.text:SetText(v);r.sel:SetShown(not recent and self.shoppingListMode and self.activeList==v)
   end
