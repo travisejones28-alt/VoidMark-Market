@@ -168,9 +168,23 @@ function M:ReviewCancel(row)
   if not ok then self.tradePending=nil;self:Print('Cancel failed: '..tostring(err)) end
  end)
 end
+-- Readable AH error: look the code up in the client's own Enum.AuctionHouseError.
+function M:AuctionErrorName(code)
+ local n=tonumber(code)
+ local enum=Enum and Enum.AuctionHouseError
+ if n and type(enum)=='table' then
+  for name,value in pairs(enum) do if value==n then
+   return (name:gsub('(%l)(%u)','%1 %2'))..' ('..n..')'
+  end end
+ end
+ return tostring(code)
+end
 for _,event in ipairs({'AUCTION_CANCELED','AUCTION_HOUSE_AUCTION_CREATED','AUCTION_HOUSE_SHOW_ERROR','AUCTION_HOUSE_CLOSED'}) do
  M:RegisterHandler(event,function(self,e,code)
-  if self.tradePending and e=='AUCTION_HOUSE_SHOW_ERROR' then self:Print('AH rejected the request: '..tostring(code)) end
+  if self.tradePending and e=='AUCTION_HOUSE_SHOW_ERROR' then
+   local what=self.tradePending=='post' and self.postingRow and (' posting '..tostring(self.postingRow.name or 'item')) or ''
+   self:Print('AH rejected the request'..what..': '..self:AuctionErrorName(code))
+  end
   if e=='AUCTION_HOUSE_CLOSED' then self.postQuote=nil
    if StaticPopup_Hide then StaticPopup_Hide('VOIDMARKMARKET_TRADE') end
   end

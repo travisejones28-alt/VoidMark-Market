@@ -78,4 +78,12 @@ check('1.9.7 A price you typed is never replaced by a late live answer',function
  end)
  unprint();restore();C_AuctionHouse=oldAH;if not ok then error(err,0) end
 end)
+check('1.9.8 AH errors show the client error name',function()
+ local old=Enum;Enum=setmetatable({AuctionHouseError={DatabaseError=10,NotEnoughMoney=0}},{__index=old})
+ local ok,err=pcall(function()
+  assert(M:AuctionErrorName(10)=='Database Error (10)',M:AuctionErrorName(10))
+  assert(M:AuctionErrorName(99)=='99')
+ end)
+ Enum=old;if not ok then error(err,0) end
+end)
 end
