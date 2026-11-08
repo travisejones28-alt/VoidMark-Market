@@ -1,3 +1,8 @@
+## 1.9.3
+- **Live-search prices sync too.** A price seen in a live search (shopping, selling check, undercut check, name search) is sent to the partner like a scan price, without an estimate, so the partner's history and its age are unchanged. Unchanged prices repeat at most every 30 minutes. Settings key `shareLivePrices=false` turns it off.
+- **Optional one-click posting.** Selling has an "Ask before posting" box (ticked by default). Untick it and Post posts straight away, like Auctionator; the slot, quantity, price-check and deposit checks still run.
+- 170 regressions.
+
 ## 1.9.2
 Faster bank-to-main sync.
 - The bank used to send one page (about 8 prices) and wait for the main's reply before the next. It now keeps up to 8 pages in flight, paced to about 1.2 KB/s (burst 3 KB) to stay clear of chat disconnects. A lost page is resent from the last confirmed point; a throttled send waits 1.5 s and keeps its place. The main's side is unchanged, so no data format changed.

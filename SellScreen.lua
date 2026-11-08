@@ -145,6 +145,12 @@ function M:InitializeSellScreen(f)
  button(h,'Skip',466,-68,80,function() self:SkipSellItem() end,26)
  label(h,'Deposit',570,-14,110);s.deposit=label(h,'--',570,-30,115,'GameFontHighlight')
  label(h,'Total price',570,-52,110);s.total=label(h,'--',570,-68,115,'GameFontHighlight')
+ s.confirm=CreateFrame('CheckButton',nil,h,'UICheckButtonTemplate');s.confirm:SetPoint('TOPLEFT',566,-88);s.confirm:SetSize(22,22)
+ s.confirm:SetScript('OnClick',function(c)
+  if self.persistenceBlocked then return end
+  self.db.settings.confirmPosts=c:GetChecked() and true or false;self:RefreshUI()
+ end)
+ label(h,'Ask before posting',590,-93,100,'GameFontHighlightSmall')
  label(h,'Never below',66,-116,80,'GameFontHighlightSmall')
  s.minimum=edit(h,148,-110,66,false)
  s.minimum:SetScript('OnEnterPressed',function(e)
@@ -267,6 +273,7 @@ function M:RenderSellScreen()
  s.name:SetText(r and r.name or (#tiles==0 and 'No sellable items in your bags' or 'Select an item'))
  s.icon:SetTexture(r and (r.icon or self:RowItemIcon(r,r.itemID)) or 'Interface\\Icons\\INV_Misc_QuestionMark')
  for i,c in ipairs(s.durations) do c:SetChecked(self.postDuration==i) end
+ s.confirm:SetChecked(self.db.settings.confirmPosts~=false)
  s.post:SetEnabled(r~=nil and self.ahOpen and not self.tradePending and true or false)
  local floor=r and r.marketKey~=nil and self.db.sellFloors[r.marketKey]
  if not (s.minimum.HasFocus and s.minimum:HasFocus()) then s.minimum:SetText(floor and self:FormatGoldInput(floor):gsub('%.?0+$','') or '') end

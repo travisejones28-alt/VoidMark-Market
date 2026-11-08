@@ -93,6 +93,25 @@ function M:PublishPrice(m,catchUp)
   self:Journal(index,table.concat({'P',m.marketKey,m.lastSeen,floor,fair,confidence},','))
  end
 end
+-- 1.9.3: a live search on this account also updates the partner. Sent as an
+-- ordinary price row with no estimate (fair 0), so the partner keeps its
+-- existing history estimate and its age. Unchanged floors repeat at most
+-- every 30 minutes, the same as scan stamps.
+function M:PublishLiveFloor(key,floor,at)
+ if not self.db.syncPeer or self.persistenceBlocked or self.db.settings.shareLivePrices==false then return end
+ if not self:ParseKey(key) or not whole(floor,1,1e12) or not whole(at,1,time()+60) then return end
+ local j=self.db.shareJournal;local index='P'..key
+ local old=j.latest[index] and j.rows[j.latest[index]]
+ local oldAt,oldFloor
+ if old then oldAt,oldFloor=old:match('^P,[^,]+,(%d+),(%d+),')  end
+ oldAt,oldFloor=tonumber(oldAt),tonumber(oldFloor)
+ if oldAt and oldAt>=at then return end
+ local u=j.latest['U'..key] and j.rows[j.latest['U'..key]]
+ local stamped=tonumber(u and u:match(',(%d+)$')) or oldAt
+ if oldFloor==floor and stamped and at-stamped<STAMP_EVERY then return end
+ if u then j.rows[j.latest['U'..key]]=nil;j.latest['U'..key]=nil end
+ self:Journal(index,table.concat({'P',key,at,floor,0,0},','))
+end
 local function listKey(list,key) return enc(list)..'/'..key end
 function M:PublishWatch(list,key,entry)
  if not self:ParseKey(key) then return end

@@ -30,6 +30,7 @@ function M:RecordLiveFloor(key,floor,quantity)
  local t=self:LiveSeenBook()
  if t[key]==nil then self.liveSeenCount=(self.liveSeenCount or 0)+1 end
  t[key]={floor=math.ceil(floor),quantity=self:Finite(quantity,1,1e9) and math.floor(quantity) or nil,at=time()}
+ if self.PublishLiveFloor then pcall(self.PublishLiveFloor,self,key,math.ceil(floor),time()) end
  if self.liveSeenCount>LIVE_CAP then self:PruneLiveSeen() end
 end
 function M:RecordSearchResult(result)

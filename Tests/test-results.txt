@@ -168,4 +168,5 @@ PASS 1.9 Cancelling screen lists undercut auctions first and enables the right b
 PASS 1.9 the shopping list column scrolls when there are more lists than fit
 PASS 1.9.1 a minimum can be saved for an item this account never scanned; owned rows carry ids and names
 PASS 1.9.1 sync keeps several pages in flight, rate-limits bytes and resends after a lost page
-ALL 169 TESTS PASSED
+PASS 1.9.3 live-search prices reach the partner without touching its estimate; one-click posting is opt-in
+ALL 170 TESTS PASSED

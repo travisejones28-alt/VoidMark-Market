@@ -123,6 +123,12 @@ check('Posting rechecks slot, quantity, live quote, deposit and requires a confi
   assert(M.tradePending=='post');emit('AUCTION_HOUSE_AUCTION_CREATED',85)
  end
  assert(posts==2);quote();advance(61);M:ReviewPost(row,3,100,2);assert(not callback)
+ -- 1.9.3 "Ask before posting" off: the Post click posts directly, same checks.
+ M.db.settings.confirmPosts=false;com=false;confirms=0
+ quote();M:ReviewPost(row,3,100,2);assert(confirms==0 and posts==3 and M.tradePending=='post');emit('AUCTION_HOUSE_AUCTION_CREATED',86)
+ quote();M:ReviewPost(row,5,100,2);assert(posts==3) -- too many: still refused
+ bag.hyperlink='moved';quote();M:ReviewPost(row,3,100,2);assert(posts==3);bag.hyperlink='test'
+ M.db.settings.confirmPosts=nil
  C_AuctionHouse=old;ItemLocation=loc;C_Container=con;M.AskTrade=ask
 end)
 check('Cancellation validates exact ownership and fee again after confirmation',function()

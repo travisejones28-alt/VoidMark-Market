@@ -99,7 +99,7 @@ function M:ReviewPost(row,n,unit,duration)
  local b,e=postTerms(self,row,n,unit,duration);if not b then self:Print(e);return end
  local q=self.postQuote
  local market=q.floor and self:Money(q.floor)..' / unit' or 'no competing listings'
- self:AskTrade(('Post %d x %s at %s each (%s total)?\nCompetition: %s. Deposit: %s. Duration: %dh.'):format(n,row.name,self:Money(unit),self:Money(n*unit),market,self:Money(b.deposit),({2,8,24})[duration]),function()
+ local function post()
   local now,reason=postTerms(self,row,n,unit,duration)
   if not now or self.postQuote~=q or now.deposit~=b.deposit then self:Print(reason or 'Quote changed; review again');return end
   self.postQuote=nil;self.tradePending='post';self.postingRow=row
@@ -114,7 +114,11 @@ function M:ReviewPost(row,n,unit,duration)
     if now.commodity then f:CachePendingPost(now.loc,duration,n,unit) else f:CachePendingPost(now.loc,duration,n,nil,unit) end
    end
   end
- end)
+ end
+ -- Default asks first. With "Ask before posting" off, the Post click itself
+ -- is the confirmation (like Auctionator); the same checks still run.
+ if self.db.settings.confirmPosts==false then return post() end
+ self:AskTrade(('Post %d x %s at %s each (%s total)?\nCompetition: %s. Deposit: %s. Duration: %dh.'):format(n,row.name,self:Money(unit),self:Money(n*unit),market,self:Money(b.deposit),({2,8,24})[duration]),post)
 end
 local function cancelFee(self,r)
  if not usable(self) or self.tradePending or not r or not whole(r.auctionID,1e15) then return nil,'Select a current owned auction' end

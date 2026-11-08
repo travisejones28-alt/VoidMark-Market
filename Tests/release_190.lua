@@ -194,4 +194,23 @@ check('1.9.1 sync keeps several pages in flight, rate-limits bytes and resends a
  end)
  C_ChatInfo=old;if not ok then error(err,0) end
 end)
+
+check('1.9.3 live-search prices reach the partner without touching its estimate; one-click posting is opt-in',function()
+ reset();M:PairPeer('Bank');jobs()
+ local j=M.db.shareJournal;j.seq=0;j.rows={};j.latest={}
+ M:RecordLiveFloor(4242,77,9)
+ local line=j.rows[j.seq];assert(line=='P,4242,'..time()..',77,0,0')
+ local seq=j.seq;advance(60);M:RecordLiveFloor(4242,77,9);assert(j.seq==seq) -- unchanged: not repeated yet
+ M:RecordLiveFloor(4242,70,9);assert(j.seq==seq+1 and j.rows[j.seq]:find(',70,0,0',1,true))
+ advance(1801);M:RecordLiveFloor(4242,70,9);assert(j.seq==seq+2)
+ M.db.settings.shareLivePrices=false;advance(5);M:RecordLiveFloor(4242,60,9);assert(j.seq==seq+2);M.db.settings.shareLivePrices=nil
+ -- Receiver: the live row updates the price and keeps the history estimate.
+ M.db.sharedPrices[4242]={kind='P',key=4242,id=4242,at=time()-3600,floor=90,fair=95,reliable=true,histAt=time()-3600,histFair=95,origin=M.db.syncPeer}
+ M:MergeAsk({kind='P',key=4242,id=4242,at=time(),floor=70,fair=nil,reliable=false,confidence=0})
+ local p=M.db.sharedPrices[4242];assert(p.floor==70 and p.histFair==95 and p.histAt==time()-3600)
+ -- Posting asks by default; the Selling screen box reflects and saves it.
+ M:InitializeUI();M.view='selling';M.sellingRows={};M:RenderUI();assert(M.sellScreen.confirm:GetChecked())
+ M.sellScreen.confirm:SetChecked(false);M.sellScreen.confirm.scripts.OnClick(M.sellScreen.confirm);assert(M.db.settings.confirmPosts==false)
+ M.sellScreen.confirm:SetChecked(true);M.sellScreen.confirm.scripts.OnClick(M.sellScreen.confirm);assert(M.db.settings.confirmPosts==true)
+end)
 end
