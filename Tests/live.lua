@@ -22,7 +22,7 @@ check('Passive tooltip picks exact suffix, level, pet, source, freshness and nev
  M.db.sharedPrices[k]={floor=99,at=time()-30,fair=158,reliable=true}
  local noSearch=M.Search;M.Search=function()error('mouseover queried AH')end
  local lines={};local tip={AddLine=function(_,s)lines[#lines+1]=s end,AddDoubleLine=function(_,a,b)lines[#lines+1]=a..':'..b end}
- M:AppendMarketTooltip(tip,link);local text=table.concat(lines,' ');assert(text:find('Auction:0g 0s 99c',1,true) and not text:find('old)',1,true))
+ M:AppendMarketTooltip(tip,link);local text=table.concat(lines,' ');assert(text:find('Auction:'..M:Coins(99),1,true) and not text:find('old)',1,true))
  assert(not M:TooltipMarketForLink(link:gsub('%-2','-3')))
  assert(not M:TooltipMarketForLink(link:gsub('hat','high')))
  local m=sample(44,101,time());M.db.market[k]=m;assert(M:TooltipMarketForLink(link).floor==101)

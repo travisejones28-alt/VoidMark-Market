@@ -42,7 +42,7 @@ check('1.8 complete live searches record the competitor floor for tooltips witho
  assert(#M.db.market[9301].history==1 and M.db.market[9301].latest.floor==290)
  local p=M:PriceObservation(9301);assert(p.floor==250 and p.source=='Live search' and p.fair==M:StoredPriceObservation(9301).fair)
  local lines,t=tip();M:AppendMarketTooltip(t,'|Hitem:9301:0:0:0:0:0:0:0|h[Herb]|h');local text=table.concat(lines,'\n')
- assert(text:find('Auction:0g 2s 50c',1,true) and not text:find('old)',1,true))
+ assert(text:find('Auction:'..M:Coins(250),1,true) and not text:find('old)',1,true))
  -- A newer full scan wins again.
  advance(10);M.db.market[9301].lastSeen=time();assert(M:PriceObservation(9301).source=='Local scan')
  C_Item=oldItem

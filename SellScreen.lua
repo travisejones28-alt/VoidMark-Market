@@ -24,10 +24,16 @@ local function panel(parent,x,y,w,h)
  return p
 end
 M.panel=panel
+-- Coin-icon money like Auctionator: "1[s] 89[c]", leading zero units dropped.
+local icons={'Interface\\MoneyFrame\\UI-GoldIcon','Interface\\MoneyFrame\\UI-SilverIcon','Interface\\MoneyFrame\\UI-CopperIcon'}
 function M:Coins(v)
- v=tonumber(v);if not v then return '--' end
- if GetCoinTextureString then local ok,s=pcall(GetCoinTextureString,math.floor(v));if ok and s then return s end end
- return self:Money(v)
+ v=tonumber(v);if not v or not self:Finite(v,-1e14,1e14) then return '--' end
+ v=math.floor(v);local sign=v<0 and '-' or '';v=math.abs(v)
+ local parts={math.floor(v/10000),math.floor(v/100)%100,v%100};local out={}
+ for i,n in ipairs(parts) do
+  if n>0 or #out>0 or i==3 then out[#out+1]=n..'|T'..icons[i]..':0:0:2:0|t' end
+ end
+ return sign..table.concat(out,' ')
 end
 
 -- One tile per auction identity: commodities and stacks of the same variant

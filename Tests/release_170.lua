@@ -25,12 +25,12 @@ check('1.8 tooltip shows Vendor and Auction lines, a stack total, greys old pric
  GetItemInfo=function()return 'Bound',nil,1,1,1,'Armor','Cloth',1,'',999,0,0,0,1 end
  lines,tip=tipLines();M:AppendMarketTooltip(tip,link);assert(#lines==0) -- bind-on-pickup never reaches the AH
  GetItemInfo=function()return 'Ore',nil,1,1,1,'Trade','Metal',20,'',999,5 end
- M.db.settings.tooltipNoData=false;M.db.settings.tooltipVendor=true;lines,tip=tipLines();M:AppendMarketTooltip(tip,link);assert(#lines==1 and lines[1]=='Vendor:0g 0s 5c');M.db.settings.tooltipVendor=nil
+ M.db.settings.tooltipNoData=false;M.db.settings.tooltipVendor=true;lines,tip=tipLines();M:AppendMarketTooltip(tip,link);assert(#lines==1 and lines[1]=='Vendor:'..M:Coins(5));M.db.settings.tooltipVendor=nil
  M.db.settings.tooltipNoData=nil;M.db.settings.tooltipVendor=true
  M.db.market[9001]={itemID=9001,marketKey=9001,name='Ore',lastSeen=time()-120,observations=8,confidenceScore=80,
   volatility=.1,fairValue=260,historySpan=10*86400,latest={floor=250,quantity=40},history={}}
  lines,tip=tipLines();M:AppendMarketTooltip(tip,link,20);local text=table.concat(lines,'\n')
- assert(text:find('Vendor x20:0g 1s 0c',1,true) and text:find('Auction:0g 2s 50c',1,true) and text:find('Auction x20:0g 50s 0c',1,true))
+ assert(text:find('Vendor x20:'..M:Coins(100),1,true) and text:find('Auction:'..M:Coins(250),1,true) and text:find('Auction x20:'..M:Coins(5000),1,true))
  assert(#lines==3 and not text:find('old)',1,true))
  M.db.settings.tooltipVendor=nil;lines,tip=tipLines();M:AppendMarketTooltip(tip,link);assert(#lines==1) -- off by default: Forever shows Sell Price itself
  advance(M.db.settings.maxDataAge+10)
