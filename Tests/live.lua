@@ -274,33 +274,47 @@ check('Auction House tabs work with Auctionator disabled and restore the standal
  emit('AUCTION_HOUSE_SHOW')
  native.IsShown=function()return true end
  native.GetPoint=function()return 'TOPLEFT',UIParent,'TOPLEFT',120,-80 end
- local tabs=M.auctionTabs;assert(#tabs==1 and #native.Tabs==3)
+ local tabs=M.auctionTabs;assert(#tabs==4 and #native.Tabs==3)
  M:InstallAuctionTabs();assert(M.auctionTabs==tabs)
- local tab=tabs[1]
+ local labels={'Shopping','Selling','Cancelling','VoidMark'}
+ local views={'browse','selling','my auctions','market'}
  M.db.settings.lastAuctionView=nil
- tab.button.scripts.OnClick();assert(M.view=='browse' and M.auctionDock.page==tab.page)
- assert(M.window:IsShown() and M.window:GetScale()>0 and M.window.testLevel>native:GetFrameLevel())
- assert(parentFrame==tab.page and tab.page:IsShown())
- M.window.scripts.OnDragStart(M.window);M.window.scripts.OnDragStop(M.window)
- assert(starts==1 and stops==1 and not movable and M.window:IsShown() and parentFrame==tab.page)
- -- Section navigation lives inside the docked window and is remembered.
- for _,view in ipairs({'selling','my auctions','market','banker','settings','vendor'}) do
-  M.navigation[view].scripts.OnClick();M:RenderUI();assert(M.view==view and M.auctionDock and M.db.settings.lastAuctionView==view)
-  if view=='selling' then assert(M.sellAction:IsShown() and M.tableFrame:IsShown()) end
-  if view=='my auctions' then assert(M.ownedRefresh:IsShown() and M.tableFrame:IsShown()) end
-  if view=='settings' then assert(M.settingsFrame:IsShown()) end
+ for i,tab in ipairs(tabs) do
+  assert(tab.button.text==labels[i])
+  tab.button.scripts.OnClick();M:RenderUI()
+  assert(M.view==views[i] and M.auctionDock.page==tab.page and parentFrame==tab.page)
+  assert(M.window:IsShown() and M.window:GetScale()>0 and M.window.testLevel>native:GetFrameLevel())
+  for j,other in ipairs(tabs) do assert(other.page:IsShown()==(j==i)) end
+  if i<=3 then
+   -- A trading tab stands alone: no section buttons, BACK only on sub-screens.
+   for _,b in pairs(M.navigation) do assert(not b:IsShown()) end
+   assert(not M.dockBack:IsShown())
+  else
+   assert(M.navigation.market:IsShown() and M.navigation.settings:IsShown() and not M.navigation.browse:IsShown())
+  end
+  if i==1 then
+   M.window.scripts.OnDragStart(M.window);M.window.scripts.OnDragStop(M.window)
+   assert(starts==1 and stops==1 and not movable and M.window:IsShown() and parentFrame==tab.page)
+   M:SetView('execution');M:RenderUI();assert(M.dockBack:IsShown())
+   M.dockBack.scripts.OnClick();M:RenderUI();assert(M.view=='browse' and not M.dockBack:IsShown())
+  end
+  if views[i]=='selling' then assert(M.sellAction:IsShown() and M.tableFrame:IsShown()) end
+  if views[i]=='my auctions' then assert(M.ownedRefresh:IsShown() and M.tableFrame:IsShown()) end
  end
+ local tab=tabs[4]
+ M.navigation.settings.scripts.OnClick();M:RenderUI();assert(M.settingsFrame:IsShown() and M.db.settings.lastAuctionView=='settings')
  -- Dragging any empty part of the native AH moves the whole window.
  native.hooks.OnMouseDown[1](native,'LeftButton');native.hooks.OnMouseUp[1](native,'LeftButton')
  assert(starts==2 and stops==2 and not movable)
  local saved=M.db.settings.auctionPoint;assert(saved and saved.x==120 and saved.y==-80 and saved.point=='TOPLEFT')
  native.hooks.OnMouseDown[1](native,'RightButton');assert(not M.ahGesture)
  tab.page.scripts.OnMouseDown(tab.page,'LeftButton');tab.page.scripts.OnMouseUp(tab.page,'LeftButton');assert(starts==3 and stops==3)
- -- Reopening the tab returns to the last section and restores the AH position.
- tab.page:Hide();assert(not M.auctionDock)
+ -- Reopening the VoidMark tab returns to its last section; the AH position is restored.
+ tab.page:Hide();assert(not M.auctionDock and not M.dockSection)
  local placed;native.SetPoint=function(_,...)placed={...} end
  M:RestoreAuctionPosition();assert(placed[1]=='TOPLEFT' and placed[2]==UIParent and placed[4]==120 and placed[5]==-80)
- tab.button.scripts.OnClick();assert(M.view=='vendor' and M.auctionDock.page==tab.page)
+ tab.button.scripts.OnClick();assert(M.view=='settings' and M.auctionDock.page==tab.page)
+ tabs[1].button.scripts.OnClick();assert(M.view=='browse' and M.db.settings.lastAuctionView=='settings')
  M:CloseMarketWindow()
  assert(not M.auctionDock and native.displayMode==AuctionHouseFrameDisplayMode.Buy)
  assert(parentFrame==UIParent and not M.window:IsShown() and M.window:GetScale()==oldScale and M.window.testLevel==2)
@@ -331,12 +345,16 @@ check('Auction House tabs work with Auctionator disabled and restore the standal
   CreateTab=function(_,id,page,label)registered[id]={page=page,label=label,button=oldCreate('Button')} end,
   GetButton=function(_,id)return registered[id].button end}
  LibStub=function()return lib end;M.auctionTabs=nil;M:InstallAuctionTabs()
- assert(registered.VoidMarkMarketTab.label=='VoidMark')
- local n=0;for _ in pairs(registered) do n=n+1 end;assert(n==1)
- M.db.settings.lastAuctionView='selling'
- registered.VoidMarkMarketTab.page:Show()
+ local n=0;for _ in pairs(registered) do n=n+1 end;assert(n==4)
+ assert(registered.VoidMarkMarketShopping.label=='Shopping' and registered.VoidMarkMarketVoidMark.label=='VoidMark')
+ registered.VoidMarkMarketSelling.page:Show()
  assert(M.view=='selling' and M.auctionDock)
- registered.VoidMarkMarketTab.page:Hide();assert(not M.auctionDock)
+ registered.VoidMarkMarketSelling.page:Hide();assert(not M.auctionDock)
+ -- With Auctionator loaded, trading tabs are prefixed so the two sets differ.
+ local oldAddOns=C_AddOns;C_AddOns={IsAddOnLoaded=function(name)return name=='Auctionator' end}
+ registered={};M.auctionTabs=nil;M:InstallAuctionTabs()
+ assert(registered.VoidMarkMarketShopping.label=='VM Shopping' and registered.VoidMarkMarketVoidMark.label=='VoidMark')
+ C_AddOns=oldAddOns
  LibStub=nil;CreateFrame=oldCreate;AuctionHouseFrame=nil;M.auctionTabs=nil
 end)
 end

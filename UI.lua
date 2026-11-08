@@ -37,7 +37,10 @@ function M:InitializeUI()
   button(f,'TRANSFER',860,-12,125,function() self:ShowTransferWindow() end)
   button(f,'X',995,-12,26,function() self:CloseMarketWindow() end)
   self.navigation={}
-  for i,v in ipairs(tabs) do local tab=v[2];self.navigation[tab]=button(f,v[1],18+(i-1)*111,-48,107,function() self:SetView(tab) end) end
+  self.navOrder={}
+  for i,v in ipairs(tabs) do local tab=v[2];self.navOrder[i]=tab;self.navigation[tab]=button(f,v[1],18+(i-1)*111,-48,107,function() self:SetView(tab) end) end
+  self.dockBack=button(f,'< BACK',18,-48,120,function() local root=self:DockRootView();if root then self:SetView(root) end end)
+  self.dockBack:Hide()
   self.syncFrame=CreateFrame('Frame',nil,f);self.syncFrame:SetPoint('TOPLEFT',18,-151);self.syncFrame:SetSize(1000,465)
   self.syncReport=label(self.syncFrame,'',0,-70,960)
   button(self.syncFrame,'RECONNECT',0,0,130,function() self:ReconnectSharing(false) end)

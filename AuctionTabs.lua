@@ -1,18 +1,28 @@
 local _, M = ...
 
--- One Auction House tab. The Market window has its own section navigation, so
--- adding a tab per section only crowded/clipped the native row (and
--- Auctionator's row when both addons are enabled).
-local TAB_LABEL, TAB_ID = 'VoidMark', 'VoidMarkMarketTab'
-local dockViews = {browse=true, selling=true, ['my auctions']=true, market=true, banker=true,
-  vendor=true, crafting=true, settings=true, tools=true, sync=true, shopping=true}
+-- Auctionator-style tabs on the Auction House tab row: three trading screens
+-- plus one VoidMark tab for everything else (scanning, history, settings...).
+local sections = {
+  {key='shopping', label='Shopping', root='browse'},
+  {key='selling', label='Selling', root='selling'},
+  {key='cancelling', label='Cancelling', root='my auctions'},
+  {key='voidmark', label='VoidMark'},
+}
+local toolViews = {market=true, banker=true, vendor=true, crafting=true, settings=true, tools=true, sync=true}
+M.auctionSections = sections
 
-function M:AuctionStartView()
+function M:AuctionStartView(section)
+  if section and section.root then return section.root end
   local v = self.db and self.db.settings.lastAuctionView
-  return dockViews[v] and v or 'browse'
+  return toolViews[v] and v or 'market'
 end
 function M:RememberAuctionView(view)
-  if self.auctionDock and dockViews[view] and self.db then self.db.settings.lastAuctionView = view end
+  if self.auctionDock and self.dockSection=='voidmark' and toolViews[view] and self.db then
+    self.db.settings.lastAuctionView = view
+  end
+end
+function M:DockRootView()
+  for _, section in ipairs(sections) do if section.key==self.dockSection then return section.root end end
 end
 
 local function fitDock(self)
@@ -27,8 +37,9 @@ local function fitDock(self)
   window:SetPoint('CENTER', ah, 'CENTER', 0, -14/fit)
 end
 
-local function dock(self, page, view)
+local function dock(self, page, view, section)
   local window = self.window
+  self.dockSection = section
   local ah = AuctionHouseFrame
   self.auctionDock = {
     page=page, anchor={window:GetPoint()}, scale=window:GetScale(),
@@ -171,6 +182,7 @@ local function undock(self, page)
   local window = self.window
   self:StopMarketDrag(window)
   self.auctionDock = nil
+  self.dockSection = nil
   window:Hide()
   window:ClearAllPoints()
   window:SetParent(state.parent)
@@ -207,49 +219,58 @@ function M:InstallAuctionTabs()
     end)
   end
 
-  local page = CreateFrame('Frame', nil, ah)
-  page:SetPoint('TOPLEFT', ah, 'TOPLEFT', 8, -36)
-  page:SetPoint('BOTTOMRIGHT', ah, 'BOTTOMRIGHT', -8, 8)
-  page:Hide()
-  -- The margins around the docked window also drag the whole AH.
-  page:EnableMouse(true)
-  page:SetScript('OnMouseDown',function(_,button) if button=='LeftButton' then beginGesture(self,button) end end)
-  page:SetScript('OnMouseUp',function(_,button) if button=='LeftButton' then endGesture(self,button) end end)
-  local errorLabel = page:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
-  errorLabel:SetPoint('CENTER')
-  errorLabel:SetWidth(500)
-  page:SetScript('OnShow', function()
-    errorLabel:SetText('')
-    local ok, reason = pcall(dock, self, page, self:AuctionStartView())
-    if not ok then
-      undock(self, page)
-      local message = 'VoidMark Market could not open: '..tostring(reason)
-      self:Log('AUCTION TAB', message)
-      errorLabel:SetText(message)
-    end
-  end)
-  page:SetScript('OnHide', function() endGesture(self); undock(self, page) end)
-  local title = 'VoidMark Market'
-  local button
-  if lib then
-    -- Share the same row manager when Auctionator (or another host) supplies it.
-    lib:CreateTab(TAB_ID, page, TAB_LABEL, title)
-    button = lib:GetButton(TAB_ID)
-  else
-    button = CreateFrame('Button', TAB_ID, ah, 'AuctionHouseFrameDisplayModeTabTemplate')
-    button:SetText(TAB_LABEL)
-    PanelTemplates_TabResize(button, 14, nil, 70)
-    button:SetPoint('TOPLEFT', ah.Tabs[#ah.Tabs], 'TOPRIGHT', 3, 0)
-    PanelTemplates_DeselectTab(button)
-    button:SetScript('OnClick', function()
-      ah:SetDisplayMode({})
-      for _, native in ipairs(ah.Tabs) do PanelTemplates_DeselectTab(native) end
-      PanelTemplates_SelectTab(button)
-      ah:SetTitle(title)
-      page:Show()
+  local auctionator = C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded('Auctionator')
+  local previous = ah.Tabs[#ah.Tabs]
+  for _, section in ipairs(sections) do
+    local page = CreateFrame('Frame', nil, ah)
+    page:SetPoint('TOPLEFT', ah, 'TOPLEFT', 8, -36)
+    page:SetPoint('BOTTOMRIGHT', ah, 'BOTTOMRIGHT', -8, 8)
+    page:Hide()
+    -- The margins around the docked window also drag the whole AH.
+    page:EnableMouse(true)
+    page:SetScript('OnMouseDown',function(_,button) if button=='LeftButton' then beginGesture(self,button) end end)
+    page:SetScript('OnMouseUp',function(_,button) if button=='LeftButton' then endGesture(self,button) end end)
+    local errorLabel = page:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+    errorLabel:SetPoint('CENTER')
+    errorLabel:SetWidth(500)
+    page:SetScript('OnShow', function()
+      errorLabel:SetText('')
+      local ok, reason = pcall(dock, self, page, self:AuctionStartView(section), section.key)
+      if not ok then
+        undock(self, page)
+        local message = section.label..' could not open: '..tostring(reason)
+        self:Log('AUCTION TAB', message)
+        errorLabel:SetText(message)
+      end
     end)
+    page:SetScript('OnHide', function() endGesture(self); undock(self, page) end)
+    -- Prefix only when Auctionator's own Shopping/Selling tabs are also shown.
+    local label = (auctionator and section.key~='voidmark') and ('VM '..section.label) or section.label
+    local title = 'VoidMark Market - '..section.label
+    local id = 'VoidMarkMarket'..section.label
+    local button
+    if lib then
+      -- Share the same row manager when Auctionator (or another host) supplies it.
+      lib:CreateTab(id, page, label, title)
+      button = lib:GetButton(id)
+    else
+      button = CreateFrame('Button', id..'Tab', ah, 'AuctionHouseFrameDisplayModeTabTemplate')
+      button:SetText(label)
+      PanelTemplates_TabResize(button, 14, nil, 60)
+      button:SetPoint('TOPLEFT', previous, 'TOPRIGHT', 3, 0)
+      PanelTemplates_DeselectTab(button)
+      button:SetScript('OnClick', function()
+        ah:SetDisplayMode({})
+        for _, native in ipairs(ah.Tabs) do PanelTemplates_DeselectTab(native) end
+        for _, other in ipairs(tabs) do if other.button~=button then other.page:Hide();PanelTemplates_DeselectTab(other.button) end end
+        PanelTemplates_SelectTab(button)
+        ah:SetTitle(title)
+        page:Show()
+      end)
+      previous = button
+    end
+    tabs[#tabs+1] = {button=button, page=page, key=section.key}
   end
-  tabs[1] = {button=button, page=page}
   self.auctionTabs = tabs
 end
 

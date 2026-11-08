@@ -63,7 +63,7 @@ function M:InitializeSimpleTradingUI(f,button,label)
 end
 function M:RenderSimpleTradingUI(view)
  self.toolsFrame:SetShown(view=='tools');self.emptyMessage:Hide()
- for target,b in pairs(self.navigation) do b:SetEnabled(target~=view) end
+ self:LayoutNavigation(view)
  self.shoppingSidebar:SetShown(view=='browse')
  if view=='browse' then
   local names={'Shopping'};for name in pairs(self.db.shoppingLists) do names[#names+1]=name end;table.sort(names)
@@ -89,6 +89,22 @@ function M:RenderSimpleTradingUI(view)
  end
  self:SetTradingColumns(view)
  if view=='tools' or view=='settings' or view=='execution' then self.toolbar:Hide() end
+end
+-- Docked from Shopping/Selling/Cancelling the screen stands alone like an
+-- Auctionator tab (only a BACK button for sub-screens). The VoidMark tab shows
+-- the remaining sections. The standalone /vmm window shows everything.
+local tradingViews={browse=true,selling=true,['my auctions']=true}
+function M:LayoutNavigation(view)
+ local section=self.auctionDock and self.dockSection
+ local x=0
+ for _,target in ipairs(self.navOrder or {}) do
+  local b=self.navigation[target]
+  local shown=not section or (section=='voidmark' and not tradingViews[target])
+  b:SetShown(shown);b:SetEnabled(target~=view)
+  if shown then b:ClearAllPoints();b:SetPoint('TOPLEFT',18+x*111,-48);x=x+1 end
+ end
+ local root=section and section~='voidmark' and self:DockRootView()
+ if self.dockBack then self.dockBack:SetShown(root and view~=root or false) end
 end
 function M:SetTradingColumns(view)
  local widths=view=='browse' and {285,140,95,125,143,0,0,0} or {250,105,105,110,95,90,110,135}

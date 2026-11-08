@@ -106,8 +106,8 @@ check('1.7 navigation exposes Shopping, Selling, Scanning, History and Settings;
    if line=='Database.lua' then assert(n==1) end
   end
  end
- assert(M.version=='1.7.0')
- local toc=io.open(addon..'VoidMarkMarket.toc'):read('*a');assert(toc:find('## Version: 1.7.0',1,true) and toc:find('## Interface: 16001',1,true))
+ local toc=io.open(addon..'VoidMarkMarket.toc'):read('*a')
+ assert(toc:find('## Version: '..M.version,1,true) and toc:find('## Interface: 16001',1,true) and M.version>='1.7.0')
  reset()
 end)
 end
