@@ -125,7 +125,7 @@ function M:ReadSearch(event,key)
   local good,n=pcall(countFn,arg)
   if not good or not tonumber(n) then self:FinishRequest(r,false,'Invalid search count'); return end
   if n>1000 then self:FinishRequest(r,false,'More than 1,000 live tiers/listings; execution paused to protect frame budget'); return end
-  local result={key=r.key,commodity=r.commodity,rows={},at=time(),received=GetTime(),full=true}; local i=1
+  local result={key=r.key,commodity=r.commodity,rows={},all={},at=time(),received=GetTime(),full=true}; local i=1
   self:AddJob('results',function(start)
     if self.queue.active~=r then return true end
     for j=1,70 do
@@ -136,6 +136,10 @@ function M:ReadSearch(event,key)
         local qty=r.commodity and tonumber(info.quantity) or self:RegularQuantity(info,r.key.itemID); local total=tonumber(info.buyoutAmount)
         local unit=r.commodity and tonumber(info.unitPrice) or (total and qty and qty>0 and total/qty)
         local own=tonumber(info.numOwnerItems) or 0
+        if unit and unit>0 and qty and qty>0 and #result.all<300 then
+          local mine=r.commodity and (own>0 or (info.containsOwnerItem and info.numOwnerItems==nil)) or (not r.commodity and (info.isOwnerItem or info.containsOwnerItem)) or false
+          result.all[#result.all+1]={unit=unit,quantity=qty,own=mine and true or false}
+        end
         if r.commodity and info.containsOwnerItem and info.numOwnerItems==nil then qty=0 end
         if r.commodity then qty=qty and math.max(0,qty-own) end
         if unit and unit>0 and qty and qty>0 and (r.commodity or (info.auctionID and not info.isOwnerItem and not info.containsOwnerItem and (not info.itemKey or self:SameKey(info.itemKey,r.key)))) then
@@ -148,6 +152,7 @@ function M:ReadSearch(event,key)
     if self.queue.active~=r then return end
     if result.incomplete then self:FinishRequest(r,false,'Incomplete search rows; revalidate again'); return end
     table.sort(result.rows,function(a,b) return a.unit<b.unit end)
+    table.sort(result.all,function(a,b) if a.unit==b.unit then return a.own and not b.own end return a.unit<b.unit end)
     if self.RecordSearchResult then pcall(self.RecordSearchResult,self,result) end
     self:FinishRequest(r,true,result)
   end)

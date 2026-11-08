@@ -29,12 +29,12 @@ check('Sync accepts realm display spaces but rejects another realm or faction',f
  reset()
 end)
 check('Simple trading uses item-name search, list sidebar, useful empty states and separate tools',function()
- reset();M.shoppingListMode=false;M.shoppingSearchStatus=nil;M.browseRows={}
+ reset();M.shoppingListMode=false;M.shoppingSearchStatus=nil;M.browseRows={};M.db.settings.filter=''
  M:SetView('browse');jobs();M:RenderUI()
- assert(M.shoppingSidebar:IsShown() and M.searchButton:IsShown() and M.scanButton:IsShown())
- assert(not M.cachedButton:IsShown() and not M.toolsFrame:IsShown())
- assert(M.emptyMessage:IsShown() and M.emptyMessage:GetText():find('Search by item name',1,true))
- assert(M.tableFrame:GetWidth()==788 and not M.headings[6]:IsShown())
+ local s=M.shopScreen
+ assert(s:IsShown() and not M.shoppingSidebar:IsShown() and not M.toolbar:IsShown() and not M.toolsFrame:IsShown())
+ assert(s.leftRows[1]:IsShown() and s.leftRows[1].value=='Shopping')
+ assert(s.empty:IsShown() and s.empty:GetText():find('Type an item name',1,true))
  M:SetView('tools');M:RenderUI()
  assert(M.toolsFrame:IsShown() and not M.tableFrame:IsShown() and not M.toolbar:IsShown() and not M.shoppingSidebar:IsShown())
  M.db.latestScan={auctionsProcessed=100,completedAt=time()};M.scanState.running=false;M.scanState.phase='done'

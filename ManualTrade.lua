@@ -47,6 +47,7 @@ function M:LiveNameSearch(text)
   self:CancelJob('browse');self.browseRows=out;self.selectedRow=nil;self.page=1;self:SortBrowseRows();self:RefreshUI()
  end,fail=function(e) self.shoppingSearchStatus='Search failed: '..tostring(e);self:Print(e);self:RefreshUI() end})
 end
+function M:ReadBagSlot(r) return self.readBag(self,r) end
 local function readBag(self,r)
  if not usable(self) or not r or not r.slot or not ItemLocation or not C_Container then return nil,'Open the AH and select a bag item' end
  local b=C_Container.GetContainerItemInfo(r.bag,r.slot)
@@ -64,16 +65,17 @@ local function readBag(self,r)
  if not whole(n,1e9) then return nil,'Item cannot currently be posted' end
  return {loc=loc,k=k,commodity=commodity,max=commodity and n or math.min(b.stackCount or 1,n)}
 end
+M.readBag=readBag
 function M:CheckPost(row)
  self.postQuote=nil
  local b,e=readBag(self,row);if not b then self:Print(e);return end
  local draft={row=row,k=b.k};self.postQuote=draft
  self:Search(b.k,60,function(result)
   if self.postQuote~=draft or self.view~='selling' then return end
-  draft.at=result.received;draft.floor=result.rows[1] and result.rows[1].unit
+  draft.at=result.received;draft.floor=result.rows[1] and result.rows[1].unit;draft.listings=result.all or {}
   local unit,clamped=self:SuggestPostUnit(row,draft.floor);draft.atMinimum=clamped
-  if self.postUnit:GetText()=='' and unit then self.postUnit:SetText(self:FormatGoldInput(unit)) end
-  local now=readBag(self,row)
+  if self:PostPriceEmpty() and unit then self:SetPostPrice(unit) end
+  local now=readBag(self,row);draft.max=now and now.max;draft.commodity=now and now.commodity
   if now and now.commodity and not self.db.sellStacks[row.marketKey] and self.postQty then self.postQty:SetText(tostring(now.max)) end
   self:RefreshUI()
  end,function(e) if self.postQuote==draft then self.postQuote=nil;self:Print(e) end end)
@@ -101,6 +103,7 @@ function M:ReviewPost(row,n,unit,duration)
   local now,reason=postTerms(self,row,n,unit,duration)
   if not now or self.postQuote~=q or now.deposit~=b.deposit then self:Print(reason or 'Quote changed; review again');return end
   self.postQuote=nil;self.tradePending='post';self.postingRow=row
+  row.postedUnit=unit;row.postedQuantity=n;row.postedDuration=duration
   local A=C_AuctionHouse;local ok,pending
   if now.commodity then ok,pending=pcall(A.PostCommodity,now.loc,duration,n,unit)
   else ok,pending=pcall(A.PostItem,now.loc,duration,n,nil,unit) end

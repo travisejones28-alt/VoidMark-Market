@@ -15,26 +15,28 @@ local function withChat(fn)
  C_ChatInfo=old;if not ok then error(err,0) end
 end
 
-check('1.7 tooltip shows per-unit, stack total, current/stale state and a no-data line',function()
+check('1.8 tooltip shows Vendor and Auction lines, a stack total, greys old prices and a no-data line',function()
  reset();local oldItem=C_Item;C_Item=nil
  local link='|Hitem:9001:0:0:0:0:0:0:0|h[Ore]|h'
+ local oldInfo=GetItemInfo
+ GetItemInfo=function()return 'Ore',nil,1,1,1,'Trade','Metal',20,'',999,0 end -- no vendor price
  local lines,tip=tipLines();M:AppendMarketTooltip(tip,link)
- assert(#lines==1 and lines[1]:find('No AH price yet',1,true))
- local oldInfo=GetItemInfo;GetItemInfo=function()return 'Bound',nil,1,1,1,'Armor','Cloth',1,'',999,100,0,0,1 end
+ assert(#lines==1 and lines[1]:find('Auction',1,true) and lines[1]:find('No price yet',1,true))
+ GetItemInfo=function()return 'Bound',nil,1,1,1,'Armor','Cloth',1,'',999,0,0,0,1 end
  lines,tip=tipLines();M:AppendMarketTooltip(tip,link);assert(#lines==0) -- bind-on-pickup never reaches the AH
- GetItemInfo=oldInfo
- M.db.settings.tooltipNoData=false;lines,tip=tipLines();M:AppendMarketTooltip(tip,link);assert(#lines==0)
+ GetItemInfo=function()return 'Ore',nil,1,1,1,'Trade','Metal',20,'',999,5 end
+ M.db.settings.tooltipNoData=false;lines,tip=tipLines();M:AppendMarketTooltip(tip,link);assert(#lines==1 and lines[1]=='Vendor:0g 0s 5c')
  M.db.settings.tooltipNoData=nil
  M.db.market[9001]={itemID=9001,marketKey=9001,name='Ore',lastSeen=time()-120,observations=8,confidenceScore=80,
   volatility=.1,fairValue=260,historySpan=10*86400,latest={floor=250,quantity=40},history={}}
  lines,tip=tipLines();M:AppendMarketTooltip(tip,link,20);local text=table.concat(lines,'\n')
- assert(text:find('VoidMark AH / unit:0g 2s 50c',1,true) and text:find('Stack of 20:0g 50s 0c',1,true))
- assert(text:find('CURRENT',1,true) and text:find('Local scan | 2m old',1,true) and text:find('Market estimate',1,true))
- assert(#lines<=4)
+ assert(text:find('Vendor x20:0g 1s 0c',1,true) and text:find('Auction:0g 2s 50c',1,true) and text:find('Auction x20:0g 50s 0c',1,true))
+ assert(#lines==3 and not text:find('old)',1,true))
+ M.db.settings.tooltipVendor=false;lines,tip=tipLines();M:AppendMarketTooltip(tip,link);assert(#lines==1);M.db.settings.tooltipVendor=nil
  advance(M.db.settings.maxDataAge+10)
  lines,tip=tipLines();M:AppendMarketTooltip(tip,link,1);text=table.concat(lines,'\n')
- assert(text:find('STALE',1,true) and not text:find('Market estimate',1,true) and not text:find('Stack of',1,true))
- C_Item=oldItem;reset()
+ assert(text:find('Auction |cff999999(',1,true) and text:find('old)',1,true) and not text:find('Auction x',1,true))
+ GetItemInfo=oldInfo;C_Item=oldItem;reset()
 end)
 
 check('1.7 sync catch-up offers older trusted prices and re-seeds existing journals once',function()

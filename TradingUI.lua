@@ -39,7 +39,8 @@ function M:InitializeSimpleTradingUI(f,button,label)
   {'Saved shopping lists','shopping','Manage lists and target prices'}, {'Flip opportunities','opportunities','Resale candidates and filters'},
   {'Purchase queue','review','Items saved for later'}, {'Price history','banker','Scan changes and watch alerts'},
   {'Investments','investments','Tracked purchases and cost'}, {'Ledger','ledger','Recorded buys and sales'},
-  {'Settings','settings','Trading limits and display'}, {'Diagnostics','diagnostics','Detailed error and scan reports'}}
+  {'Settings','settings','Trading limits and display'}, {'Diagnostics','diagnostics','Detailed error and scan reports'},
+  {'Posting queue','post review','Saved posting reminders'}}
  for i,t in ipairs(tools) do
   local x=(i-1)%2*500;local y=-40-math.floor((i-1)/2)*76;local view=t[2]
   button(self.toolsFrame,t[1],x,y,220,function() self:SetView(view) end)

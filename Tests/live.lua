@@ -22,12 +22,12 @@ check('Passive tooltip picks exact suffix, level, pet, source, freshness and nev
  M.db.sharedPrices[k]={floor=99,at=time()-30,fair=158,reliable=true}
  local noSearch=M.Search;M.Search=function()error('mouseover queried AH')end
  local lines={};local tip={AddLine=function(_,s)lines[#lines+1]=s end,AddDoubleLine=function(_,a,b)lines[#lines+1]=a..':'..b end}
- M:AppendMarketTooltip(tip,link);local text=table.concat(lines,' ');assert(text:find('Synced account') and text:find('Market estimate') and text:find('99c'))
+ M:AppendMarketTooltip(tip,link);local text=table.concat(lines,' ');assert(text:find('Auction:0g 0s 99c',1,true) and not text:find('old)',1,true))
  assert(not M:TooltipMarketForLink(link:gsub('%-2','-3')))
  assert(not M:TooltipMarketForLink(link:gsub('hat','high')))
  local m=sample(44,101,time());M.db.market[k]=m;assert(M:TooltipMarketForLink(link).floor==101)
  M.db.sharedPrices[k].at=time();assert(M:TooltipMarketForLink(link).source=='Local scan')
- advance(M.db.settings.maxDataAge+1);lines={};M:AppendMarketTooltip(tip,link);assert(table.concat(lines):find('STALE'))
+ advance(M.db.settings.maxDataAge+1);lines={};M:AppendMarketTooltip(tip,link);assert(table.concat(lines):find('old)',1,true))
  assert(M:LinkIdentity('|Hbattlepet:500:2:3:100|h[Pet]|h')~=M:LinkIdentity('|Hbattlepet:501:2:3:100|h[Pet]|h'))
  C_Item=old;M.Search=noSearch
 end)
@@ -298,7 +298,8 @@ check('Auction House tabs work with Auctionator disabled and restore the standal
    M:SetView('execution');M:RenderUI();assert(M.dockBack:IsShown())
    M.dockBack.scripts.OnClick();M:RenderUI();assert(M.view=='browse' and not M.dockBack:IsShown())
   end
-  if views[i]=='selling' then assert(M.sellAction:IsShown() and M.tableFrame:IsShown()) end
+  if views[i]=='selling' then assert(M.sellScreen:IsShown() and not M.tableFrame:IsShown() and not M.shopScreen:IsShown()) end
+  if views[i]=='browse' then assert(M.shopScreen:IsShown() and not M.tableFrame:IsShown() and not M.sellScreen:IsShown()) end
   if views[i]=='my auctions' then assert(M.ownedRefresh:IsShown() and M.tableFrame:IsShown()) end
  end
  local tab=tabs[4]

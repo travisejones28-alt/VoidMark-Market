@@ -107,32 +107,64 @@ function M:SuggestPostUnit(row,floor)
  return unit
 end
 function M:FormatGoldInput(copper) return ('%0.4f'):format(copper/10000) end
+-- Post price lives in gold/silver/copper boxes (SellScreen); these helpers
+-- keep the selling logic independent of the widgets.
+function M:SetPostPrice(copper)
+ if not self.postGold then return end
+ if not copper then self.postGold:SetText('');self.postSilver:SetText('');self.postCopper:SetText('');return end
+ copper=math.floor(copper)
+ self.postGold:SetText(tostring(math.floor(copper/10000)));self.postSilver:SetText(tostring(math.floor(copper/100)%100));self.postCopper:SetText(tostring(copper%100))
+end
+function M:PostPriceEmpty()
+ return not self.postGold or (self.postGold:GetText()=='' and self.postSilver:GetText()=='' and self.postCopper:GetText()=='')
+end
+function M:GetPostPrice()
+ if self:PostPriceEmpty() then return nil end
+ local function part(e,max) local t=e:GetText();if t=='' then return 0 end;local n=tonumber(t);if not n or n<0 or n%1~=0 or (max and n>max) then return nil end;return n end
+ local g,s,c=part(self.postGold),part(self.postSilver,99),part(self.postCopper,99)
+ if not g or not s or not c then return nil end
+ return g*10000+s*100+c
+end
 -- Selecting a bag item fills quantity and starts the live price check.
 function M:SelectSellRow(row,check)
  if not row then return end
  local changed=self.selectedRow~=row
  self.selectedRow=row
  if changed then
-  self.postQuote=nil
-  if self.postUnit then self.postUnit:SetText('') end
+  self.postQuote=nil;self.sellListPage=1
+  self:SetPostPrice(nil)
   if self.postQty then self.postQty:SetText(tostring(math.min(row.quantity or 1,self.db.sellStacks[row.marketKey] or row.quantity or 1))) end
  end
- if check and changed and self.ahOpen and self.view=='selling' then self:CheckPost(row) else self:RefreshUI() end
+ if check and changed and self.ahOpen and self.view=='selling' then self:CheckPost(row) end
+ self:RefreshUI()
 end
 function M:AfterPostRefresh(rows)
  local next=self.selectAfterRefresh;self.selectAfterRefresh=nil
- if not next or self.view~='selling' or #rows==0 then return end
+ if not next or self.view~='selling' then return end
+ local tiles=self.SellTiles and self:SellTiles(rows) or rows
+ if #tiles==0 then return end
  self.selectedRow=nil
- self:SelectSellRow(rows[math.min(next,#rows)],true)
+ local t=tiles[math.min(next,#tiles)]
+ self:SelectSellRow(t.row or t,true)
 end
 M:RegisterHandler('AUCTION_HOUSE_AUCTION_CREATED',function(self)
  local posted=self.postingRow;self.postingRow=nil
- if not posted or self.view~='selling' then return end
- for i,r in ipairs(self.sellingRows or {}) do
+ if not posted then return end
+ if posted.marketKey~=nil and not self.persistenceBlocked and posted.postedUnit then
+  self.db.postHistory=type(self.db.postHistory)=='table' and self.db.postHistory or {}
+  local h=self.db.postHistory[posted.marketKey] or {};self.db.postHistory[posted.marketKey]=h
+  table.insert(h,1,{at=time(),unit=posted.postedUnit,quantity=posted.postedQuantity,duration=posted.postedDuration})
+  while #h>20 do table.remove(h) end
+ end
+ if self.view~='selling' then return end
+ local tiles=self.SellTiles and self:SellTiles(self.sellingRows or {}) or (self.sellingRows or {})
+ for i,t in ipairs(tiles) do
+  local r=t.row or t
   if r.bag==posted.bag and r.slot==posted.slot then self.selectAfterRefresh=i;break end
  end
+ self.selectAfterRefresh=self.selectAfterRefresh or 1
  self.selectedRow=nil;self.postQuote=nil
- if self.postUnit then self.postUnit:SetText('') end
+ self:SetPostPrice(nil)
  self:RefreshInventory()
 end)
 for _,event in ipairs({'AUCTION_HOUSE_SHOW_ERROR','AUCTION_HOUSE_CLOSED'}) do

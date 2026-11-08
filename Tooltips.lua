@@ -63,33 +63,36 @@ function M:TooltipAgeText(at)
  local age=math.max(0,time()-at)
  return age>=86400 and math.floor(age/86400)..'d' or age>=3600 and math.floor(age/3600)..'h' or math.max(1,math.floor(age/60))..'m'
 end
--- Compact: price per unit, optional stack total, one source/age line and the
--- historical estimate only while the observation is current.
+-- Auctionator-style: a Vendor line and an Auction line, plus the stack total
+-- when hovering a stack. Old prices are greyed with their age.
+local function vendorPrice(link)
+ local info=C_Item and C_Item.GetItemInfo or GetItemInfo
+ if not info then return end
+ local ok,_,_,_,_,_,_,_,_,_,_,sell=pcall(info,link)
+ sell=ok and tonumber(sell)
+ return sell and sell>0 and sell or nil
+end
 function M:AppendMarketTooltip(tip,link,count)
  if not self.db or not tip then return end
+ count=tonumber(count);if not (count and count>1 and count%1==0 and count<=10000) then count=nil end
+ if self.db.settings.tooltipVendor~=false then
+  local v=vendorPrice(link)
+  if v then tip:AddDoubleLine(count and ('Vendor x'..count) or 'Vendor',self:Coins(v*(count or 1)),1,.82,0,1,1,1) end
+ end
  local key=self:LinkIdentity(link)
  if not key then return end -- unresolved variant: never borrow another variant's price
  local p=self:PriceObservation(key)
  if not p then
   if self.db.settings.tooltipNoData~=false and not bindBlocksAuction(link) then
-   tip:AddDoubleLine('VoidMark Market','No AH price yet',.76,.56,1,.6,.6,.6)
+   tip:AddDoubleLine('Auction','|cff999999No price yet|r',1,.82,0,.6,.6,.6)
   end
   return
  end
- local age=math.max(0,time()-p.at)
- local stale=age>self.db.settings.maxDataAge or p.unverified
- tip:AddDoubleLine('VoidMark AH / unit',self:Money(p.floor),.76,.56,1,1,.85,.4)
- count=tonumber(count)
- if count and count>1 and count%1==0 and count<=10000 then
-  tip:AddDoubleLine('  Stack of '..count,self:Money(p.floor*count),.75,.8,.85,1,.85,.4)
- end
- local state=stale and '|cffff6655STALE / UNVERIFIED|r' or '|cff72e7aaCURRENT|r'
- tip:AddLine(state..' '..p.source..' | '..self:TooltipAgeText(p.at)..' old',.75,.8,.85)
- if not stale and p.fair then
-  local note=p.confidence and (' ('..math.floor(p.confidence+0.5)..'%)') or ''
-  if p.developing or not p.confidence then note=note..' provisional' end
-  tip:AddDoubleLine('Market estimate'..note,self:Money(p.fair),.75,.8,.85,.75,.8,.85)
- end
+ local stale=time()-p.at>self.db.settings.maxDataAge or p.unverified
+ local name=stale and ('Auction |cff999999('..self:TooltipAgeText(p.at)..' old)|r') or 'Auction'
+ local r,g,b=1,1,1;if stale then r,g,b=.6,.6,.6 end
+ tip:AddDoubleLine(name,self:Coins(p.floor),1,.82,0,r,g,b)
+ if count then tip:AddDoubleLine('Auction x'..count,self:Coins(p.floor*count),1,.82,0,r,g,b) end
 end
 -- Stack size of the hovered bag slot, when the tooltip owner is a bag button.
 function M:TooltipStackCount(tip)

@@ -144,7 +144,7 @@ PASS Shared stack prices round up fractional copper and publish scan-completion 
 PASS Sync accepts realm display spaces but rejects another realm or faction
 PASS Simple trading uses item-name search, list sidebar, useful empty states and separate tools
 PASS Saved shopping results use received prices and keep target-based buying available
-PASS 1.7 tooltip shows per-unit, stack total, current/stale state and a no-data line
+PASS 1.8 tooltip shows Vendor and Auction lines, a stack total, greys old prices and a no-data line
 PASS 1.7 sync catch-up offers older trusted prices and re-seeds existing journals once
 PASS 1.7 sync skips a revision too large for one message instead of stalling, and retries throttled pages
 PASS 1.7 navigation exposes Shopping, Selling, Scanning, History and Settings; Safe Mode is gone
@@ -157,4 +157,10 @@ PASS 1.8 after a post the next bag item is selected and checked
 PASS 1.8 cancelling checks every listing for undercuts and cancels one per confirmed click
 PASS 1.8 time left reads as hours/minutes or a duration band
 PASS 1.8 live price cache drops old entries and stays bounded
-ALL 158 TESTS PASSED
+PASS 1.9 bag tiles merge stacks per item, put favourites first and group by item type
+PASS 1.9 price boxes round-trip copper and Post sends exact copper, quantity and duration
+PASS 1.9 listings show every price with your own marked; clicking one sets the price
+PASS 1.9 live searches keep every listing, including your own
+PASS 1.9 Skip moves to the next item and a post is recorded in Your history
+PASS 1.9 shopping screen searches by name, keeps recent searches and opens lists
+ALL 164 TESTS PASSED
