@@ -20,7 +20,7 @@ PASS Owned listings excluded from execution
 PASS Commodity ownership reduces available quantity
 PASS Moving-average accounting excludes unknown basis
 PASS Invoices are observed, deduped and not auto-booked
-90k scan job ticks: 884; synthetic-budget elapsed ms: 1925
+90k scan job ticks: 168; synthetic-budget elapsed ms: 1896
 PASS 90,000 rows process across frames; malformed row isolated
 PASS Oversized price distribution retains history and blocks trading
 PASS UI builds and every terminal tab renders
@@ -173,6 +173,10 @@ PASS 1.9.4 no background bag, crafting or item-name work while the window is clo
 PASS 1.9.5 three stacks post as one 60-unit post, a locked slot is retried, closing the AH ends "Checking"
 PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
+PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
+PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
+BENCH scan: 84 frames (1.4s at 60fps, 2.8s at 30fps), worst frame 12.1ms, cpu 0.70s | after:share-scan=31 done=1 model=41 processing=11
+PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.7 A refresh that answers without an event still fills the price (Linen Cloth)
 PASS 1.9.7 No live answer: last scan price after 10 s, and a late live answer replaces it
 PASS 1.9.7 A price you typed is never replaced by a late live answer
@@ -183,4 +187,4 @@ PASS 1.9.8 Green flips pick cheap good-suffix greens and price them under the ne
 PASS 1.9.8 Flip settings: max buy, min profit and suffix list apply from the screen
 PASS 1.9.8 Flips screen lists rows and double-click opens the normal Buy flow
 PASS 1.9.8 Scan observation records the next price above the lowest
-ALL 184 TESTS PASSED
+ALL 187 TESTS PASSED

@@ -121,6 +121,10 @@ function M:StartSnapshotProcessing(total,source,diagnostic)
     totalQuantity=0,invalidRecords=0,incompleteRecords=0,deferredRows=0,recoveredRows=0,unresolvedRows=0,retryPasses=0,rejectedReasons={},variantRows=0,variantMarkets=0,uniqueItems=0,uniqueBaseItems=0,skippedMarkets=0,modelErrors=0}
   local grouped,baseSeen,linkKeys={},{},{};local cachedLinks=0; local i=0
   local pending,nextPending={},{}; local retryIndex=1; local retryAt,deadline,finalPass
+  -- Looked up once per scan instead of once per auction row.
+  local player=UnitName('player') or ''
+  local playerFull=player..'-'..((GetNormalizedRealmName and GetNormalizedRealmName()) or GetRealmName() or '')
+  local requested={}; local requestLoad=C_Item and C_Item.RequestLoadItemDataByID
   local function reject(reason)
     summary.invalidRecords=summary.invalidRecords+1
     summary.rejectedReasons[reason]=(summary.rejectedReasons[reason] or 0)+1
@@ -143,7 +147,11 @@ function M:StartSnapshotProcessing(total,source,diagnostic)
     local key,linkID,suffix,itemLevel,pet=unpack(identity)
     if linkID~=itemID then key=nil end
     -- No link means variant identity is uncertain. Never mix random-stat gear blindly.
-    if not key then return 'defer','missingLink',true end
+    if not key then
+      -- Ask the client to load the item now so the retry pass finds it sooner.
+      if requestLoad and not requested[itemID] then requested[itemID]=true; pcall(requestLoad,itemID) end
+      return 'defer','missingLink',true
+    end
     local unit=buyout/count
     local g=grouped[key]
     if not g then
@@ -162,8 +170,7 @@ function M:StartSnapshotProcessing(total,source,diagnostic)
     elseif g.tierCount<512 then g.priceLevels[unit]=count; g.tierCount=g.tierCount+1
     else g.analysisIncomplete=true end -- retain old history, block an oversized distribution
     -- Preserve whole-stack acquisition costs; exclude this character's own asks.
-    local player=UnitName('player')
-    local mine=owner==player or ownerFull==player..'-'..(GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName())
+    local mine=owner==player or ownerFull==playerFull
     if not mine then
       local lotKey=tostring(count)..'/'..tostring(buyout)
       local lot=g.lotIndex[lotKey]
@@ -181,14 +188,14 @@ function M:StartSnapshotProcessing(total,source,diagnostic)
     return state,reason,incomplete
   end
   local function beginRetry()
-    s.phase='hydrating'; deadline=GetTime()+10; retryAt=GetTime()+0.5
+    s.phase='hydrating'; deadline=GetTime()+10; retryAt=GetTime()+0.25
     if diagnostic then diagnostic.phase='hydrating'; diagnostic.deferredRows=summary.deferredRows end
     self:Log('FULL SCAN','Waiting for item data: '..#pending..' rows deferred; retry budget 10s')
   end
   self:AddJob('scan',function(start)
     if not self.ahOpen or token~=self.scanToken then return true end
     if not deadline then
-      for j=1,140 do
+      while true do
         if i>=total then
           if #pending==0 then return true end
           beginRetry(); break
@@ -199,20 +206,20 @@ function M:StartSnapshotProcessing(total,source,diagnostic)
         if state=='defer' then pending[#pending+1]=i; summary.deferredRows=summary.deferredRows+1
         elseif state=='reject' then reject(reason) end
         i=i+1
-        if debugprofilestop()-start>=4 then break end
+        if debugprofilestop()-start>=self.budget then break end
       end
       s.processed=i; self:SetScanStatus(string.format('Scan rows %d / %d',i,total),total>0 and i/total*0.70 or 0.70)
     else
       if GetTime()<retryAt then return false end
       if retryIndex==1 then
         summary.retryPasses=summary.retryPasses+1
-        finalPass=GetTime()>=deadline or summary.retryPasses>=20
+        finalPass=GetTime()>=deadline or summary.retryPasses>=40
       end
-      for j=1,140 do
+      while true do
         if retryIndex>#pending then
           pending=nextPending; nextPending={}; retryIndex=1
           if #pending==0 then return true end
-          retryAt=GetTime()+0.5; break
+          retryAt=GetTime()+0.25; break
         end
         local state,reason=read(pending[retryIndex]); retryIndex=retryIndex+1
         if not self.ahOpen or token~=self.scanToken then return true end
@@ -220,7 +227,7 @@ function M:StartSnapshotProcessing(total,source,diagnostic)
         elseif state=='reject' then reject(reason)
         elseif finalPass then summary.unresolvedRows=summary.unresolvedRows+1; reject(reason)
         else nextPending[#nextPending+1]=pending[retryIndex-1] end
-        if debugprofilestop()-start>=4 then break end
+        if debugprofilestop()-start>=self.budget then break end
       end
       self:SetScanStatus(string.format('Loading item data: %d recovered / %d deferred',summary.recoveredRows,summary.deferredRows),0.70)
     end
@@ -248,7 +255,16 @@ function M:StartSnapshotProcessing(total,source,diagnostic)
        if source~='cached snapshot' then self:RecordBankerScan(summary);self:QueueScanSharing(self.db.lastDepthSnapshotAt) end
       if #self.db.scans>20 then table.remove(self.db.scans,1) end
       if source~='cached snapshot' then self.db.lastSuccessfulScanAt=time() end
-      s.running=false; s.phase='done'; self:SetScanStatus(string.format('%d valid rows | %d markets | %d candidates | %d skipped',summary.auctionsProcessed,summary.uniqueItems,#self.db.opportunities,summary.skippedMarkets),1)
+      s.running=false; s.phase='done'
+      -- Time split: waiting for the server vs. Market's own processing.
+      local timing=''
+      if summary.processingMS then
+        timing=string.format(' | processing %.1fs',summary.processingMS/1000)
+        if summary.responseSeconds then timing=string.format(' | server %.0fs',summary.responseSeconds)..timing end
+      end
+      summary.timing=timing
+      self:SetScanStatus(string.format('%d valid rows | %d markets | %d candidates | %d skipped',summary.auctionsProcessed,summary.uniqueItems,#self.db.opportunities,summary.skippedMarkets)..timing,1)
+      self:Print(string.format('Scan complete: %d auctions, %d items%s',summary.auctionsProcessed,summary.uniqueItems,timing))
       self:PruneDatabase()
     end)
   end)

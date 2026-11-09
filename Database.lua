@@ -66,7 +66,7 @@ end
 function M:RebuildIndexes()
   self.marketIndex={}; self.itemIndex={}; self.nameIndex={}; local cursor=nil
   self:AddJob('index',function(start)
-    for i=1,40 do
+    while true do
       local k,m=next(self.db.market,cursor); cursor=k
       if k==nil then return true end
       if type(m)=='table' and tonumber(m.itemID) and type(m.latest)=='table' and type(m.history or {})=='table' then
@@ -74,7 +74,7 @@ function M:RebuildIndexes()
         self.itemIndex[m.itemID]=self.itemIndex[m.itemID] or {}; table.insert(self.itemIndex[m.itemID],k)
         if m.name then if self.nameIndex[m.name]==nil then self.nameIndex[m.name]=k else self.nameIndex[m.name]=false end end
       end
-      if debugprofilestop()-start>=4 then return false end
+      if debugprofilestop()-start>=self.budget then return false end
     end
   end,function() self:RebuildOpportunities(); if self.RebuildCrafting then self:RebuildCrafting() end; if self.view=='browse' then self:BuildBrowseRows(self.db.settings.filter) end; self:RefreshUI() end)
 end
@@ -89,14 +89,14 @@ end
 function M:PruneDatabase()
   local cursor=nil; local cutoff=time()-self.db.settings.historyDays*86400
   self:AddJob('prune',function(start)
-    for i=1,40 do
+    while true do
       local k,m=next(self.db.market,cursor); cursor=k; if k==nil then return true end
       if type(m)=='table' and type(m.history)=='table' then
         while #m.history>1 and type(m.history[1])=='table' and (tonumber(m.history[1].at) or 0)<cutoff do table.remove(m.history,1) end
         -- Retain the last useful price and aggregate history even for absent markets.
         if (tonumber(m.lastSeen) or 0)<cutoff then m.archived=true end
       end
-      if debugprofilestop()-start>=4 then return false end
+      if debugprofilestop()-start>=self.budget then return false end
     end
   end)
 end

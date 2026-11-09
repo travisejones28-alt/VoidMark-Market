@@ -1,6 +1,6 @@
 local addonName, M = ...
 _G.VoidMarkMarket = M
-M.name, M.version = addonName or 'VoidMarkMarket', '1.9.11'
+M.name, M.version = addonName or 'VoidMarkMarket', '1.9.12'
 M.eventHandlers, M.runtimeLog, M.jobs = {}, {}, {}
 M.ahOpen = false
 M.scanState = {running=false, phase='idle', status='No scan yet', progress=0}
@@ -70,8 +70,21 @@ function M:AddJob(id,step,done)
   self.jobs[id]={step=step,done=done}; return id
 end
 function M:CancelJob(id) self.jobs[id]=nil end
+-- Per-frame work budget. A full scan runs while you stand at the Auction House,
+-- so it may use a larger slice (like Auctioneer's processing priority); the
+-- rest of the time background jobs stay at 4 ms. /vmm scanspeed changes it.
+M.scanSpeeds={fast=12,normal=7,smooth=4}
+M.budget=4
+function M:FrameBudget()
+  local s=self.scanState
+  if s and s.running and self.ahOpen and not (InCombatLockdown and InCombatLockdown()) then
+    return self.scanSpeeds[self.db and self.db.settings.scanSpeed or 'fast'] or 12
+  end
+  return 4
+end
 function M:RunJobs()
   local start=debugprofilestop()
+  self.budget=self:FrameBudget()
   local ids={}
   for id in pairs(self.jobs) do ids[#ids+1]=id end
   for _,id in ipairs(ids) do
@@ -84,7 +97,7 @@ function M:RunJobs()
       elseif job.done then local good,err=pcall(job.done); if not good then self:Log('JOB ERROR',err) end end
     end
     end
-    if debugprofilestop()-start>=4 then break end
+    if debugprofilestop()-start>=self.budget then break end
   end
 end
 function M:Key(itemID,suffix,level,pet)
@@ -194,6 +207,10 @@ SlashCmdList.VOIDMARKMARKET=function(msg)
   msg=raw:lower()
   if msg=='peer' or msg:match('^peer%s') then M:Print(M:PairPeer(raw:match('^%S+%s+(.+)$')))
   elseif msg=='perf' then M:StartPerf(10)
+  elseif msg=='scanspeed' or msg:match('^scanspeed%s') then
+    local v=msg:match('^scanspeed%s+(%a+)$')
+    if v and M.scanSpeeds[v] then M.db.settings.scanSpeed=v end
+    M:Print('Scan speed: '..(M.db.settings.scanSpeed or 'fast')..' ('..(M.scanSpeeds[M.db.settings.scanSpeed or 'fast'])..' ms per frame while scanning). Options: fast, normal, smooth')
   elseif msg=='version' then M:Print('Version '..M.version..' | sync partner: '..tostring(M.db.syncPeer or 'not paired'))
   elseif msg=='scan' then M:RequestFreshScan()
   elseif msg=='cached' then M:AnalyzeCachedSnapshot()

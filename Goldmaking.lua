@@ -68,9 +68,12 @@ function M:RebuildGoldmaking()
   table.sort(out,function(a,b) return a.score==b.score and a.itemID<b.itemID or a.score>b.score end)
   return out
   end)
-  self:AddJob('goldmaking',function()
-    local ok,result=coroutine.resume(worker);if not ok then error(result) end
-    if coroutine.status(worker)=='dead' then self.goldmakingRows=result;return true end
+  self:AddJob('goldmaking',function(start)
+    -- Several worker steps per frame within the background budget (was one).
+    repeat
+      local ok,result=coroutine.resume(worker);if not ok then error(result) end
+      if coroutine.status(worker)=='dead' then self.goldmakingRows=result;return true end
+    until debugprofilestop()-start>=3
   end,function() self:RefreshUI() end)
 end
 function M:GetGoldmakingRows()

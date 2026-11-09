@@ -227,7 +227,7 @@ function M:QueueScanSharing(at)
  if not self.db.syncPeer or self.persistenceBlocked then return end
  local d=self.db;local keys=self.marketIndex;local i=1
  self:AddJob('share-scan',function(start)
-  for _=1,40 do
+  while true do
    local key=keys[i];if not key then return true end;i=i+1
    local m=d.market[key];if m and m.lastSeen==at then self:PublishPrice(m) end
    if debugprofilestop()-start>=3 then break end

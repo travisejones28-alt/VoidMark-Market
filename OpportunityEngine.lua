@@ -76,14 +76,14 @@ function M:RebuildOpportunities()
   if not self.db then return end
   local i=1; local list={}; local keys=self.marketIndex or {}
   self:AddJob('opportunities',function(start)
-    for j=1,40 do
+    while true do
       if i>#keys then return true end
       local m=self.db.market[keys[i]]; i=i+1
       if m then local ok,o=pcall(self.MakeOpportunity,self,m); if ok and o then
         list[#list+1]=o
         if #list>200 then table.sort(list,function(a,b) return a.score>b.score end); list[201]=nil end
       end end
-      if debugprofilestop()-start>=4 then return false end
+      if debugprofilestop()-start>=self.budget then return false end
     end
   end,function()
     table.sort(list,function(a,b) return a.score>b.score end); self.db.opportunities=list; self.opportunityRevision=(self.opportunityRevision or 0)+1
@@ -97,7 +97,7 @@ function M:FinalizeMarketScan(grouped,summary,done)
   self.db.scanSequence=self.db.scanSequence+1; local scanID=self.db.scanSequence; local cursor=nil; local at=time(); local updated=0
   local storedCount=#(self.marketIndex or {})
   self:AddJob('model',function(start)
-    for j=1,12 do
+    while true do
       local k,g=next(grouped,cursor); cursor=k
       if k==nil then return true end
       local isNew=not self.db.market[k]
@@ -119,7 +119,7 @@ function M:FinalizeMarketScan(grouped,summary,done)
           else m.cacheUntrusted=nil end
         else summary.modelErrors=summary.modelErrors+1; self:Log('MODEL',m) end
       end
-      if debugprofilestop()-start>=4 then return false end
+      if debugprofilestop()-start>=self.budget then break end
     end
     self:SetScanStatus('Modeling markets: '..updated,0.85)
   end,function()

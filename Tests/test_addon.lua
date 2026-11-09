@@ -213,7 +213,7 @@ check('Invoices are observed, deduped and not auto-booked',function()
 end)
 check('90,000 rows process across frames; malformed row isolated',function()
  resetQueue();M.ahOpen=true;replicateRows=90000;M:StartSnapshotProcessing(90000,'fresh replicate request');local ticks=jobs()
- assert(ticks>350);assert(M.scanState.phase=='done');local s=M.db.latestScan
+ assert(ticks>100,'scan must still be spread across frames: '..ticks);assert(M.scanState.phase=='done');local s=M.db.latestScan
  assert(s.rawRows==90000 and s.auctionsProcessed==89999 and s.invalidRecords==1);assert(s.uniqueItems==1500)
  assert(M.db.market[5001],'absent market retained');assert(s.marketScanID and M.db.marketStats.storedMarkets>=1501)
  print('90k scan job ticks: '..ticks..'; synthetic-budget elapsed ms: '..s.processingMS)
@@ -462,7 +462,7 @@ check('Unresolved data retries are bounded; bid-only and unavailable rows have s
  C_AuctionHouse.GetReplicateItemLink=function(i) if i~=0 then return link(i) end end
  local d=freshScan(4);emit('REPLICATE_ITEM_LIST_UPDATE');jobs(0.25)
  local scan=M.db.latestScan;assert(scan.auctionsProcessed==0 and scan.invalidRecords==4 and scan.incompleteRecords==2)
- assert(scan.deferredRows==2 and scan.unresolvedRows==2 and scan.retryPasses<=20 and scan.hydrationSeconds<=11)
+ assert(scan.deferredRows==2 and scan.unresolvedRows==2 and scan.retryPasses<=40 and scan.hydrationSeconds<=11)
  local reasons=scan.rejectedReasons
  assert(reasons.noBuyout==1 and reasons.unavailableSale==1 and reasons.missingLink==1 and reasons.missingFields==1)
  assert(M:BuildFullScanReport():find('Rejected noBuyout: 1',1,true) and d.phase=='done')
@@ -832,6 +832,8 @@ assert(loadfile(addon..'Tests/release_170.lua'))()(M,check,jobs,advance)
 assert(loadfile(addon..'Tests/release_180.lua'))()(M,check,jobs,advance,emit)
 assert(loadfile(addon..'Tests/release_190.lua'))()(M,check,jobs,advance,emit)
 assert(loadfile(addon..'Tests/release_196.lua'))()(M,check,jobs,advance,emit)
+assert(loadfile(addon..'Tests/release_1912.lua'))()(M,check,jobs,advance,emit,freshScan)
+assert(loadfile(addon..'Tests/bench_scan.lua'))()(M,check,jobs,advance,emit,freshScan)
 assert(loadfile(addon..'Tests/release_197.lua'))()(M,check,jobs,advance,emit)
 assert(loadfile(addon..'Tests/flips.lua'))()(M,check,jobs,advance,emit)
 print('ALL '..total..' TESTS PASSED')

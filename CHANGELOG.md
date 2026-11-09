@@ -1,3 +1,12 @@
+## 1.9.12
+Faster full scans.
+- **Processing a full scan is several times faster.** Market used to handle a fixed small number of rows per frame (140 auctions, then only 12 items per frame while modelling), so a scan of ~25,000 auctions took about 1,000 frames (17 s at 60 fps, 34 s at 30 fps) even though the actual work is under 1 second. It now works to a time budget instead: 12 ms per frame while a scan is running at the Auction House (out of combat), back to 4 ms otherwise. The same scan now processes in about 70 frames (~1-2 s).
+- `/vmm scanspeed fast|normal|smooth` (12 / 7 / 4 ms per frame while scanning). Default fast. Use smooth if you see a frame-rate dip at the AH.
+- Items the client has not loaded yet are requested immediately, and retried every 0.25 s instead of 0.5 s, so the "Loading item data" step finishes sooner.
+- Your character name is read once per scan instead of once per auction.
+- After the scan, sharing to the bank partner and the gold-making list also rebuild faster.
+- The finished scan now says where the time went, e.g. `Scan complete: 24,512 auctions, 4,980 items | server 18s | processing 1.4s`. The server part is the Auction House sending its data and is the same for every addon.
+
 ## 1.9.6
 Bank sync status fix from in-game testing.
 - **"Bank sync: waiting for partner" now clears as soon as the characters connect, on every screen.** The header line was only redrawn on a full window refresh, so Selling, Buy and other views could keep showing "waiting" long after the link was up (the Bank sync tools page refreshed every second, which is why it looked instant there). It now updates once a second on every view, and also switches back when the partner goes quiet.
