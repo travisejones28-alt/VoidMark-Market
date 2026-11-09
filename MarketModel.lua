@@ -1,6 +1,17 @@
 local addonName, TTB = ...
 
 local MAX_HISTORY_PER_ITEM = 30
+-- History keeps only the fields later read (trend, fair value, volatility,
+-- activity, charts). The full snapshot lives in market.latest. A full
+-- observation is ~20 fields (~1.3 KB in memory); this is about a quarter.
+local HISTORY_FIELDS = { "at", "median", "depthValue", "quantity", "floor", "listings" }
+local function slimObservation(obs)
+  local h = {}
+  for _, k in ipairs(HISTORY_FIELDS) do h[k] = obs[k] end
+  return h
+end
+TTB.SlimObservation = slimObservation
+TTB.HistoryFields = HISTORY_FIELDS
 local MAX_OPPORTUNITIES = 60
 local AH_CUT = 0.05 -- default; configured cut used below
 local MIN_BUY_OBSERVATIONS = 3
@@ -370,7 +381,7 @@ function TTB:UpdateMarketFromGroup(group, scanID, completedAt)
     floorMovePct = safePct(obs.floor - (tonumber(previous.floor) or 0), previous.floor)
   end
 
-  table.insert(market.history, obs)
+  table.insert(market.history, slimObservation(obs))
   while #market.history > MAX_HISTORY_PER_ITEM do table.remove(market.history, 1) end
 
   local activityScore = computeActivityProxy(market.history, obs.quantity, obs.listings)

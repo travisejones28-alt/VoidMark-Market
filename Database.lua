@@ -51,6 +51,10 @@ function M:InitializeDatabase()
   root.schemaVersion=1; db.schemaVersion=1
   self.exposureDirty=true
   self:RebuildIndexes()
+  -- One background pass at login converts history saved by older versions.
+  if not self.persistenceBlocked and db.historyFormat~=2 then
+    self:PruneDatabase(function() db.historyFormat=2 end)
+  end
   if self.InitializeCrafting then self:InitializeCrafting() end
   -- Pending spend is persistent. Reload/close never changes an uncertain purchase to failed.
   for _,p in pairs(db.pending) do
@@ -86,7 +90,7 @@ end
 function M:GetMarketVariants(itemID)
   local out={}; for _,k in ipairs(self.itemIndex[tonumber(itemID)] or {}) do out[#out+1]=self.db.market[k] end; return out
 end
-function M:PruneDatabase()
+function M:PruneDatabase(done)
   local cursor=nil; local cutoff=time()-self.db.settings.historyDays*86400
   self:AddJob('prune',function(start)
     while true do
@@ -95,8 +99,10 @@ function M:PruneDatabase()
         while #m.history>1 and type(m.history[1])=='table' and (tonumber(m.history[1].at) or 0)<cutoff do table.remove(m.history,1) end
         -- Retain the last useful price and aggregate history even for absent markets.
         if (tonumber(m.lastSeen) or 0)<cutoff then m.archived=true end
+        -- Older versions stored full snapshots in history; shrink them in place.
+        for i,h in ipairs(m.history) do if type(h)=='table' and h.q10~=nil then m.history[i]=self.SlimObservation(h) end end
       end
       if debugprofilestop()-start>=self.budget then return false end
     end
-  end)
+  end,done)
 end

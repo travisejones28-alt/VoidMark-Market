@@ -1,3 +1,8 @@
+## 1.9.13
+Less memory.
+- **Price history uses about 60% less memory.** Each item keeps its last 30 scans of history, and every entry used to be a full ~20-field snapshot (about 1.3 KB). History now keeps only the 6 fields Market actually reads (time, median, fair-value depth, quantity, lowest price, listings); the full snapshot is kept once, for the latest scan. Measured on 5,000 items after 32 scans: 221 MB -> 90 MB of addon memory. The SavedVariables file and login/logout time shrink too.
+- History saved by older versions is converted once, in the background, the first time you log in. No prices or history points are lost.
+
 ## 1.9.12
 Faster full scans.
 - **Processing a full scan is several times faster.** Market used to handle a fixed small number of rows per frame (140 auctions, then only 12 items per frame while modelling), so a scan of ~25,000 auctions took about 1,000 frames (17 s at 60 fps, 34 s at 30 fps) even though the actual work is under 1 second. It now works to a time budget instead: 12 ms per frame while a scan is running at the Auction House (out of combat), back to 4 ms otherwise. The same scan now processes in about 70 frames (~1-2 s).
