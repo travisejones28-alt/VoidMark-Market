@@ -175,7 +175,7 @@ PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
 PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
 PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
-BENCH scan: 108 frames (1.8s at 60fps, 3.6s at 30fps), worst frame 12.3ms, cpu 1.03s | after:share-scan=28 done=1 model=63 processing=16
+BENCH scan: 114 frames (1.9s at 60fps, 3.8s at 30fps), worst frame 12.2ms, cpu 1.05s | after:share-scan=34 done=1 model=60 processing=19
 PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.13 history stores only the fields it needs; latest keeps the full snapshot
 PASS 1.9.13 history saved by older versions is shrunk once at login without losing prices
@@ -198,8 +198,9 @@ PASS 1.10 Item buy view: pick a listing, Buy Now asks "Paying", buys that auctio
 PASS 1.10 Limits block Buy Now with a plain reason
 PASS 1.11 Disenchant tables: uncommon, Forever weapon essence, rare shard, wands and whites excluded
 PASS 1.11 Advice compares disenchant (after AH cut) with vendor and the item on the AH
-PASS 1.11 Tooltip says Disenchant value and the best choice; Shift lists materials
+PASS 1.11 Shift tooltip: materials with chance and value at current prices, total, best choice
+PASS 1.11 Within 10% of vendor (or below) defaults to Vendor, shown red
 PASS 1.11 Your own disenchants are recorded and blended into the estimate
 PASS 1.11 Bag check window lists disenchantable gear, best first, with a total
 PASS 1.11 AH items mode reads the VoidMark market database: buy, disenchant, profit
-ALL 201 TESTS PASSED
+ALL 202 TESTS PASSED

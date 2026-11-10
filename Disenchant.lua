@@ -6,6 +6,7 @@ local _,M=...
 -- disenchants are recorded per quality/type/5-level band and blended in, so
 -- the estimates move toward what Forever really gives.
 M.defaults.tooltipDisenchant=true
+M.defaults.deVendorMargin=0.10 -- disenchant must beat vendor by more than this, or vendor it
 
 local DISENCHANT_SPELL=13262
 local LEARN_WEIGHT=10 -- the built-in table counts as this many casts
@@ -145,40 +146,67 @@ function M:DisenchantAdvice(item)
   end
  end
  table.sort(a.options,function(x,y) return x.value>y.value end)
+ -- Not worth the cast: within 10% of vendor (or less) means vendor it.
+ local margin=self.db and tonumber(self.db.settings.deVendorMargin) or 0.10
+ a.deClose=a.disenchant and a.vendor and a.disenchant<=a.vendor*(1+margin) or false
+ if a.deClose and a.options[1] and a.options[1].kind=='Disenchant' then
+  for i,o in ipairs(a.options) do if o.kind=='Vendor' then table.remove(a.options,i);table.insert(a.options,1,o);break end end
+ end
  a.best=a.options[1];a.second=a.options[2]
  return a
 end
 
 -- Tooltip -------------------------------------------------------------------
+-- Shown while Shift is held: what the item disenchants into, each material's
+-- chance and its expected share at current AH prices, the total, and the call.
 function M:AppendDisenchantTooltip(tip,link)
  if not self.db or self.db.settings.tooltipDisenchant==false or not tip then return end
+ if not (IsShiftKeyDown and IsShiftKeyDown()) then return end
  local a=self:DisenchantAdvice(link)
- if not a or not a.canDisenchant then return end
+ if not a or not a.canDisenchant or not a.yields then return end
  local grey=function(s) return '|cff999999'..s..'|r' end
- if a.disenchant then
-  local txt=self:Coins(a.disenchant)
-  if a.partial or a.missing>0 then txt=txt..grey(' +?') end
-  if a.deStale then txt=grey(self:Coins(a.disenchant)..' (old prices)') end
-  tip:AddDoubleLine('Disenchant',txt,1,.82,0,1,1,1)
- else
-  tip:AddDoubleLine('Disenchant',grey('No dust prices yet - scan the AH'),1,.82,0,.6,.6,.6)
+ tip:AddLine('Disenchants into:',.7,.4,1)
+ for _,y in ipairs(a.yields) do
+  local qty=y.min and (y.min==y.max and tostring(y.min) or (y.min..'-'..y.max)) or '?'
+  local left='  '..y.name..(y.chance and (' '..math.floor(y.chance*100+0.5)..'% x'..qty) or '')
+  local right
+  if y.unit then
+   right=self:Coins(y.value)..grey(' ('..self:Coins(y.unit)..' ea)')
+   if y.stale then right=grey(self:Coins(y.value)..' old price') end
+  else right=grey('no price') end
+  tip:AddDoubleLine(left,right,.85,.85,.85,1,1,1)
  end
- if a.best and #a.options>1 then
-  local more=a.second and a.best.value-a.second.value or 0
-  local s='|cffb366ff'..a.best.kind..'|r'..(more>0 and grey(' (+'..self:Coins(more)..' vs '..a.second.kind:lower()..')') or '')
+ if a.disenchant then
+  local txt=self:Coins(a.disenchant)..(a.missing>0 and grey(' +?') or '')
+  if a.deClose then txt='|cffff4040'..self:Coins(a.disenchant)..'|r'..(a.missing>0 and grey(' +?') or '') end
+  tip:AddDoubleLine('Disenchant value',txt,1,.82,0,1,1,1)
+ else
+  tip:AddDoubleLine('Disenchant value',grey('no material prices - scan the AH'),1,.82,0,.6,.6,.6)
+ end
+ if a.best then
+  local s
+  if a.best.kind=='Vendor' and a.deClose then
+   s='|cffff4040Vendor|r'..grey(' (disenchant within '..math.floor((tonumber(self.db.settings.deVendorMargin) or 0.1)*100+0.5)..'% of vendor)')
+  else
+   local more=a.second and a.best.value-a.second.value or 0
+   local color=a.best.kind=='Disenchant' and '|cffb366ff' or a.best.kind=='Auction' and '|cff66ccff' or '|cffffd100'
+   s=color..a.best.kind..'|r'..(more>0 and a.second and grey(' (+'..self:Coins(more)..' vs '..a.second.kind:lower()..')') or '')
+  end
   tip:AddDoubleLine('Best',s,1,.82,0,1,1,1)
  end
- if a.yields and IsShiftKeyDown and IsShiftKeyDown() then
-  for _,y in ipairs(a.yields) do
-   local qty=y.min and (y.min==y.max and tostring(y.min) or (y.min..'-'..y.max)) or '?'
-   local left='  '..y.name..(y.chance and (' '..math.floor(y.chance*100+0.5)..'% x'..qty) or '')
-   tip:AddDoubleLine(left,y.unit and self:Coins(y.unit)..' each' or grey('no price'),.8,.8,.8,1,1,1)
-  end
-  if (a.learned or 0)>0 then tip:AddLine(grey('  Adjusted by '..a.learned..' of your disenchants'),1,1,1) end
- elseif a.yields then
-  tip:AddLine(grey('Hold Shift for disenchant materials'),1,1,1)
- end
+ if (a.learned or 0)>0 then tip:AddLine(grey('  Adjusted by '..a.learned..' of your disenchants'),1,1,1) end
 end
+-- Re-draw the hovered tooltip when Shift goes down/up.
+M:RegisterHandler('MODIFIER_STATE_CHANGED',function(self,_,key)
+ if type(key)~='string' or not key:find('SHIFT') or not GameTooltip or not GameTooltip:IsShown() then return end
+ if self.db and self.db.settings.tooltipDisenchant==false then return end
+ local owner=GameTooltip.GetOwner and GameTooltip:GetOwner()
+ if type(owner)~='table' then return end
+ if owner.UpdateTooltip then pcall(owner.UpdateTooltip,owner)
+ elseif owner.GetScript and owner.IsMouseOver and owner:IsMouseOver() then
+  local fn=owner:GetScript('OnEnter');if fn then pcall(fn,owner) end
+ end
+end)
 
 -- Bag check window ------------------------------------------------------------
 function M:DisenchantBagRows()
@@ -261,7 +289,7 @@ function M:ShowDisenchantWindow(mode)
   f:EnableMouseWheel(true)
   f:SetScript('OnMouseWheel',function(_,d) f.offset=math.max(0,math.min(math.max(0,#(f.data or {})-ROWS),(f.offset or 0)-(d>0 and 3 or -3)));self:RenderDisenchantWindow(true) end)
   f.empty=label(f,'',18,-200,664,'GameFontHighlightLarge');f.empty:SetJustifyH('CENTER')
-  f.foot=label(f,'Prices after the '..math.floor((self.db.settings.ahCut or 0.05)*100+0.5)..'% AH cut. Disenchant value is the average over many disenchants. Hover a row, hold Shift for the materials.',18,-446,664,'GameFontHighlightSmall')
+  f.foot=label(f,'Prices after the '..math.floor((self.db.settings.ahCut or 0.05)*100+0.5)..'% AH cut. Disenchant value is the average over many disenchants. Red = disenchant within 10% of vendor, so vendor it. Hover a row and hold Shift for the materials.',18,-446,664,'GameFontHighlightSmall')
  end
  f.mode=mode or f.mode or 'bags';f.offset=0;f:Show();self:RenderDisenchantWindow()
 end
@@ -287,9 +315,9 @@ function M:RenderDisenchantWindow(keep)
    row.c[1]:SetText(r.link)
    row.c[2]:SetText(a.vendor and self:Coins(a.vendor) or '--')
    row.c[3]:SetText(a.auction and (a.auctionStale and '|cff999999'..self:Coins(a.auction)..'|r' or self:Coins(a.auction)) or '--')
-   row.c[4]:SetText(a.disenchant and ((a.deStale and '|cff999999' or '')..self:Coins(a.disenchant)..(a.deStale and '|r' or '')..(a.missing>0 and '|cff999999 +?|r' or '')) or '|cff999999no prices|r')
+   row.c[4]:SetText(a.disenchant and ((a.deClose and '|cffff4040' or a.deStale and '|cff999999' or '')..self:Coins(a.disenchant)..((a.deClose or a.deStale) and '|r' or '')..(a.missing>0 and '|cff999999 +?|r' or '')) or '|cff999999no prices|r')
    local best=a.best and a.best.kind or '--'
-   local color=best=='Disenchant' and '|cffb366ff' or best=='Auction' and '|cff66ccff' or '|cffffd100'
+   local color=best=='Disenchant' and '|cffb366ff' or best=='Auction' and '|cff66ccff' or a.deClose and '|cffff4040' or '|cffffd100'
    row.c[5]:SetText(color..best..'|r')
   end
  end

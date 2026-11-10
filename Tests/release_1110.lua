@@ -62,23 +62,41 @@ check('1.11 Advice compares disenchant (after AH cut) with vendor and the item o
  end,stubItems())
 end)
 
-check('1.11 Tooltip says Disenchant value and the best choice; Shift lists materials',function()
+check('1.11 Shift tooltip: materials with chance and value at current prices, total, best choice',function()
  reset()
- local oldShift=IsShiftKeyDown
+ local oldShift=IsShiftKeyDown;local shift=false;IsShiftKeyDown=function() return shift end
  run(function()
-  local t=tooltip();M:AppendDisenchantTooltip(t,link(1001))
-  assert(t:text():find('No dust prices yet',1,true))
   price(10940,100);price(10939,300);price(10978,400)
-  t=tooltip();M:AppendDisenchantTooltip(t,link(1001))
-  assert(t:text():find('Disenchant = '..M:Coins(282),1,true),t:text())
-  assert(t:text():find('Best = |cffb366ffDisenchant|r',1,true) and t:text():find('vs vendor',1,true))
-  assert(t:text():find('Hold Shift',1,true))
-  IsShiftKeyDown=function() return true end
-  t=tooltip();M:AppendDisenchantTooltip(t,link(1001))
-  assert(t:text():find('Strange Dust 75% x2-3',1,true) and t:text():find('Small Glimmering Shard 5% x1',1,true))
+  local t=tooltip();M:AppendDisenchantTooltip(t,link(1001));assert(#t.lines==0,'nothing without Shift')
+  shift=true
+  t=tooltip();M:AppendDisenchantTooltip(t,link(1001));local x=t:text()
+  assert(x:find('Disenchants into:',1,true))
+  -- 75% x2-3 dust at 100c: 0.75*2.5*100*0.95 = 178c expected
+  assert(x:find('Strange Dust 75% x2-3 = '..M:Coins(0.75*2.5*100*0.95),1,true),x)
+  assert(x:find('Small Glimmering Shard 5% x1 = '..M:Coins(0.05*400*0.95),1,true))
+  assert(x:find('Disenchant value = '..M:Coins(282),1,true))
+  assert(x:find('Best = |cffb366ffDisenchant|r',1,true) and x:find('vs vendor',1,true))
+  -- No material prices yet.
+  reset();t=tooltip();M:AppendDisenchantTooltip(t,link(1001));assert(t:text():find('no material prices',1,true))
   -- Not for whites, and switchable.
   t=tooltip();M:AppendDisenchantTooltip(t,link(1005));assert(#t.lines==0)
   M.db.settings.tooltipDisenchant=false;t=tooltip();M:AppendDisenchantTooltip(t,link(1001));assert(#t.lines==0)
+ end,stubItems(),function() IsShiftKeyDown=oldShift end)
+end)
+
+check('1.11 Within 10% of vendor (or below) defaults to Vendor, shown red',function()
+ reset()
+ local oldShift=IsShiftKeyDown;IsShiftKeyDown=function() return true end
+ run(function()
+  -- Green Shirt vendors for 50c. Dust only: 0.75*2.5*p*0.95 -> p=28 gives 49c, p=30 gives 53c (within 10%), p=40 gives 71c.
+  price(10940,30)
+  local a=M:DisenchantAdvice(link(1001));assert(a.disenchant==53 and a.deClose and a.best.kind=='Vendor' and a.second.kind=='Disenchant')
+  local t=tooltip();M:AppendDisenchantTooltip(t,link(1001));local x=t:text()
+  assert(x:find('Disenchant value = |cffff4040'..M:Coins(53),1,true) and x:find('Best = |cffff4040Vendor|r',1,true),x)
+  price(10940,28);a=M:DisenchantAdvice(link(1001));assert(a.deClose and a.best.kind=='Vendor')
+  price(10940,40);a=M:DisenchantAdvice(link(1001));assert(not a.deClose and a.best.kind=='Disenchant')
+  -- The margin is a setting.
+  M.db.settings.deVendorMargin=0.5;a=M:DisenchantAdvice(link(1001));assert(a.deClose and a.best.kind=='Vendor')
  end,stubItems(),function() IsShiftKeyDown=oldShift end)
 end)
 
