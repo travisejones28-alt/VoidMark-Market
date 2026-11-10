@@ -125,6 +125,34 @@ function M:StartSnapshotProcessing(total,source,diagnostic)
   local player=UnitName('player') or ''
   local playerFull=player..'-'..((GetNormalizedRealmName and GetNormalizedRealmName()) or GetRealmName() or '')
   local requested={}; local requestLoad=C_Item and C_Item.RequestLoadItemDataByID
+  -- Speed: most auctions are trade goods/consumables, which have no AH
+  -- variants, so their market is just the itemID: skip the per-row link call
+  -- and link parsing for them (link read once per item for display).
+  local instant=C_Item and C_Item.GetItemInfoInstant or GetItemInfoInstant
+  local plainItems={}
+  local function plain(itemID)
+    local v=plainItems[itemID]
+    if v==nil then
+      v=false
+      if instant then
+        local ok,_,_,_,equip=pcall(instant,itemID)
+        if ok and (equip=='' or equip=='INVTYPE_BAG' or equip=='INVTYPE_NON_EQUIP_IGNORE') then v=true end
+      end
+      plainItems[itemID]=v
+    end
+    return v
+  end
+  -- Gear: the same variant appears under many links that differ only by
+  -- enchant and unique instance id; resolve the variant once per distinct
+  -- (item, gems, suffix, level...) instead of once per auction.
+  local function readLink(index)
+    if C_AuctionHouse.GetReplicateItemLink then local good,v=pcall(C_AuctionHouse.GetReplicateItemLink,index); if good then return v end end
+  end
+  local function linkCacheKey(link)
+    local id,mid,rest=link:match('item:(%d+):[^:]*:([^:]*:[^:]*:[^:]*:[^:]*:[^:]*):[^:]*([^|]*)')
+    if id then return id..':'..mid..rest end
+    return link
+  end
   local function reject(reason)
     summary.invalidRecords=summary.invalidRecords+1
     summary.rejectedReasons[reason]=(summary.rejectedReasons[reason] or 0)+1
@@ -138,14 +166,20 @@ function M:StartSnapshotProcessing(total,source,diagnostic)
     if (tonumber(saleStatus) or 0)~=0 then return 'reject','unavailableSale',not complete end
     if not itemID or itemID<=0 or not count or count<1 or not buyout then return 'defer','missingFields',true end
     if buyout<=0 then return 'reject','noBuyout',not complete end
-    local link; if C_AuctionHouse.GetReplicateItemLink then local good,v=pcall(C_AuctionHouse.GetReplicateItemLink,index); if good then link=v end end
-    local identity=link and linkKeys[link]
-    if not identity then
-      identity={self:LinkIdentity(link,itemID)}
-      if identity[1] and cachedLinks<3000 then linkKeys[link]=identity;cachedLinks=cachedLinks+1 end
+    local link,key,linkID,suffix,itemLevel,pet
+    if plain(itemID) then
+      key,linkID,suffix,itemLevel,pet=self:Key(itemID),itemID,0,0,0
+    else
+      link=readLink(index)
+      local ck=type(link)=='string' and linkCacheKey(link)
+      local identity=ck and linkKeys[ck]
+      if not identity then
+        identity={self:LinkIdentity(link,itemID)}
+        if identity[1] and ck and cachedLinks<50000 then linkKeys[ck]=identity;cachedLinks=cachedLinks+1 end
+      end
+      key,linkID,suffix,itemLevel,pet=unpack(identity)
+      if linkID~=itemID then key=nil end
     end
-    local key,linkID,suffix,itemLevel,pet=unpack(identity)
-    if linkID~=itemID then key=nil end
     -- No link means variant identity is uncertain. Never mix random-stat gear blindly.
     if not key then
       -- Ask the client to load the item now so the retry pass finds it sooner.
@@ -155,6 +189,7 @@ function M:StartSnapshotProcessing(total,source,diagnostic)
     local unit=buyout/count
     local g=grouped[key]
     if not g then
+      if not link then link=readLink(index) end
       g={marketKey=key,itemID=itemID,itemSuffix=suffix,itemLevel=itemLevel,battlePetSpeciesID=pet,itemLink=link,name=name,texture=texture,quality=quality,level=level,
         listings=0,quantity=0,floorUnitPrice=unit,ceilingUnitPrice=unit,priceLevels={},tierCount=0,
         acquisitionLots={},lotIndex={},lotCount=0}

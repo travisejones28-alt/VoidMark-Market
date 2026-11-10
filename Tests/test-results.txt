@@ -175,11 +175,11 @@ PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
 PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
 PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
-BENCH scan: 122 frames (2.0s at 60fps, 4.1s at 30fps), worst frame 12.1ms, cpu 1.02s | after:share-scan=48 done=1 model=58 processing=15
+BENCH scan: 79 frames (1.3s at 60fps, 2.6s at 30fps), worst frame 12.5ms, cpu 0.79s | after:prune=5 after:share-scan=12 done=1 model=48 processing=13
 PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.13 history stores only the fields it needs; latest keeps the full snapshot
 PASS 1.9.13 history saved by older versions is shrunk once at login without losing prices
-MEM per scan of 5,000 items: 2.8 MB (was ~6.5 MB before 1.9.13)
+MEM per scan of 5,000 items: 2.7 MB (was ~6.5 MB before 1.9.13)
 PASS MEM 1.9.13 memory after 6 scans of 5,000 items
 PASS 1.9.7 A refresh that answers without an event still fills the price (Linen Cloth)
 PASS 1.9.7 No live answer: last scan price after 10 s, and a late live answer replaces it
@@ -203,4 +203,7 @@ PASS 1.11 Within 10% of vendor (or below) defaults to Vendor, shown red
 PASS 1.11 Your own disenchants are recorded and blended into the estimate
 PASS 1.11 Bag check window lists disenchantable gear, best first, with a total
 PASS 1.11 AH items mode reads the VoidMark market database: buy, disenchant, profit
-ALL 202 TESTS PASSED
+PASS 1.11.4 Scan skips per-row link work for plain items and resolves each gear variant once
+PASS 1.11.4 Selling finds an item that moved slots instead of failing; locked retries quickly
+PASS 1.11.4 Bag list and price-check jobs run before a long background job; background jobs take turns
+ALL 205 TESTS PASSED

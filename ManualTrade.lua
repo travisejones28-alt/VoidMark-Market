@@ -48,10 +48,38 @@ function M:LiveNameSearch(text)
  end,fail=function(e) self.shoppingSearchStatus='Search failed: '..tostring(e);self:Print(e);self:RefreshUI() end})
 end
 function M:ReadBagSlot(r) return self.readBag(self,r) end
+-- The bag list on Selling can be out of date (items moved, stacked, looted
+-- or posted since it was built). Find the same item in its current slot.
+function M:FindBagItem(r)
+ local get=C_Container and C_Container.GetContainerItemInfo
+ local slots=C_Container and C_Container.GetContainerNumSlots
+ if not get or not slots then return end
+ local loose
+ for bag=0,4 do
+  local ok,n=pcall(slots,bag)
+  for slot=1,(ok and tonumber(n) or 0) do
+   local b=get(bag,slot)
+   if type(b)=='table' and b.itemID==r.itemID and not b.isBound then
+    if b.hyperlink==r.itemLink and not b.isLocked then return bag,slot end
+    if not loose and not b.isLocked and r.marketKey~=nil and self:LinkIdentity(b.hyperlink,b.itemID)==r.marketKey then loose={bag,slot,b.hyperlink} end
+   end
+  end
+ end
+ if loose then return loose[1],loose[2],loose[3] end
+end
 local function readBag(self,r)
  if not usable(self) or not r or not r.slot or not ItemLocation or not C_Container then return nil,'Open the AH and select a bag item' end
  local b=C_Container.GetContainerItemInfo(r.bag,r.slot)
- if not b or not b.hyperlink or b.hyperlink~=r.itemLink or b.itemID~=r.itemID or b.isBound or b.isLocked then return nil,'Bag slot changed, locked or bound; select it again' end
+ if b and b.isLocked and b.hyperlink==r.itemLink then return nil,'Item is locked for a moment' end
+ if not b or not b.hyperlink or b.hyperlink~=r.itemLink or b.itemID~=r.itemID or b.isBound then
+  local bag,slot,link=self:FindBagItem(r)
+  self.bagsDirty=true -- rebuild the list on the next tick
+  if not bag then return nil,'That item is no longer in your bags' end
+  r.bag,r.slot=bag,slot;if link then r.itemLink=link end
+  b=C_Container.GetContainerItemInfo(bag,slot)
+  if not b or b.hyperlink~=r.itemLink or b.isBound then return nil,'That item is no longer in your bags' end
+ end
+ if b.isLocked then return nil,'Item is locked for a moment' end
  local loc=ItemLocation:CreateFromBagAndSlot(r.bag,r.slot)
  local A=C_AuctionHouse;local k=A.GetItemKeyFromItem and A.GetItemKeyFromItem(loc)
  if not k or k.itemID~=b.itemID then return nil,'Exact auction identity unavailable' end
@@ -74,8 +102,8 @@ function M:CheckPost(row)
  local b,e=readBag(self,row)
  if not b then
   -- Right after a post the slot is briefly locked; try again shortly.
-  if e and e:find('locked',1,true) and (self.sellRetry or 0)<5 then
-   self.sellRetry=(self.sellRetry or 0)+1;self.sellCheckAt=GetTime()+0.5;self.sellCheckRow=row;return
+  if e and e:find('locked',1,true) and (self.sellRetry or 0)<10 then
+   self.sellRetry=(self.sellRetry or 0)+1;self.sellCheckAt=GetTime()+0.2;self.sellCheckRow=row;return
   end
   self.sellRetry=nil;self:Print(e);return
  end

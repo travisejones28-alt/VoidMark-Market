@@ -1,3 +1,9 @@
+## 1.11.4
+- **Faster full-scan processing.** Trade goods, consumables and other non-gear items no longer read and parse an item link for every auction (once per item instead), and gear variants are resolved once per variant instead of once per auction. In a 132k-auction test that is about 65% fewer link reads and 75% fewer item-level look-ups, with identical results.
+- **Selling: no more "Bag slot changed, locked or bound; select it again".** If the bag list is out of date (item moved, stacked, looted or posted), Market finds the item in its new slot and checks the price straight away, and the list refreshes. A slot that is only locked for a moment after posting is retried every 0.2 s instead of 0.5 s.
+- **Price checks are not held up by background work.** The bag list, price-check results and searches run before scan/model/sync jobs each frame, and background jobs take turns.
+- 205 regressions.
+
 ## 1.11.3
 - **Cleaner Shift disenchant tooltip:** one value per material (no "each" prices or "old price" on every line), "Disenchant" total, and "Best Auction +23s 93c". Red Vendor when disenchanting is within 10% of vendor.
 - Prices only count as old after a day (was 2 hours); when they are, the age shows once on the "Disenchants into" line. Setting `deMaxAge`.

@@ -1,6 +1,6 @@
 local addonName, M = ...
 _G.VoidMarkMarket = M
-M.name, M.version = addonName or 'VoidMarkMarket', '1.11.3'
+M.name, M.version = addonName or 'VoidMarkMarket', '1.11.4'
 M.eventHandlers, M.runtimeLog, M.jobs = {}, {}, {}
 M.ahOpen = false
 M.scanState = {running=false, phase='idle', status='No scan yet', progress=0}
@@ -82,11 +82,20 @@ function M:FrameBudget()
   end
   return 4
 end
+-- Jobs you are waiting on (bag list, a price check's results, a search) run
+-- first each frame; background jobs take turns so a long scan or model job
+-- never starves the rest.
+M.interactiveJobs={bags=true,results=true,browse=true}
 function M:RunJobs()
   local start=debugprofilestop()
   self.budget=self:FrameBudget()
-  local ids={}
-  for id in pairs(self.jobs) do ids[#ids+1]=id end
+  local ids,rest={},{}
+  for id in pairs(self.jobs) do if self.interactiveJobs[id] then ids[#ids+1]=id else rest[#rest+1]=id end end
+  if #rest>1 then
+    table.sort(rest,function(a,b) return tostring(a)<tostring(b) end)
+    self.jobTurn=(self.jobTurn or 0)%#rest+1
+    for n=0,#rest-1 do ids[#ids+1]=rest[(self.jobTurn-1+n)%#rest+1] end
+  elseif rest[1] then ids[#ids+1]=rest[1] end
   for _,id in ipairs(ids) do
     local job=self.jobs[id]
     if job then
