@@ -49,7 +49,7 @@ function M:BuildTextReport()
   lines[#lines+1]='Crafting interfaces: legacy='..tostring(type(GetNumTradeSkills)=='function')..
     ' | schematic='..tostring(C_TradeSkillUI and type(C_TradeSkillUI.GetRecipeSchematic)=='function' or false)..
     ' | bags='..tostring(type(GetItemCount)=='function' or C_Item and type(C_Item.GetItemCount)=='function' or false)
-  lines[#lines+1]='PricingAPI v1; snapshot costs require live validation. No verified disenchant dataset bundled.'
+  lines[#lines+1]='PricingAPI v1; snapshot costs require live validation. Disenchant advisor: CraftShuffle yield tables + your recorded disenchants.'
   local scan=self.db.latestScan
   if scan then
     for _,k in ipairs({'source','requestedAt','startedAt','completedAt','rawRows','auctionsProcessed','invalidRecords','incompleteRecords','deferredRows','recoveredRows','unresolvedRows','retryPasses','hydrationSeconds','uniqueItems','uniqueBaseItems','totalQuantity','processingMS','responseAt','responseSeconds','parseMS','marketScanID','skippedMarkets','modelErrors'}) do lines[#lines+1]=k..': '..tostring(scan[k]) end

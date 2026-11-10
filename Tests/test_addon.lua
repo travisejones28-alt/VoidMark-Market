@@ -838,4 +838,5 @@ assert(loadfile(addon..'Tests/release_1913.lua'))()(M,check,jobs,advance,emit,fr
 assert(loadfile(addon..'Tests/release_197.lua'))()(M,check,jobs,advance,emit)
 assert(loadfile(addon..'Tests/flips.lua'))()(M,check,jobs,advance,emit)
 assert(loadfile(addon..'Tests/release_1100.lua'))()(M,check,jobs,advance,emit)
+assert(loadfile(addon..'Tests/release_1110.lua'))()(M,check,jobs,advance,emit)
 print('ALL '..total..' TESTS PASSED')

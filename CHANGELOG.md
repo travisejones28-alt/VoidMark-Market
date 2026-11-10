@@ -1,3 +1,13 @@
+## 1.11.0
+Disenchant or vendor? (disenchant side of CraftShuffle, built into Market.)
+- **Tooltip:** on green, blue and purple weapons and armor, a **Disenchant** line (average value of the materials on the AH, after the AH cut) and a **Best** line: Disenchant, Vendor or Auction, and by how much. Hold **Shift** to see the materials, chances and prices. `/vmm de tooltip` turns it off/on.
+- **Bag check:** Tools > *Disenchant or vendor?* (or `/vmm de`) lists every disenchantable item in your bags with Vendor / Auction / Disenchant / Best, best first, and how much more you get by disenchanting.
+- Yield tables from CraftShuffle 0.2.4 by Vystery (MIT), including the Forever change for green weapons ilvl 21-30 (Greater Magic Essence). Wands that can't be disenchanted are excluded.
+- **Learns from your casts:** each of your disenchants is recorded (account-wide) and blended into the estimate for that quality/level band, so numbers move toward real Forever results.
+- Prices come from your scans/searches and bank sync; old prices are greyed, missing material prices show "+?".
+- CraftProfit's crafting features are not ported; Market already has Crafting.
+- 200 regressions.
+
 ## 1.10.0
 Auctionator-style buying in Shopping.
 - **Click a Shopping result to open its buy view**, laid out like Auctionator's (VoidMark colours): Back, item icon and name, Refresh; Quantity, Unit price, Total price and Buy Now on the left; the live price tiers (Buyout price / Available) on the right.

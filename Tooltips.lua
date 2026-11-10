@@ -116,6 +116,7 @@ function M:InitializePriceTooltips()
   if link then
    local ok,count=pcall(self.TooltipStackCount,self,tip)
    self:AppendMarketTooltip(tip,link,ok and count or nil)
+   if self.AppendDisenchantTooltip then pcall(self.AppendDisenchantTooltip,self,tip,link) end
   end
  end
  if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType and Enum.TooltipDataType.Item then
