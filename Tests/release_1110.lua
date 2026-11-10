@@ -70,14 +70,18 @@ check('1.11 Shift tooltip: materials with chance and value at current prices, to
   local t=tooltip();M:AppendDisenchantTooltip(t,link(1001));assert(#t.lines==0,'nothing without Shift')
   shift=true
   t=tooltip();M:AppendDisenchantTooltip(t,link(1001));local x=t:text()
-  assert(x:find('Disenchants into:',1,true))
+  assert(x:find('Disenchants into',1,true) and not x:find(' old',1,true) and not x:find(' ea',1,true))
   -- 75% x2-3 dust at 100c: 0.75*2.5*100*0.95 = 178c expected
   assert(x:find('Strange Dust 75% x2-3 = '..M:Coins(0.75*2.5*100*0.95),1,true),x)
   assert(x:find('Small Glimmering Shard 5% x1 = '..M:Coins(0.05*400*0.95),1,true))
-  assert(x:find('Disenchant value = '..M:Coins(282),1,true))
-  assert(x:find('Best = |cffb366ffDisenchant|r',1,true) and x:find('vs vendor',1,true))
+  assert(x:find('Disenchant = '..M:Coins(282),1,true))
+  assert(x:find('Best = |cffb366ffDisenchant|r|cff999999 +'..M:Coins(282-50),1,true))
+  -- 20h-old prices are fine; older than a day shows the age once in the header.
+  price(10940,100,72000);t=tooltip();M:AppendDisenchantTooltip(t,link(1001));assert(not t:text():find(' old',1,true))
+  price(10940,100,2*86400+60);t=tooltip();M:AppendDisenchantTooltip(t,link(1001))
+  assert(t.lines[1]:find('2d old',1,true) and not t.lines[2]:find('old',1,true),t:text())
   -- No material prices yet.
-  reset();t=tooltip();M:AppendDisenchantTooltip(t,link(1001));assert(t:text():find('no material prices',1,true))
+  reset();t=tooltip();M:AppendDisenchantTooltip(t,link(1001));assert(t:text():find('no prices - scan the AH',1,true))
   -- Not for whites, and switchable.
   t=tooltip();M:AppendDisenchantTooltip(t,link(1005));assert(#t.lines==0)
   M.db.settings.tooltipDisenchant=false;t=tooltip();M:AppendDisenchantTooltip(t,link(1001));assert(#t.lines==0)
@@ -92,7 +96,7 @@ check('1.11 Within 10% of vendor (or below) defaults to Vendor, shown red',funct
   price(10940,30)
   local a=M:DisenchantAdvice(link(1001));assert(a.disenchant==53 and a.deClose and a.best.kind=='Vendor' and a.second.kind=='Disenchant')
   local t=tooltip();M:AppendDisenchantTooltip(t,link(1001));local x=t:text()
-  assert(x:find('Disenchant value = |cffff4040'..M:Coins(53),1,true) and x:find('Best = |cffff4040Vendor|r',1,true),x)
+  assert(x:find('Disenchant = |cffff4040'..M:Coins(53),1,true) and x:find('Best = |cffff4040Vendor|r',1,true),x)
   price(10940,28);a=M:DisenchantAdvice(link(1001));assert(a.deClose and a.best.kind=='Vendor')
   price(10940,40);a=M:DisenchantAdvice(link(1001));assert(not a.deClose and a.best.kind=='Disenchant')
   -- The margin is a setting.

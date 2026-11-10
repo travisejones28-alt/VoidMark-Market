@@ -6,6 +6,7 @@ local _,M=...
 -- disenchants are recorded per quality/type/5-level band and blended in, so
 -- the estimates move toward what Forever really gives.
 M.defaults.tooltipDisenchant=true
+M.defaults.deMaxAge=86400 -- disenchant prices count as old after a day
 M.defaults.deVendorMargin=0.10 -- disenchant must beat vendor by more than this, or vendor it
 
 local DISENCHANT_SPELL=13262
@@ -113,7 +114,7 @@ end
 function M:DisenchantAdvice(item)
  local meta=self:DisenchantMeta(item);if not meta then return end
  local cut=1-(self.db and self.db.settings.ahCut or 0.05)
- local maxAge=self.db and self.db.settings.maxDataAge or 7200
+ local maxAge=self.db and tonumber(self.db.settings.deMaxAge) or 86400
  local a={meta=meta,canDisenchant=self:CanDisenchant(meta),vendor=meta.sell,options={}}
  if meta.sell then a.options[#a.options+1]={kind='Vendor',value=meta.sell} end
  -- The item itself on the AH (exact suffix/level variant only).
@@ -128,17 +129,18 @@ function M:DisenchantAdvice(item)
  if a.canDisenchant then
   local yields,learned=self:DisenchantYields(meta)
   if yields then
-   local value,missing,stale=0,0,false;a.yields={};a.learned=learned
+   local value,missing,stale,oldest=0,0,false,nil;a.yields={};a.learned=learned
    for _,y in ipairs(yields) do
     local p=self:PriceObservation(self:Key(y.itemID))
     local row={itemID=y.itemID,name=matName(self,y.itemID),chance=y.chance,expected=y.expected,min=y.min,max=y.max}
     if p and self:Finite(p.floor,1,1e12) then
      row.unit=p.floor;row.value=p.floor*y.expected*cut;value=value+row.value
      if time()-p.at>maxAge or p.unverified then stale=true;row.stale=true end
+     if not oldest or p.at<oldest then oldest=p.at end
     elseif y.expected>=0.02 then missing=missing+1 end
     a.yields[#a.yields+1]=row
    end
-   a.missing=missing;a.deStale=stale
+   a.missing=missing;a.deStale=stale;a.deOldest=oldest
    if value>0 then
     a.disenchant=math.floor(value)
     a.options[#a.options+1]={kind='Disenchant',value=a.disenchant,stale=stale,partial=missing>0}
@@ -165,36 +167,28 @@ function M:AppendDisenchantTooltip(tip,link)
  local a=self:DisenchantAdvice(link)
  if not a or not a.canDisenchant or not a.yields then return end
  local grey=function(s) return '|cff999999'..s..'|r' end
- tip:AddLine('Disenchants into:',.7,.4,1)
+ local red=function(s) return '|cffff4040'..s..'|r' end
+ -- Header carries the price age once, only when the prices are old.
+ tip:AddDoubleLine('Disenchants into',a.deStale and a.deOldest and grey(self:TooltipAgeText(a.deOldest)..' old') or ' ',.7,.4,1,.6,.6,.6)
  for _,y in ipairs(a.yields) do
   local qty=y.min and (y.min==y.max and tostring(y.min) or (y.min..'-'..y.max)) or '?'
   local left='  '..y.name..(y.chance and (' '..math.floor(y.chance*100+0.5)..'% x'..qty) or '')
-  local right
-  if y.unit then
-   right=self:Coins(y.value)..grey(' ('..self:Coins(y.unit)..' ea)')
-   if y.stale then right=grey(self:Coins(y.value)..' old price') end
-  else right=grey('no price') end
-  tip:AddDoubleLine(left,right,.85,.85,.85,1,1,1)
+  tip:AddDoubleLine(left,y.value and self:Coins(y.value) or grey('--'),.85,.85,.85,1,1,1)
  end
- if a.disenchant then
-  local txt=self:Coins(a.disenchant)..(a.missing>0 and grey(' +?') or '')
-  if a.deClose then txt='|cffff4040'..self:Coins(a.disenchant)..'|r'..(a.missing>0 and grey(' +?') or '') end
-  tip:AddDoubleLine('Disenchant value',txt,1,.82,0,1,1,1)
- else
-  tip:AddDoubleLine('Disenchant value',grey('no material prices - scan the AH'),1,.82,0,.6,.6,.6)
- end
- if a.best then
+ local txt=a.disenchant and self:Coins(a.disenchant) or grey('no prices - scan the AH')
+ if a.disenchant and a.deClose then txt=red(self:Coins(a.disenchant)) end
+ if a.disenchant and a.missing>0 then txt=txt..grey(' +?') end
+ tip:AddDoubleLine('Disenchant',txt,1,.82,0,1,1,1)
+ if a.best and a.second then
   local s
-  if a.best.kind=='Vendor' and a.deClose then
-   s='|cffff4040Vendor|r'..grey(' (disenchant within '..math.floor((tonumber(self.db.settings.deVendorMargin) or 0.1)*100+0.5)..'% of vendor)')
+  if a.best.kind=='Vendor' and a.deClose then s=red('Vendor')
   else
-   local more=a.second and a.best.value-a.second.value or 0
    local color=a.best.kind=='Disenchant' and '|cffb366ff' or a.best.kind=='Auction' and '|cff66ccff' or '|cffffd100'
-   s=color..a.best.kind..'|r'..(more>0 and a.second and grey(' (+'..self:Coins(more)..' vs '..a.second.kind:lower()..')') or '')
+   local more=a.best.value-a.second.value
+   s=color..a.best.kind..'|r'..(more>0 and grey(' +'..self:Coins(more)) or '')
   end
   tip:AddDoubleLine('Best',s,1,.82,0,1,1,1)
  end
- if (a.learned or 0)>0 then tip:AddLine(grey('  Adjusted by '..a.learned..' of your disenchants'),1,1,1) end
 end
 -- Re-draw the hovered tooltip when Shift goes down/up.
 M:RegisterHandler('MODIFIER_STATE_CHANGED',function(self,_,key)

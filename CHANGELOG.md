@@ -1,3 +1,8 @@
+## 1.11.3
+- **Cleaner Shift disenchant tooltip:** one value per material (no "each" prices or "old price" on every line), "Disenchant" total, and "Best Auction +23s 93c". Red Vendor when disenchanting is within 10% of vendor.
+- Prices only count as old after a day (was 2 hours); when they are, the age shows once on the "Disenchants into" line. Setting `deMaxAge`.
+- 202 regressions.
+
 ## 1.11.2
 - **Disenchant tooltip is Shift-only** (no clutter otherwise). Hold Shift over gear: "Disenchants into:" each material with its chance, amount and its expected value at current AH prices (unit price in grey), then **Disenchant value** and **Best**. The tooltip redraws when you press/release Shift.
 - **Within 10% of vendor defaults to Vendor:** if disenchanting pays no more than vendor +10%, Best says **Vendor** in red and the disenchant value is red. Same in the bag check window. (Setting `deVendorMargin`, default 0.10.)
