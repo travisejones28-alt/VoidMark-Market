@@ -1,3 +1,13 @@
+## 1.10.0
+Auctionator-style buying in Shopping.
+- **Click a Shopping result to open its buy view**, laid out like Auctionator's (VoidMark colours): Back, item icon and name, Refresh; Quantity, Unit price, Total price and Buy Now on the left; the live price tiers (Buyout price / Available) on the right.
+- **Commodities:** type a quantity (Max fills everything listed) or click a price tier to buy every tier up to it. Unit and total prices add up across tiers like Auctionator.
+- **Items:** listings are shown cheapest per item first; click one (or double-click) and Buy Now. "Paying X for N x Item?" is asked before every bid.
+- **Chain buying:** after each purchase the listing refreshes and your quantity stays, so you can press Buy Now again straight away.
+- **Warnings like Auctionator:** "CAREFUL - the price varies a lot" when the dearest unit is 50%+ above the cheapest; "The price has increased!" on the confirmation when the server quote is higher than shown (you choose; it is no longer silently rejected); final "Confirm purchase of N x Item for X? (Y each)". Not enough gold, your Settings limits and the commodity wait after a cancelled quote are shown in plain words under Buy Now.
+- Every purchase still goes through the normal VoidMark path: spend limits, pending reservations and the ledger. Confirm a commodity quote within 15 seconds.
+- 195 regressions.
+
 ## 1.9.13
 Less memory.
 - **Price history uses about 60% less memory.** Each item keeps its last 30 scans of history, and every entry used to be a full ~20-field snapshot (about 1.3 KB). History now keeps only the 6 fields Market actually reads (time, median, fair-value depth, quantity, lowest price, listings); the full snapshot is kept once, for the latest scan. Measured on 5,000 items after 32 scans: 221 MB -> 90 MB of addon memory. The SavedVariables file and login/logout time shrink too.

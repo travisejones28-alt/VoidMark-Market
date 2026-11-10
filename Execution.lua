@@ -80,7 +80,7 @@ function M:ConfirmClicked()
   -- Called only by CONFIRM QUOTE OnClick. Events never confirm automatically.
   local x=self.execution
   if self.persistenceBlocked or not self:CanUseAuctionHouse() or x.state~='quoted' then return end
-  if GetTime()-x.quotedAt>5 then self:InvalidateQuote('Quote expired; revalidate'); return end
+  if GetTime()-x.quotedAt>(x.quoteWindow or 5) then self:InvalidateQuote('Quote expired; revalidate'); return end
   if not self:ThrottleReady() then return end
   local pass,why=self:CheckRisk(x.market,x.live.economics)
   if not pass then self:InvalidateQuote(table.concat(why,'; ')); return end
@@ -101,7 +101,7 @@ function M:ExecutionTick()
   local x=self.execution
   if x.state=='ready' and GetTime()-x.live.received>10 then x.state='stale'; x.message='Live prices expired; revalidate'; self:RefreshUI()
   elseif x.state=='quoting' and GetTime()-x.sent>3 then self:InvalidateQuote('Quote request timed out')
-  elseif x.state=='quoted' and GetTime()-x.quotedAt>5 then self:InvalidateQuote('Quote expired')
+  elseif x.state=='quoted' and GetTime()-x.quotedAt>(x.quoteWindow or 5) then self:InvalidateQuote('Quote expired')
   elseif x.state=='pending' and GetTime()-x.sent>15 then
     x.order.status='unknown'; x.order.evidence='Request sent, result not received'; x.state='unknown'
     x.message='Result uncertain; gold stays reserved. Check mailbox and reconcile in Ledger.'; self:RefreshUI()
@@ -110,14 +110,18 @@ end
 M:RegisterHandler('COMMODITY_PRICE_UPDATED',function(self,_,unit,total)
   local x=self.execution; if x.state~='quoting' or GetTime()-x.sent>3 then return end
   unit=tonumber(unit); total=tonumber(total)
-  if not self:Finite(unit,1,1e12) or not self:Finite(total,1,x.live.cost) then
+  -- Shopping's buy view shows a higher quote to the player (Auctionator-style
+  -- "price has increased" warning); every other path rejects any increase.
+  if not self:Finite(unit,1,1e12) or not self:Finite(total,1,x.shop and 1e14 or x.live.cost) then
     self:InvalidateQuote('Price/quantity changed or invalid quote; revalidate'); return
   end
+  local increased=total>x.live.cost
   x.live.cost=total; x.live.economics=self:Economics(x.market,total,x.live.quantity,x.opportunity.kind)
   if not self:ThrottleReady() then return end
   local pass,why=self:CheckRisk(x.market,x.live.economics)
   if not pass then self:InvalidateQuote(table.concat(why,'; ')); return end
-  x.state='quoted'; x.quotedAt=GetTime(); x.message='Quote '..self:Money(total)..'; click CONFIRM QUOTE within 5 seconds'; self:RefreshUI()
+  x.state='quoted'; x.quotedAt=GetTime(); x.message='Quote '..self:Money(total)..'; click CONFIRM QUOTE within '..(x.quoteWindow or 5)..' seconds'; self:RefreshUI()
+  if x.shop and self.ShopBuyQuoted then self:ShopBuyQuoted(x,unit,total,increased) end
 end)
 M:RegisterHandler('COMMODITY_PRICE_UNAVAILABLE',function(self)
   local x=self.execution; if x.state=='quoting' or x.state=='quoted' then self:InvalidateQuote('Commodity price unavailable') end

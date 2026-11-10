@@ -24,6 +24,7 @@ end
 function M:ShopSearch(text)
  text=(text or ''):match('^%s*(.-)%s*$')
  if #text<2 then self:Print('Type at least two characters');return end
+ if self.ShopBuyClose then self:ShopBuyClose() end
  self.shoppingListMode=false;self.selectedRow=nil;self.page=1
  self.db.settings.filter=text
  if self.shopSearch and self.shopSearch:GetText()~=text then self.shopSearch:SetText(text) end
@@ -33,6 +34,7 @@ function M:ShopSearch(text)
 end
 function M:OpenShoppingList(name)
  local ok,why=self:SetList(name);if not ok then self:Print(why);return end
+ if self.ShopBuyClose then self:ShopBuyClose() end
  self.shoppingListMode=true;self.selectedRow=nil;self.page=1;self.db.settings.filter=''
  if self.shopSearch then self.shopSearch:SetText('') end
  if self.ahOpen then self:SearchShoppingList() end
@@ -44,7 +46,7 @@ function M:ShopListNames()
  return names
 end
 function M:ShopAddSelected()
- local row=self.selectedRow;if not row or row.marketKey==nil then self:Print('Select a result first');return end
+ local row=self.shopBuy and {marketKey=self.shopBuy.key} or self.selectedRow;if not row or row.marketKey==nil then self:Print('Select a result first');return end
  local ok,why=self:SetWatch(row.marketKey,nil);self:Print(ok and ('Added to '..self.activeList) or why)
 end
 function M:ShopRemoveSelected()
@@ -102,8 +104,8 @@ function M:InitializeShopScreen(f)
   r.sel=r:CreateTexture(nil,'BACKGROUND');r.sel:SetAllPoints();r.sel:SetColorTexture(.32,.15,.5,.45)
   r.icon=r:CreateTexture(nil,'ARTWORK');r.icon:SetSize(20,20);r.icon:SetPoint('LEFT',182,0)
   r.c={label(r,'',8,-7,170,'GameFontHighlight'),label(r,'',208,-7,280,'GameFontHighlight'),label(r,'',490,-7,90,'GameFontHighlight'),label(r,'',586,-7,94,'GameFontHighlight')}
-  r:SetScript('OnClick',function(b) if b.data then self.selectedRow=b.data;self:RefreshUI() end end)
-  r:SetScript('OnDoubleClick',function(b) if b.data then self.selectedRow=b.data;self:ShopSelected(b.data) end end)
+  -- Like Auctionator: clicking a result opens its buy view (AH open).
+  r:SetScript('OnClick',function(b) if b.data then self.selectedRow=b.data;if self.ahOpen then self:ShopBuyOpen(b.data) end;self:RefreshUI() end end)
   r:SetScript('OnEnter',function(b) self:ShowRowTooltip(b) end)
   r:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
   s.rows[i]=r
@@ -111,11 +113,12 @@ function M:InitializeShopScreen(f)
  res:EnableMouseWheel(true)
  res:SetScript('OnMouseWheel',function(_,d) self.page=math.max(1,(self.page or 1)-(d>0 and 1 or -1));self:RefreshUI() end)
  s.empty=label(res,'',14,-200,660,'GameFontHighlight');s.empty:SetJustifyH('CENTER')
- s.buy=button(s,'Buy...',312,-522,140,function() self:ShopSelected(self.selectedRow) end,26)
- button(s,'Price history',460,-522,140,function() self:ShowHistoryWindow(self.selectedRow) end,26)
+ s.buy=button(s,'Buy...',312,-522,140,function() self:ShopBuyOpen(self.selectedRow) end,26)
+ s.history=button(s,'Price history',460,-522,140,function() self:ShowHistoryWindow(self.selectedRow) end,26)
  s.searchList=button(s,'Search this list',608,-522,160,function() self:SearchShoppingList() end,26)
  s.pageText=label(s,'',780,-528,220,'GameFontHighlightSmall');s.pageText:SetJustifyH('RIGHT')
  self.shopLeft='lists'
+ self:InitializeShopBuyView(s)
 end
 
 local function sourceText(o)
@@ -137,6 +140,11 @@ function M:RenderShopScreen()
    r.text:SetText(v);r.sel:SetShown(not recent and self.shoppingListMode and self.activeList==v)
   end
  end
+ -- Buy view replaces the results (Auctionator-style)
+ local buying=self.shopBuy~=nil
+ s.results:SetShown(not buying);s.buy:SetShown(not buying);s.history:SetShown(not buying);s.pageText:SetShown(not buying)
+ if buying then s.searchList:Hide();s.buyView:Show();return self:RenderShopBuy() end
+ s.buyView:Hide()
  -- Results
  local source=self:ShoppingResultRows()
  if self.shopSearch and not (self.shopSearch.HasFocus and self.shopSearch:HasFocus()) and not self.shoppingListMode then

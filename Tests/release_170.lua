@@ -109,7 +109,7 @@ check('1.7 navigation exposes Shopping, Selling, Scanning, History and Settings;
   end
  end
  local toc=io.open(addon..'VoidMarkMarket.toc'):read('*a')
- assert(toc:find('## Version: '..M.version,1,true) and toc:find('## Interface: 16001',1,true) and M.version>='1.7.0')
+ assert(toc:find('## Version: '..M.version,1,true) and toc:find('## Interface: 16001',1,true) and (function() local a,b=M.version:match('^(%d+)%.(%d+)');return tonumber(a)*1000+tonumber(b)>=1007 end)())
  reset()
 end)
 end

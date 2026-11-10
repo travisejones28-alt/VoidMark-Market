@@ -175,7 +175,7 @@ PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
 PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
 PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
-BENCH scan: 81 frames (1.4s at 60fps, 2.7s at 30fps), worst frame 12.1ms, cpu 0.70s | after:share-scan=27 done=1 model=41 processing=12
+BENCH scan: 68 frames (1.1s at 60fps, 2.3s at 30fps), worst frame 12.1ms, cpu 0.63s | after:share-scan=19 done=1 model=38 processing=10
 PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.13 history stores only the fields it needs; latest keeps the full snapshot
 PASS 1.9.13 history saved by older versions is shrunk once at login without losing prices
@@ -191,4 +191,9 @@ PASS 1.9.8 Green flips pick cheap good-suffix greens and price them under the ne
 PASS 1.9.8 Flip settings: max buy, min profit and suffix list apply from the screen
 PASS 1.9.8 Flips screen lists rows and double-click opens the normal Buy flow
 PASS 1.9.8 Scan observation records the next price above the lowest
-ALL 190 TESTS PASSED
+PASS 1.10 Clicking a Shopping result opens the buy view with live price tiers
+PASS 1.10 Commodity Buy Now: quote, confirm popup, ledger, then refresh keeping quantity (chain buy)
+PASS 1.10 Warnings: price increased, wide price range, cancel discards the quote
+PASS 1.10 Item buy view: pick a listing, Buy Now asks "Paying", buys that auction, then refreshes
+PASS 1.10 Limits block Buy Now with a plain reason
+ALL 195 TESTS PASSED
