@@ -124,4 +124,22 @@ check('1.11 Bag check window lists disenchantable gear, best first, with a total
   f:Hide()
  end,stubItems(),function() C_Container=oldC end)
 end)
+
+check('1.11 AH items mode reads the VoidMark market database: buy, disenchant, profit',function()
+ reset()
+ run(function()
+  price(10940,100);price(10939,300);price(10978,400);price(11139,5000)
+  M.db.market[1001]={marketKey=1001,itemID=1001,itemLink=link(1001),name='Green Shirt',quality=2,latest={floor=150},lastSeen=time()}
+  M.db.market[1003]={marketKey=1003,itemID=1003,itemLink=link(1003),name='Blue Helm',quality=3,latest={floor=6000},lastSeen=time()}
+  M.db.market[1005]={marketKey=1005,itemID=1005,itemLink=link(1005),name='White Pants',quality=1,latest={floor=1},lastSeen=time()}
+  M.db.market[1007]={marketKey=1007,itemID=1007,name='Old',quality=2,latest={floor=1},lastSeen=time(),archived=true}
+  M:ShowDisenchantWindow('market')
+  local f=M.disenchantWindow;assert(#f.data==2,'only disenchantable, priced, live markets')
+  assert(f.data[1].marketKey==1001 and f.data[1].advice.profit==282-150 and f.data[2].advice.profit==math.floor(5000*0.95)-6000)
+  assert(f.heads[2]:GetText()=='Buy price' and f.rows[1].c[2]:GetText()==M:Coins(150) and f.rows[1].c[5]:GetText():find(M:Coins(132),1,true))
+  assert(f.summary:GetText():find('1 of 2 disenchantable items in the VoidMark database',1,true),f.summary:GetText())
+  f.bagsTab.scripts.OnClick(f.bagsTab);assert(f.mode=='bags' and f.heads[2]:GetText()=='Vendor')
+  f:Hide()
+ end,stubItems())
+end)
 end

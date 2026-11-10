@@ -201,8 +201,33 @@ function M:DisenchantBagRows()
  end)
  return out
 end
+-- Every disenchantable item in VoidMark's market database: buy on the AH at
+-- the stored price, disenchant, sell the materials. Profitable ones first.
+function M:DisenchantMarketRows()
+ local out={};local maxAge=self.db.settings.maxDataAge;local loading=0
+ local load=C_Item and C_Item.RequestLoadItemDataByID
+ for key,m in pairs(self.db.market or {}) do
+  local q=tonumber(m.quality)
+  if type(m)=='table' and not m.archived and (q==nil or (q>=2 and q<=4)) then
+   local item=type(m.itemLink)=='string' and m.itemLink or m.itemID
+   local p=self:PriceObservation(key)
+   if p and self:Finite(p.floor,1,1e12) then
+    local a=self:DisenchantAdvice(item)
+    if not a and self:Finite(m.itemID,1,1e9) then loading=loading+1;if load then pcall(load,m.itemID) end end
+    if a and a.canDisenchant and a.disenchant then
+     a.buy=p.floor;a.buyStale=time()-p.at>maxAge or p.unverified;a.profit=a.disenchant-p.floor
+     out[#out+1]={marketKey=key,link=type(m.itemLink)=='string' and m.itemLink or a.meta.link,icon=m.texture,advice=a,name=m.name or a.meta.name}
+    end
+   end
+  end
+ end
+ out.loading=loading
+ table.sort(out,function(x,y) if x.advice.profit~=y.advice.profit then return x.advice.profit>y.advice.profit end return tostring(x.marketKey)<tostring(y.marketKey) end)
+ return out
+end
 local ROWS=13
-function M:ShowDisenchantWindow()
+local HEAD={bags={'Item','Vendor','Auction','Disenchant','Best'},market={'Item (AH)','Buy price','Vendor','Disenchant','Profit'}}
+function M:ShowDisenchantWindow(mode)
  local f=self.disenchantWindow
  if not f then
   local function label(p,t,x,y,w,font) local s=p:CreateFontString(nil,'OVERLAY',font or 'GameFontHighlight');s:SetPoint('TOPLEFT',x,y);if w then s:SetWidth(w) end;s:SetJustifyH('LEFT');s:SetText(t or '');return s end
@@ -215,12 +240,14 @@ function M:ShowDisenchantWindow()
    f:SetBackdropColor(0.035,0.026,0.065,0.98);f:SetBackdropBorderColor(0.48,0.25,0.75,1)
   end
   if UISpecialFrames then table.insert(UISpecialFrames,'VoidMarkMarketDisenchantFrame') end
-  label(f,'DISENCHANT OR VENDOR?',18,-14,400,'GameFontNormalLarge')
+  label(f,'DISENCHANT OR VENDOR?',18,-14,300,'GameFontNormalLarge')
+  f.bagsTab=button(f,'My bags',300,-11,100,function() f.mode='bags';f.offset=0;self:RenderDisenchantWindow() end)
+  f.marketTab=button(f,'AH items',404,-11,100,function() f.mode='market';f.offset=0;self:RenderDisenchantWindow() end)
   button(f,'Refresh',508,-11,90,function() self:RenderDisenchantWindow() end)
   button(f,'Close',604,-11,80,function() f:Hide() end)
   f.summary=label(f,'',18,-44,664,'GameFontHighlightSmall')
   local cols={{'Item',46},{'Vendor',290},{'Auction',380},{'Disenchant',470},{'Best',570}}
-  for _,c in ipairs(cols) do label(f,c[1],c[2],-74,100,'GameFontNormalSmall') end
+  f.heads={};for i,c in ipairs(cols) do f.heads[i]=label(f,c[1],c[2],-74,100,'GameFontNormalSmall') end
   f.rows={}
   for i=1,ROWS do
    local r=CreateFrame('Button',nil,f);r:SetPoint('TOPLEFT',14,-92-(i-1)*27);r:SetSize(672,26)
@@ -236,11 +263,15 @@ function M:ShowDisenchantWindow()
   f.empty=label(f,'',18,-200,664,'GameFontHighlightLarge');f.empty:SetJustifyH('CENTER')
   f.foot=label(f,'Prices after the '..math.floor((self.db.settings.ahCut or 0.05)*100+0.5)..'% AH cut. Disenchant value is the average over many disenchants. Hover a row, hold Shift for the materials.',18,-446,664,'GameFontHighlightSmall')
  end
- f.offset=0;f:Show();self:RenderDisenchantWindow()
+ f.mode=mode or f.mode or 'bags';f.offset=0;f:Show();self:RenderDisenchantWindow()
 end
 function M:RenderDisenchantWindow(keep)
  local f=self.disenchantWindow;if not f or not f:IsShown() then return end
- if not keep then f.data=self:DisenchantBagRows() end
+ local market=f.mode=='market'
+ for i,h in ipairs(f.heads) do h:SetText(HEAD[market and 'market' or 'bags'][i]) end
+ f.bagsTab:SetEnabled(market);f.marketTab:SetEnabled(not market)
+ if not keep then f.data=market and self:DisenchantMarketRows() or self:DisenchantBagRows() end
+ if market then return self:RenderDisenchantMarket(f) end
  local data=f.data;local extra,count=0,0
  for _,r in ipairs(data) do local a=r.advice
   if a.best and a.best.kind=='Disenchant' then count=count+1;extra=extra+a.best.value-(a.vendor or 0) end
@@ -260,6 +291,28 @@ function M:RenderDisenchantWindow(keep)
    local best=a.best and a.best.kind or '--'
    local color=best=='Disenchant' and '|cffb366ff' or best=='Auction' and '|cff66ccff' or '|cffffd100'
    row.c[5]:SetText(color..best..'|r')
+  end
+ end
+end
+
+function M:RenderDisenchantMarket(f)
+ local data=f.data;local good=0
+ for _,r in ipairs(data) do if r.advice.profit>0 then good=good+1 end end
+ f.summary:SetText(#data==0 and '' or (good>0 and (good..' of '..#data..' disenchantable items in the VoidMark database are worth buying to disenchant (at the stored prices; check live before buying).')
+  or ('None of the '..#data..' disenchantable items in the VoidMark database pay to disenchant at the stored prices.'))
+  ..((data.loading or 0)>0 and ('  '..data.loading..' items still loading - press Refresh.') or ''))
+ f.empty:SetText(#data==0 and ((data.loading or 0)>0 and 'Item data is still loading - press Refresh.' or 'No disenchantable items with prices in the VoidMark database yet. Run a full AH scan.') or '')
+ local off=f.offset or 0
+ local grey=function(s,on) return on and ('|cff999999'..s..'|r') or s end
+ for i,row in ipairs(f.rows) do
+  local r=data[i+off];row:SetShown(r~=nil);row.link=r and r.link
+  if r then
+   local a=r.advice;row.icon:SetTexture(r.icon or (GetItemIcon and GetItemIcon(a.meta.itemID)))
+   row.c[1]:SetText(r.link or r.name)
+   row.c[2]:SetText(grey(self:Coins(a.buy),a.buyStale))
+   row.c[3]:SetText(a.vendor and self:Coins(a.vendor) or '--')
+   row.c[4]:SetText(grey(self:Coins(a.disenchant),a.deStale)..(a.missing>0 and '|cff999999 +?|r' or ''))
+   row.c[5]:SetText((a.profit>0 and '|cff66ff66' or '|cffff5555')..self:Coins(a.profit)..'|r')
   end
  end
 end

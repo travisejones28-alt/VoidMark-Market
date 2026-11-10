@@ -1,3 +1,8 @@
+## 1.11.1
+- **Disenchant window reads the whole VoidMark database:** new **AH items** tab (or `/vmm de ah`) goes through every scanned green/blue/purple weapon and armor in VoidMark's market data and shows Buy price, Vendor, Disenchant and Profit (disenchant value after AH cut minus the stored buy price), most profitable first. **My bags** tab is the old view.
+- Items whose data isn't loaded yet are requested and counted ("press Refresh").
+- 201 regressions.
+
 ## 1.11.0
 Disenchant or vendor? (disenchant side of CraftShuffle, built into Market.)
 - **Tooltip:** on green, blue and purple weapons and armor, a **Disenchant** line (average value of the materials on the AH, after the AH cut) and a **Best** line: Disenchant, Vendor or Auction, and by how much. Hold **Shift** to see the materials, chances and prices. `/vmm de tooltip` turns it off/on.

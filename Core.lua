@@ -1,6 +1,6 @@
 local addonName, M = ...
 _G.VoidMarkMarket = M
-M.name, M.version = addonName or 'VoidMarkMarket', '1.11.0'
+M.name, M.version = addonName or 'VoidMarkMarket', '1.11.1'
 M.eventHandlers, M.runtimeLog, M.jobs = {}, {}, {}
 M.ahOpen = false
 M.scanState = {running=false, phase='idle', status='No scan yet', progress=0}
@@ -220,7 +220,8 @@ SlashCmdList.VOIDMARKMARKET=function(msg)
   elseif msg=='craft' then M:RebuildCrafting();M:SetView('crafting')
   elseif msg=='craftscan' then M:CaptureProfession()
   elseif msg=='materials' then M:BuildCraftShopping();M:SetView('materials')
-  elseif msg=='de' or msg=='disenchant' then M:ShowDisenchantWindow()
+  elseif msg=='de' or msg=='disenchant' then M:ShowDisenchantWindow('bags')
+  elseif msg=='de ah' then M:ShowDisenchantWindow('market')
   elseif msg=='de tooltip' then M.db.settings.tooltipDisenchant=M.db.settings.tooltipDisenchant==false;M:Print('Disenchant tooltip '..(M.db.settings.tooltipDisenchant and 'on' or 'off'))
   elseif msg=='gold' then M:SetView('goldmaking')
   elseif msg=='debug' then M.db.settings.debug=not M.db.settings.debug; M:Print('Debug '..tostring(M.db.settings.debug))
