@@ -197,9 +197,27 @@ local function undock(self, page)
   window:SetPoint(unpack(state.anchor, 1, 5))
 end
 
+-- Taint safety: addon code must never write Auction House state (display
+-- mode, selected tab). Blizzard's bag-click handler reads that state, and if
+-- an addon wrote it, using any bag item while the AH is open is blocked
+-- ("VoidMarkMarket has been blocked from an action only available to the
+-- Blizzard UI"). Our pages are opaque overlays on top of the native content;
+-- the native display mode is left exactly as Blizzard set it.
+local function showNative(self)
+  local ah = AuctionHouseFrame
+  for _, tab in ipairs(self.auctionTabs or {}) do
+    tab.page:Hide()
+    if PanelTemplates_DeselectTab then PanelTemplates_DeselectTab(tab.button) end
+  end
+  local selected = ah and ah.Tabs and PanelTemplates_GetSelectedTab and PanelTemplates_GetSelectedTab(ah)
+  local native = selected and ah.Tabs[selected]
+  if native and PanelTemplates_SelectTab then PanelTemplates_SelectTab(native) end
+end
+M.ShowNativeAuctionView = showNative
+
 function M:CloseMarketWindow()
   if self.auctionDock then
-    AuctionHouseFrame:SetDisplayMode(AuctionHouseFrameDisplayMode.Buy)
+    showNative(self)
   else
     self.window:Hide()
   end
@@ -226,6 +244,11 @@ function M:InstallAuctionTabs()
     local page = CreateFrame('Frame', nil, ah)
     page:SetPoint('TOPLEFT', ah, 'TOPLEFT', 8, -36)
     page:SetPoint('BOTTOMRIGHT', ah, 'BOTTOMRIGHT', -8, 8)
+    -- Sit above the native Buy/Sell/Auctions content and hide it visually.
+    page:SetFrameLevel(ah:GetFrameLevel()+30)
+    local shade = page:CreateTexture(nil, 'BACKGROUND')
+    shade:SetAllPoints(page)
+    shade:SetColorTexture(.035, .02, .055, 1)
     page:Hide()
     -- The margins around the docked window also drag the whole AH.
     page:EnableMouse(true)
@@ -247,12 +270,11 @@ function M:InstallAuctionTabs()
     page:SetScript('OnHide', function() endGesture(self); undock(self, page) end)
     -- Prefix only when Auctionator's own Shopping/Selling tabs are also shown.
     local label = (auctionator and section.key~='voidmark') and ('VM '..section.label) or section.label
-    local title = 'VoidMark Market - '..section.label
     local id = 'VoidMarkMarket'..section.label
     local button
     if lib then
       -- Share the same row manager when Auctionator (or another host) supplies it.
-      lib:CreateTab(id, page, label, title)
+      lib:CreateTab(id, page, label, 'VoidMark Market - '..section.label)
       button = lib:GetButton(id)
     else
       button = CreateFrame('Button', id..'Tab', ah, 'AuctionHouseFrameDisplayModeTabTemplate')
@@ -261,11 +283,10 @@ function M:InstallAuctionTabs()
       button:SetPoint('TOPLEFT', previous, 'TOPRIGHT', 3, 0)
       PanelTemplates_DeselectTab(button)
       button:SetScript('OnClick', function()
-        ah:SetDisplayMode({})
+        -- No ah:SetDisplayMode here (see showNative): it taints bag item use.
         for _, native in ipairs(ah.Tabs) do PanelTemplates_DeselectTab(native) end
         for _, other in ipairs(tabs) do if other.button~=button then other.page:Hide();PanelTemplates_DeselectTab(other.button) end end
         PanelTemplates_SelectTab(button)
-        ah:SetTitle(title)
         page:Show()
       end)
       previous = button

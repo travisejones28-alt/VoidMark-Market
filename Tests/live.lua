@@ -288,7 +288,7 @@ check('Auction House tabs work with Auctionator disabled and restore the standal
  M.db.settings.lastAuctionView=nil
  for i,tab in ipairs(tabs) do
   assert(tab.button.text==labels[i])
-  tab.button.scripts.OnClick();M:RenderUI()
+  tab.button.scripts.OnClick();M:RenderUI();assert(rawget(native,"displayMode")==nil)
   assert(M.view==views[i] and M.auctionDock.page==tab.page and parentFrame==tab.page)
   assert(M.window:IsShown() and M.window:GetScale()>0 and M.window.testLevel>native:GetFrameLevel())
   for j,other in ipairs(tabs) do assert(other.page:IsShown()==(j==i)) end
@@ -324,8 +324,13 @@ check('Auction House tabs work with Auctionator disabled and restore the standal
  M:RestoreAuctionPosition();assert(placed[1]=='TOPLEFT' and placed[2]==UIParent and placed[4]==120 and placed[5]==-80)
  tab.button.scripts.OnClick();assert(M.view=='settings' and M.auctionDock.page==tab.page)
  tabs[1].button.scripts.OnClick();assert(M.view=='browse' and M.db.settings.lastAuctionView=='settings')
+ native.selectedTab=1
+ PanelTemplates_GetSelectedTab=function(f)return f.selectedTab end
  M:CloseMarketWindow()
- assert(not M.auctionDock and native.displayMode==AuctionHouseFrameDisplayMode.Buy)
+ -- Taint safety: the addon never writes the AH display mode (bag item use
+ -- would be blocked); the native tab is reselected visually instead.
+ assert(not M.auctionDock and rawget(native,"displayMode")==nil and native.Tabs[1].selected)
+ for _,t in ipairs(tabs) do assert(not t.page:IsShown() and not t.button.selected) end
  assert(parentFrame==UIParent and not M.window:IsShown() and M.window:GetScale()==oldScale and M.window.testLevel==2)
  local _,parent,_,x,y=M.window:GetPoint();assert(parent==UIParent and x==23 and y==46)
  -- On the Blizzard Buy tab the same grip controls the whole AH.
@@ -364,7 +369,7 @@ check('Auction House tabs work with Auctionator disabled and restore the standal
  registered={};M.auctionTabs=nil;M:InstallAuctionTabs()
  assert(registered.VoidMarkMarketShopping.label=='VM Shopping' and registered.VoidMarkMarketVoidMark.label=='VoidMark')
  C_AddOns=oldAddOns
- LibStub=nil;CreateFrame=oldCreate;AuctionHouseFrame=nil;M.auctionTabs=nil
+ LibStub=nil;CreateFrame=oldCreate;AuctionHouseFrame=nil;M.auctionTabs=nil;PanelTemplates_GetSelectedTab=nil
 end)
 end
 
