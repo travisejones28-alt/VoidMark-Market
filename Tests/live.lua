@@ -170,21 +170,22 @@ end)
 check('Offline peer suppresses only matching system errors and quietly resumes after cooldown',function()
  new()
  local oldChat,oldGroup,oldErr=C_ChatInfo,GetNumGroupMembers,ERR_CHAT_PLAYER_NOT_FOUND
- local calls=0
+ local calls=0;local sentTo={}
  ERR_CHAT_PLAYER_NOT_FOUND="No player named '%s' is currently playing."
  GetNumGroupMembers=function() return 0 end
  C_ChatInfo={RegisterAddonMessagePrefix=function()return 0 end,
   SendAddonMessage=function(_,_,ch,target)
-   assert(ch=='WHISPER' and target=='Voidmark Bank');calls=calls+1;return 0
+   assert(ch=='WHISPER' and (target=='Voidmark Bank' or target=='Voidmark-Bank'));calls=calls+1;sentTo[calls]=target;return 0
   end}
- M:PairPeer('Voidmark Bank');M:PumpSharing();assert(calls==1)
+ M:PairPeer('Voidmark Bank');M:PumpSharing();assert(calls==1 and sentTo[1]=='Voidmark Bank')
  assert(not M:HandlePeerOfflineNotice("No player named 'Somebody' is currently playing."))
  assert(M:HandlePeerOfflineNotice("No player named 'Voidmark Bank' is currently playing."))
  -- 1.9.6: the quiet offline cooldown is one minute (was five).
  for i=1,5 do advance(10);M:PumpSharing() end
  assert(calls==1 and M.db.syncPeer)
  assert(M.db.sharedPrices and M.db.market and M.db.ledger)
- advance(11);M:PumpSharing();assert(calls==2)
+ advance(11);M:PumpSharing();assert(calls==2 and sentTo[2]=='Voidmark-Bank','unanswered probes alternate name forms')
+ assert(M:HandlePeerOfflineNotice("No player named 'Voidmark-Bank' is currently playing."))
  M:PairPeer('off')
  C_ChatInfo,GetNumGroupMembers,ERR_CHAT_PLAYER_NOT_FOUND=oldChat,oldGroup,oldErr
 end)

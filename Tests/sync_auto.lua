@@ -10,9 +10,22 @@ check('Automatic named pairing preserves explicit peer and off across reload',fu
  UnitName=function()return 'Voidmark Bank' end
  reset();assert(M.db.syncPeer=='voidmark soulreaver-testrealm')
  local peer=M.db.syncPeer
- assert(M:PairPeer('Other-OtherRealm')=='Peer must be on the same realm' and M.db.syncPeer==peer)
+ assert(M:PairPeer('Other Name-OtherRealm')=='Peer must be on the same realm' and M.db.syncPeer==peer)
+ -- Forever First-Surname with a hyphen pairs as "First Surname" on this realm.
+ M:PairPeer('Voidmark-Soulreaver');assert(M.db.syncPeer=='voidmark soulreaver-testrealm')
+ -- Surname in UnitName's second slot (Forever) still auto-pairs.
+ UnitName=function()return 'Voidmark','Soulreaver' end
+ reset();assert(M.db.syncPeer=='voidmark bank-testrealm')
  UnitName,NameUtil,UnitNameUnmodified=old,nu,un
  reset()
+ -- A partner reported as "First-Surname" (with or without realm) is the paired partner.
+ M:PairPeer('Voidmark Bank');M.shareRun={}
+ for _,sender in ipairs({'Voidmark-Bank','Voidmark Bank-TestRealm','Voidmark-Bank-TestRealm'}) do
+  M.shareRun={};M:ReceiveSharing('VMMkt2',M.economyID..'\tH\t1-1','WHISPER',sender)
+  assert(M.shareRun.status=='Partner connected',sender)
+ end
+ M.shareRun={};M:ReceiveSharing('VMMkt2',M.economyID..'\tH\t1-1','WHISPER','Voidmark-Soulreaver');assert(M.shareRun.status~='Partner connected')
+ M:PairPeer('off')
 end)
 check('Automatic bank scan requires AH and cooldown and bounds failed retries',function()
  local old,nu,un,request,combat=UnitName,NameUtil,UnitNameUnmodified,M.RequestFreshScan,InCombatLockdown

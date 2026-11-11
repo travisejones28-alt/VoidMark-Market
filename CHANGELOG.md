@@ -1,3 +1,8 @@
+## 1.11.6
+- **Bank sharing works with either Forever name form.** Forever can report a character as "Voidmark-Bank" (surname where a realm normally goes) instead of "Voidmark Bank". Market now accepts the partner in either form, pairs from "Voidmark-Bank", and while the partner has not answered it alternates "Voidmark Bank" and "Voidmark-Bank" when whispering, then keeps the one that gets through.
+- **Your own full name is read even without NameUtil.** The surname is taken from the second UnitName value. Before, only "Voidmark" was read in that case, so automatic pairing and the automatic bank scan (which only runs on Voidmark Bank) never started.
+- 205 regressions.
+
 ## 1.11.5
 - **Fixed "VoidMarkMarket has been blocked from an action only available to the Blizzard UI" when using a bag item.** Clicking a VoidMark tab on the Auction House (or closing it with X) changed the Auction House's own display mode from addon code. Blizzard's bag-click code reads that value, so the next item you used from your bags was blocked. VoidMark tabs now sit on top of the Blizzard content without touching its state.
 - 205 regressions.

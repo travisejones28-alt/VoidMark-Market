@@ -11,9 +11,26 @@ local function unitCharacter(unit)
   if secret(first) or secret(last) or not first then return end
   return NameUtil.GetFullNameWithoutRealm(first,last)
  end
- local first=UnitName(unit)
- if not secret(first) then return first end
+ local first,second=UnitName(unit)
+ if secret(first) or secret(second) or type(first)~='string' then return end
+ -- Forever puts the surname in the slot other clients use for a realm.
+ local realm=(GetRealmName and GetRealmName()) or ''
+ if type(second)=='string' and second~='' and not first:find(' ',1,true)
+  and second:gsub('%s',''):lower()~=tostring(realm):gsub('%s',''):lower() then return first..' '..second end
+ return first
 end
+-- "First Surname" key for a character however the client writes it:
+-- "Voidmark Bank", "Voidmark-Bank" or "Voidmark Bank-Realm".
+local function realmKey() return tostring((GetNormalizedRealmName and GetNormalizedRealmName()) or (GetRealmName and GetRealmName()) or ''):gsub('%s',''):lower() end
+local function nameKey(name)
+ if secret(name) or type(name)~='string' or name=='' then return end
+ local s=name:lower();local realm=realmKey()
+ local base,tail=s:match('^(.-)%-([^%-]+)$')
+ if base and base~='' and tail:gsub('%s','')==realm then s=base end
+ s=s:gsub('%-',' '):gsub('%s+',' '):match('^%s*(.-)%s*$')
+ return s~='' and s or nil
+end
+M.SharingNameKey=nameKey
 local function enc(s) return (tostring(s):gsub('[%%%c,;|/]',function(c)return ('%%%02X'):format(c:byte()) end)) end
 local function dec(s) return (s:gsub('%%(%x%x)',function(x)return string.char(tonumber(x,16)) end)) end
 local function fields(s,sep)
@@ -204,6 +221,9 @@ function M:PairPeer(name)
  if type(name)=='string' then name=name:match('^%s*(.-)%s*$') end
  if name=='' or (name and name:lower()=='off') then self.db.syncAutoPairSeen=true;self.db.syncPeer=nil;self.db.syncAddress=nil;self.shareRun={};self:RefreshUI();return 'Automatic sharing off' end
  if not name then return self:SharingStatus() end
+ do local base,tail=name:match('^(.-)%-([^%-]+)$')
+  -- Forever names always have a surname, so a single "First-Surname" is never a realm.
+  if base and not base:find(' ',1,true) and tail:gsub('%s',''):lower()~=realmKey() then name=base..' '..tail end end
  local peer=canonical(name)
  if not peer or peer==canonical(unitCharacter('player')) then return 'Enter the other character name (First Surname)' end
  local realm=GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName()
@@ -244,7 +264,7 @@ function M:HandlePeerOfflineNotice(message)
  local candidate=message:lower()
  local template=ERR_CHAT_PLAYER_NOT_FOUND or "No player named '%s' is currently playing."
  local match=false
- for _,name in ipairs({short,address}) do
+ for _,name in ipairs({short,address,(short:gsub(' ','-',1))}) do
   local ok,expected=pcall(string.format,template,name)
   if ok and type(expected)=='string' and candidate==expected:lower() then match=true;break end
  end
@@ -310,7 +330,7 @@ local function channel(self)
   if NameUtil and NameUtil.GetUnmodifiedUnitFullName then
    identity=unitCharacter((raid and 'raid' or 'party')..i)
   elseif not secret(n) and not secret(r) and n then identity=r and r~='' and n..'-'..r or n end
-  if canonical(identity)==self.db.syncPeer then
+  if nameKey(identity) and nameKey(identity)==nameKey(self.db.syncPeer) then
    if IsInGroup and LE_PARTY_CATEGORY_INSTANCE and IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then return 'INSTANCE_CHAT' end
    return raid and 'RAID' or 'PARTY'
   end
@@ -326,6 +346,8 @@ local function send(self,ch,body)
   local address=self.db.syncAddress or self.db.syncPeer
   local name=address:match('^([^-]+)')
   target=canonical(name)==self.db.syncPeer and name or address
+  -- Until the partner answers, probes alternate "First Surname" and "First-Surname".
+  if self.shareRun and self.shareRun.hyphenTarget then target=target:gsub(' ','-',1) end
  end
  -- The legacy compatibility wrapper can return (nil, enum). Read the
  -- final return value, and do not mistake a nil/false result for success.
@@ -382,9 +404,11 @@ function M:PumpSharing()
   return
  end
  if not r.hello or now>=r.hello then
+  r.helloHyphen=r.hyphenTarget or false
   local sent=send(self,ch,'H\t'..j.epoch)
   if sent then r.infoPending=true end
   local unconfirmed=ch=='WHISPER' and not r.lastContact
+  if unconfirmed then r.hyphenTarget=not r.hyphenTarget end
   -- Unanswered probes back off to at most 60 s, so a partner who logs in
   -- later is found within a minute even if its own hello was lost.
   r.probeDelay=unconfirmed and math.min(60,(r.probeDelay or 10)*2) or 20
@@ -430,7 +454,7 @@ function M:PumpSharing()
 end
 function M:ReceiveSharing(prefix,msg,ch,sender)
  if secret(prefix) or secret(msg) or secret(ch) or secret(sender) then return end
- if prefix~=PREFIX or not self.db or self.persistenceBlocked or not self.db.syncPeer or canonical(sender)~=self.db.syncPeer or
+ if prefix~=PREFIX or not self.db or self.persistenceBlocked or not self.db.syncPeer or nameKey(sender)~=nameKey(self.db.syncPeer) or
   (ch~='WHISPER' and ch~='PARTY' and ch~='RAID' and ch~='INSTANCE_CHAT') or type(msg)~='string' or #msg>240 then return end
  local f=fields(msg,'\t')
  if (f[1] or ''):gsub('%s',''):lower()~=self.economyID:gsub('%s',''):lower() then self.shareRun.status='Rejected peer: realm/faction mismatch';self:RefreshUI();return end
@@ -438,6 +462,7 @@ function M:ReceiveSharing(prefix,msg,ch,sender)
  local r=self.shareRun;local j=self.db.shareJournal;local db=self.db.shareReceived
  local peer=self.db.syncPeer;local rx=db[peer]
  local function ack() r.reply=table.concat({'Q',rx.epoch,rx.seq},'\t');r.next=0 end
+ if not r.lastContact and r.helloHyphen~=nil then r.hyphenTarget=r.helloHyphen end -- keep the form that got through
  if f[2]=='H' and #f==3 then
   if not r.lastContact then r.hello=nil end
   r.lastContact=GetTime();r.probeDelay=nil;r.offlineUntil=nil
