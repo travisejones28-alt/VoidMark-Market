@@ -49,6 +49,7 @@ PASS No-event timeout differs from empty response; duplicate events do not parse
 PASS Late replicate recovery preserves an unrelated active search request
 PASS AH closure invalidates late recovery across reopen
 PASS AH close during full-scan parsing preserves diagnostic abort and cancels jobs
+PASS Closing the AH while prices are being saved still saves every price with the new time
 PASS Cached analysis invalidates late full-scan recovery
 PASS Full-scan send failure is visible without retry
 PASS Full-scan event history is bounded, reports are persisted, unsolicited cache not consumed
@@ -175,7 +176,7 @@ PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
 PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
 PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
-BENCH scan: 72 frames (1.2s at 60fps, 2.4s at 30fps), worst frame 12.1ms, cpu 0.71s | after:prune=4 after:share-scan=11 done=1 model=41 processing=15
+BENCH scan: 64 frames (1.1s at 60fps, 2.1s at 30fps), worst frame 12.1ms, cpu 0.61s | after:prune=4 after:share-scan=10 done=1 model=39 processing=10
 PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.13 history stores only the fields it needs; latest keeps the full snapshot
 PASS 1.9.13 history saved by older versions is shrunk once at login without losing prices
@@ -202,4 +203,4 @@ PASS 1.11 AH items mode reads the VoidMark market database: buy, disenchant, pro
 PASS 1.11.4 Scan skips per-row link work for plain items and resolves each gear variant once
 PASS 1.11.4 Selling finds an item that moved slots instead of failing; locked retries quickly
 PASS 1.11.4 Bag list and price-check jobs run before a long background job; background jobs take turns
-ALL 201 TESTS PASSED
+ALL 202 TESTS PASSED

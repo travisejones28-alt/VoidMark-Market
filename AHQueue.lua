@@ -183,4 +183,14 @@ M:RegisterHandler('AUCTION_HOUSE_THROTTLED_MESSAGE_DROPPED',function(self)
   self.queue.stats.dropped=self.queue.stats.dropped+1
   local r=self.queue.active; if r then self:FinishRequest(r,false,'AH throttle dropped request') end
 end)
-M:RegisterHandler('AUCTION_HOUSE_CLOSED',function(self) self:CancelRequests('Auction House closed'); self.scanToken=(self.scanToken or 0)+1; self:CancelJob('scan'); self:CancelJob('model'); self:CancelJob('scan-finish') end)
+-- Once every auction has been read, saving the prices needs no Auction House:
+-- let it finish. Closing earlier left half the items with yesterday's prices.
+function M:ScanSurvivesClose()
+  local s=self.scanState
+  return s and s.running and s.phase=='model' and (self.jobs.model or self.jobs['scan-finish']) and true or false
+end
+M:RegisterHandler('AUCTION_HOUSE_CLOSED',function(self)
+  self:CancelRequests('Auction House closed')
+  if self:ScanSurvivesClose() then self:SetScanStatus('Saving scan results (Auction House closed is fine)',0.9); return end
+  self.scanToken=(self.scanToken or 0)+1; self:CancelJob('scan'); self:CancelJob('model'); self:CancelJob('scan-finish')
+end)

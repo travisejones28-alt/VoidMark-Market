@@ -170,7 +170,7 @@ end)
 TTB:RegisterHandler("AUCTION_HOUSE_CLOSED", function(self)
   self.ahOpen = false
   self:Log("AH", "Auction House closed")
-  if self.scanState and self.scanState.running then
+  if self.scanState and self.scanState.running and not (self.ScanSurvivesClose and self:ScanSurvivesClose()) then
     self.scanState.running = false
     self.scanState.phase = "aborted"
     self.scanState.status = "Auction House closed during scan"

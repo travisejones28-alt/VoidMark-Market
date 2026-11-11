@@ -1,3 +1,7 @@
+## 1.12.1
+- **Fixed: prices showing old after a scan.** A full scan has two parts: reading every auction (needs the Auction House open), then saving prices item by item. Closing the Auction House during the second part stopped it, so some items kept yesterday's price and age ("1d old") even though you scanned today. Saving now finishes after the Auction House closes; only the reading part still needs it open.
+- 202 regressions.
+
 ## 1.12.0
 - **Removed the Flips tab.** The Auction House tabs are now Shopping, Selling, Cancelling and VoidMark. Saved scans, prices and settings are untouched; the old flip settings stay in your saved file unused. Flip opportunities under VoidMark > Tools are unchanged.
 - 201 regressions (the four Flips-screen tests were removed with the screen).

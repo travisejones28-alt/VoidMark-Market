@@ -307,6 +307,7 @@ end
 
 M:RegisterHandler('AUCTION_HOUSE_CLOSED',function(self)
   local d=self.scanState.fullScanDiagnostic
+  if self.ScanSurvivesClose and self:ScanSurvivesClose() then d=nil end -- finishing; see AHQueue
   if d and d.phase~='done' then
     d.phase='aborted'; d.error='Auction House closed'; d.abortedAt=time()
     self.scanState.running=false; self.scanState.phase='aborted'; self:SetScanStatus('Auction House closed during scan',0)

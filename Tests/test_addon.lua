@@ -403,6 +403,19 @@ check('AH close during full-scan parsing preserves diagnostic abort and cancels 
  assert(d.phase=='aborted' and not M.jobs.scan and not M.jobs.model and not d.completedAt)
  jobs();emit('AUCTION_HOUSE_SHOW')
 end)
+check('Closing the AH while prices are being saved still saves every price with the new time',function()
+ local d=freshScan(3000);advance(20);emit('REPLICATE_ITEM_LIST_UPDATE')
+ local guard=0;while M.scanState.phase~='model' or not M.jobs.model do M:RunJobs();guard=guard+1;assert(guard<5000,'never reached modeling') end
+ M:RunJobs() -- part of the items saved
+ local scanAt=time()
+ emit('AUCTION_HOUSE_CLOSED');M.ahOpen=false
+ assert(M.jobs.model or M.jobs['scan-finish'],'saving continues after close')
+ jobs()
+ assert(d.phase=='done' and M.scanState.phase=='done' and not M.scanState.running)
+ local old=0;for k,m in pairs(M.db.market) do if type(m)=='table' and m.itemID and m.itemID<=1500 and (m.lastSeen or 0)<scanAt-5 then old=old+1 end end
+ assert(old==0,old..' items kept an old time')
+ emit('AUCTION_HOUSE_SHOW');M.ahOpen=true
+end)
 check('Cached analysis invalidates late full-scan recovery',function()
  local d=freshScan(100);advance(181);M:PumpQueue();M:AnalyzeCachedSnapshot();assert(not M.queue.lateReplicate)
  local token=M.scanToken;emit('REPLICATE_ITEM_LIST_UPDATE');assert(M.scanToken==token);jobs()
