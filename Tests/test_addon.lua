@@ -836,7 +836,6 @@ assert(loadfile(addon..'Tests/release_1912.lua'))()(M,check,jobs,advance,emit,fr
 assert(loadfile(addon..'Tests/bench_scan.lua'))()(M,check,jobs,advance,emit,freshScan)
 assert(loadfile(addon..'Tests/release_1913.lua'))()(M,check,jobs,advance,emit,freshScan)
 assert(loadfile(addon..'Tests/release_197.lua'))()(M,check,jobs,advance,emit)
-assert(loadfile(addon..'Tests/flips.lua'))()(M,check,jobs,advance,emit)
 assert(loadfile(addon..'Tests/release_1100.lua'))()(M,check,jobs,advance,emit)
 assert(loadfile(addon..'Tests/release_1110.lua'))()(M,check,jobs,advance,emit)
 assert(loadfile(addon..'Tests/release_1114.lua'))()(M,check,jobs,advance,emit)

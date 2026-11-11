@@ -1,3 +1,7 @@
+## 1.12.0
+- **Removed the Flips tab.** The Auction House tabs are now Shopping, Selling, Cancelling and VoidMark. Saved scans, prices and settings are untouched; the old flip settings stay in your saved file unused. Flip opportunities under VoidMark > Tools are unchanged.
+- 201 regressions (the four Flips-screen tests were removed with the screen).
+
 ## 1.11.6
 - **Bank sharing works with either Forever name form.** Forever can report a character as "Voidmark-Bank" (surname where a realm normally goes) instead of "Voidmark Bank". Market now accepts the partner in either form, pairs from "Voidmark-Bank", and while the partner has not answered it alternates "Voidmark Bank" and "Voidmark-Bank" when whispering, then keeps the one that gets through.
 - **Your own full name is read even without NameUtil.** The surname is taken from the second UnitName value. Before, only "Voidmark" was read in that case, so automatic pairing and the automatic bank scan (which only runs on Voidmark Bank) never started.

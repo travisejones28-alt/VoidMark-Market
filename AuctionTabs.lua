@@ -1,10 +1,10 @@
 local _, M = ...
 
 -- Auctionator-style tabs on the Auction House tab row: three trading screens
+-- (the Flips tab was removed in 1.12.0)
 -- plus one VoidMark tab for everything else (scanning, history, settings...).
 local sections = {
   {key='shopping', label='Shopping', root='browse'},
-  {key='flips', label='Flips', root='flips'},
   {key='selling', label='Selling', root='selling'},
   {key='cancelling', label='Cancelling', root='my auctions'},
   {key='voidmark', label='VoidMark'},

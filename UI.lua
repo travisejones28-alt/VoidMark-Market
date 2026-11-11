@@ -13,6 +13,7 @@ local function edit(parent,x,y,w,text)
   e:SetText(text or ''); e:SetScript('OnEscapePressed',function(f) f:ClearFocus() end); return e
 end
 function M:SetView(view)
+  if view=='flips' then view='browse' end -- Flips tab removed in 1.12.0
   if self.view~=view and view~='shopping' then self.selectedRow=nil end
   self.view=view; self.page=1; if self.window then self.window:Show() end
   if self.RememberAuctionView then self:RememberAuctionView(view) end
@@ -104,7 +105,7 @@ function M:InitializeUI()
   self.historyAction=CreateFrame('Frame',nil,f);self.historyAction:SetPoint('BOTTOMLEFT',18,18);self.historyAction:SetSize(998,28)
   button(self.historyAction,'PRICE HISTORY',0,0,160,function() self:ShowHistoryWindow(self.selectedRow) end)
   button(self.historyAction,'GOLD HISTORY',170,0,160,function() self:ShowHistoryWindow(nil,true) end)
-  self:InitializeSellScreen(f);self:InitializeShopScreen(f);self:InitializeFlipScreen(f);self:InitializeCancelScreen(f);self:WarmItemNames()
+  self:InitializeSellScreen(f);self:InitializeShopScreen(f);self:InitializeCancelScreen(f);self:WarmItemNames()
   self.browseAction=CreateFrame('Frame',nil,f);self.browseAction:SetPoint('BOTTOMLEFT',18,18);self.browseAction:SetSize(998,28)
   button(self.browseAction,'BUY ITEM',0,0,180,function() self:ShopSelected(self.selectedRow) end)
   button(self.browseAction,'COMPARE LISTINGS',190,0,180,function() local ok,why=self:InspectLiveMarket(self.selectedRow);if not ok then self:Print(why or 'Select an item first') end end)
@@ -308,14 +309,13 @@ function M:RenderUI()
   self.scanButton:SetEnabled(self.ahOpen and not self.scanState.running and self:GetSecondsUntilFreshScanAllowed()==0); self.cachedButton:SetEnabled(self.ahOpen and not self.scanState.running)
   self:RenderSimpleTradingUI(view)
   self.syncFrame:Hide()
-  self.sellScreen:Hide();self.shopScreen:Hide();self.cancelScreen:Hide();self.flipScreen:Hide()
-  if view=='selling' or view=='browse' or view=='my auctions' or view=='flips' then
+  self.sellScreen:Hide();self.shopScreen:Hide();self.cancelScreen:Hide()
+  if view=='selling' or view=='browse' or view=='my auctions' then
    self.toolbar:Hide();self.shoppingSidebar:Hide();self.browseAction:Hide();self.emptyMessage:Hide()
    self.tableFrame:Hide();self.detail:Hide()
    for _,b in ipairs({self.ownedRefresh,self.cancelOwned,self.checkUndercuts,self.cancelNextUndercut}) do b:Hide() end
    if view=='selling' then return self:RenderSellScreen() end
    if view=='my auctions' then return self:RenderCancelScreen() end
-   if view=='flips' then return self:RenderFlipScreen() end
    return self:RenderShopScreen()
   end
   if view=='crafting' or view=='materials' or view=='goldmaking' then return self:RenderCraftingUI(view) end
