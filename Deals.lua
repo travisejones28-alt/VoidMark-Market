@@ -203,12 +203,13 @@ function M:SearchShopTerms(list,onlyTerm)
    local inv=spec.slot and #spec.slot==1 and INVTYPE_ENUM[spec.slot[1]]
    classFilters[1]={classID=4,subClassID=armor,inventoryType=inv or nil}
   end
-  local queued=self:QueueRequest({id='browse-term:'..term:lower(),kind='browse',priority=40,
-   query=self:ApplyLevelQuery({searchString=text,sorts={},filters={},itemClassFilters=classFilters},spec),
-   done=function()
+  local id='browse-term:'..term:lower();local pages=0
+  local fail
+  local function done()
     if self.termSearch~=run then return end
+    pages=pages+1
     local result=C_AuctionHouse.GetBrowseResults() or {}
-    for i=1,math.min(300,#result) do
+    for i=1,math.min(5000,#result) do
      local b=result[i];local k=b.itemKey
      local key=k and self:Key(k.itemID,k.itemSuffix,k.itemLevel,k.battlePetSpeciesID)
      if key and self:Finite(b.minPrice,1,1e12) then
@@ -225,17 +226,23 @@ function M:SearchShopTerms(list,onlyTerm)
       end
      end
     end
-    run.done=run.done+1;self.termRows=run.rows
+    self.termRows=run.rows
+    -- More pages of this term come before the next term.
+    if self:BrowseNeedsMore(pages) and self:QueueBrowseMore(id,done,fail) then self:RefreshUI();return end
+    run.done=run.done+1
     if run.done>=run.total then run.finished=true
      self:Print(('Search terms: %d item%s found in %s'):format(run.found,run.found==1 and '' or 's',list)) end
     self:RefreshUI()
-   end,
-   fail=function()
+  end
+  fail=function()
     if self.termSearch~=run then return end
     run.done=run.done+1;run.failed=(run.failed or 0)+1
     if run.done>=run.total then run.finished=true end
     self:RefreshUI()
-   end})
+  end
+  local queued=self:QueueRequest({id=id,kind='browse',priority=40,
+   query=self:ApplyLevelQuery({searchString=text,sorts={},filters={},itemClassFilters=classFilters},spec),
+   done=done,fail=fail})
   if queued then run.total=run.total+1 end
  end
  if run.total==0 then self.termSearch=nil;return false end

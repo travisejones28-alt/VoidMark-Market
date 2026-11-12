@@ -87,7 +87,7 @@ function M:ShopSearching()
  return type(st)=='string' and st:find('^Searching the Auction House') and true or false
 end
 function M:ShopStopSearch()
- self.listSearch=nil
+ self.listSearch=nil;self.nameSearch=nil
  if self.StopTermSearch then self:StopTermSearch() end
  if self:ShopSearching() then self:CancelJob('browse');self.shoppingSearchStatus=nil end
  self:RefreshUI()

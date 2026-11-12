@@ -213,6 +213,42 @@ check('1.14.2 Term options: per-term max price and level, armor slot, category-o
  M.db.shopTerms=nil
 end)
 
+check('1.14.3 Term sweeps and name searches read every page of results, not just the first',function()
+ fresh();M:SetView('browse');M.ahOpen=true;M.queue.nextSend=0
+ local A=C_AuctionHouse;local o={A.GetBrowseResults,A.SendBrowseQuery,A.HasFullBrowseResults,A.RequestMoreBrowseResults}
+ local page,more=1,0
+ local p1={{itemKey={itemID=950,itemSuffix=-10,itemLevel=0},minPrice=300,totalQuantity=1}}
+ local p2={{itemKey={itemID=951,itemSuffix=-10,itemLevel=0},minPrice=900,totalQuantity=1}}  -- level 30 item, page 2
+ A.SendBrowseQuery=function() page=1 end
+ A.RequestMoreBrowseResults=function() more=more+1;page=page+1 end
+ A.HasFullBrowseResults=function() return page>=2 end
+ A.GetBrowseResults=function() local r={unpack(p1)};if page>=2 then r[2]=p2[1] end;return r end
+ local function pump(event) M.queue.nextSend=0;M:PumpQueue();emit(event) end
+ local ok,err=pcall(function()
+  M:SetList('Flips');M:AddShopTerm('Flips','of the Monkey');M:AddShopTerm('Flips','of the Tiger')
+  M:OpenShoppingList('Flips')
+  pump('AUCTION_HOUSE_BROWSE_RESULTS_UPDATED')               -- page 1 of Monkey
+  assert(M:ShopSearching() and M.queue.waiting[1].kind=='browsemore','page 2 queued ahead of the next term')
+  pump('AUCTION_HOUSE_BROWSE_RESULTS_ADDED')                 -- page 2 of Monkey
+  pump('AUCTION_HOUSE_BROWSE_RESULTS_UPDATED');pump('AUCTION_HOUSE_BROWSE_RESULTS_ADDED') -- Tiger
+  assert(more==2 and M.termSearch.finished,'both terms paged and finished')
+  local ids={};for _,r in ipairs(M:ShoppingResultRows()) do ids[#ids+1]=r.itemID end;table.sort(ids)
+  assert(table.concat(ids,',')=='950,951','page 2 item found: '..table.concat(ids,','))
+  -- Name search pages too.
+  M.queue.waiting={};M.queue.dedupe={};M.queue.active=nil
+  M.db.settings.filter='Monkey';M:LiveNameSearch('Monkey');pump('AUCTION_HOUSE_BROWSE_RESULTS_UPDATED');jobs()
+  assert(#M.browseRows==1 and M:ShopSearching(),'still searching page 2')
+  pump('AUCTION_HOUSE_BROWSE_RESULTS_ADDED');jobs()
+  assert(#M.browseRows==2 and not M:ShopSearching(),'name search has both pages')
+  -- Page cap.
+  A.HasFullBrowseResults=function() return false end
+  assert(M:BrowseNeedsMore(1) and not M:BrowseNeedsMore(M.BROWSE_MAX_PAGES),'page cap')
+ end)
+ A.GetBrowseResults,A.SendBrowseQuery,A.HasFullBrowseResults,A.RequestMoreBrowseResults=o[1],o[2],o[3],o[4]
+ M.queue.waiting={};M.queue.dedupe={};M.queue.active=nil
+ M:DeleteShoppingList('Flips');assert(ok,err)
+end)
+
 check('1.14 Vs Avg compares against the exact suffix history and sorts deals first',function()
  fresh();M:SetView('browse');M.ahOpen=false
  local monkey,bear=M:Key(600,-10),M:Key(600,-12)

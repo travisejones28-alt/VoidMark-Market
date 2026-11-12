@@ -1,3 +1,7 @@
+## 1.14.3
+- **Fixed: higher-level items missing from searches.** The Auction House sends search results a page at a time and Market only read the first page, which fills up with cheap low-level greens. Search terms and typed searches now keep asking for more pages (up to 20) before moving on.
+- 224 regressions.
+
 ## 1.14.2
 - **Search terms take options, like Auctionator's extended search:** `[armor] [slot]: [text] [max 75s] [lvl 15+ | lvl 15-30]`.
   - `leather: agility max 50s`, `cloth: intellect lvl 15+`, `mail head: max 75s` (no text = every mail helm under 75s).

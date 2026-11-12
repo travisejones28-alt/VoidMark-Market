@@ -40,6 +40,7 @@ function M:SendAHRequest(r)
     self.db.lastFreshScanRequestAt=time(); A.ReplicateItems()
   elseif r.kind=='owned' then A.QueryOwnedAuctions({})
   elseif r.kind=='browse' then A.SendBrowseQuery(r.query)
+  elseif r.kind=='browsemore' then A.RequestMoreBrowseResults()
   elseif r.kind=='search' then
     local has=A.HasSearchResults and A.HasSearchResults(r.key)
     if r.more then
@@ -177,8 +178,23 @@ M:RegisterHandler('OWNED_AUCTIONS_UPDATED',function(self)
   local r=self.queue.active; if r and r.kind=='owned' then self:FinishRequest(r,true,true) end
 end)
 M:RegisterHandler('AUCTION_HOUSE_BROWSE_RESULTS_UPDATED',function(self)
-  local r=self.queue.active; if r and r.kind=='browse' then self:FinishRequest(r,true,true) end
+  local r=self.queue.active; if r and (r.kind=='browse' or r.kind=='browsemore') then self:FinishRequest(r,true,true) end
 end)
+M:RegisterHandler('AUCTION_HOUSE_BROWSE_RESULTS_ADDED',function(self)
+  local r=self.queue.active; if r and r.kind=='browsemore' then self:FinishRequest(r,true,true) end
+end)
+-- The AH sends browse results a page at a time. After a browse finishes, ask
+-- for the next page (ahead of other searches, so the browse is not replaced)
+-- until it is complete or maxPages is reached. Returns true when a page was queued.
+M.BROWSE_MAX_PAGES=20
+function M:BrowseNeedsMore(pages)
+  local A=C_AuctionHouse
+  if not (A and A.HasFullBrowseResults and A.RequestMoreBrowseResults) then return false end
+  return not A.HasFullBrowseResults() and (pages or 1)<self.BROWSE_MAX_PAGES
+end
+function M:QueueBrowseMore(id,done,fail)
+  return self:QueueRequest({id=id..':more',kind='browsemore',priority=60,done=done,fail=fail})
+end
 M:RegisterHandler('AUCTION_HOUSE_THROTTLED_MESSAGE_DROPPED',function(self)
   self.queue.stats.dropped=self.queue.stats.dropped+1
   local r=self.queue.active; if r then self:FinishRequest(r,false,'AH throttle dropped request') end

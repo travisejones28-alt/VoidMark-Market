@@ -31,10 +31,14 @@ function M:LiveNameSearch(text)
  self.shoppingListMode=false;self.shoppingSearchStatus='Searching the Auction House for '..text..'...';self.browseRows={};self:RefreshUI()
  local q={searchString=text,sorts={},filters={},itemClassFilters={}}
  if self.ApplyLevelQuery then self:ApplyLevelQuery(q) end
- self:QueueRequest({id='browse-name',kind='browse',query=q,priority=50,done=function()
-  if self.view~='browse' or (self.db.settings.filter or ''):match('^%s*(.-)%s*$')~=text then return end
+ local pages,done,fail=0
+ local token={};self.nameSearch=token
+ fail=function(e) self.shoppingSearchStatus='Search failed: '..tostring(e);self:Print(e);self:RefreshUI() end
+ done=function()
+  if self.nameSearch~=token or self.view~='browse' or (self.db.settings.filter or ''):match('^%s*(.-)%s*$')~=text then return end
+  pages=pages+1
   local result=C_AuctionHouse.GetBrowseResults() or {};local out={}
-  for i=1,math.min(300,#result) do
+  for i=1,math.min(5000,#result) do
    local b=result[i];local k=b.itemKey
    local key=k and self:Key(k.itemID,k.itemSuffix,k.itemLevel,k.battlePetSpeciesID)
    if key and (not self.LevelAllowed or self:LevelAllowed(k.itemID)) then
@@ -44,9 +48,11 @@ function M:LiveNameSearch(text)
      floor=b.minPrice or 0,quantity=tonumber(b.totalQuantity),fair=m and m.fairValue or 0,modelReady=self:CanEstimateResale(m),confidence=m and m.confidence or 'Unknown',status='LIVE BROWSE'}
    end
   end
-  self.shoppingSearchStatus=#out==0 and ('No auctions found for '..text..'. Try another name.') or nil
-  self:CancelJob('browse');self.browseRows=out;self.selectedRow=nil;self.page=1;self:SortBrowseRows();self:RefreshUI()
- end,fail=function(e) self.shoppingSearchStatus='Search failed: '..tostring(e);self:Print(e);self:RefreshUI() end})
+  local more=self.BrowseNeedsMore and self:BrowseNeedsMore(pages) and self:QueueBrowseMore('browse-name',done,fail)
+  self.shoppingSearchStatus=more and ('Searching the Auction House for '..text..'... page '..(pages+1)) or #out==0 and ('No auctions found for '..text..'. Try another name.') or nil
+  self:CancelJob('browse');self.browseRows=out;if pages==1 then self.selectedRow=nil end;self.page=1;self:SortBrowseRows();self:RefreshUI()
+ end
+ self:QueueRequest({id='browse-name',kind='browse',query=q,priority=50,done=done,fail=fail})
 end
 function M:ReadBagSlot(r) return self.readBag(self,r) end
 -- The bag list on Selling can be out of date (items moved, stacked, looted
