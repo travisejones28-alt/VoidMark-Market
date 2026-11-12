@@ -99,6 +99,55 @@ function M:RemoveFlip(id)
  self:RefreshUI()
 end
 
+-- Ctrl + hover: what you last paid -------------------------------------------
+-- Your buys of the hovered item (same name, or same item + suffix), newest first.
+function M:BoughtHistory(link)
+ local name=nameOf(link);local key=self.LinkIdentity and self:LinkIdentity(link)
+ local _,kid,ks=self:ParseKey(key)
+ local out={}
+ local function same(nm,k)
+  if name and type(nm)=='string' and nm:lower()==name:lower() then return true end
+  if kid and k~=nil then local _,id,s=self:ParseKey(k);return id==kid and (s or 0)==(ks or 0) end
+  return false
+ end
+ for _,f in ipairs(self:FlipBook()) do
+  if f.cost and same(f.name,f.key) then out[#out+1]={cost=f.cost,qty=f.qty or 1,at=f.at,sold=f.sold or 0,net=self:FlipNumbers(f).net,soldAt=f.soldAt} end
+ end
+ if #out==0 then -- buys from before the Flip Ledger
+  for _,e in ipairs(self.db.ledger or {}) do
+   if e.kind=='purchase' and e.status=='confirmed' and self:Finite(e.cost,0,1e14) and same(nameOf(e.itemLink,e.name),e.marketKey) then
+    out[#out+1]={cost=e.cost,qty=e.quantity or 1,at=e.resolvedAt or e.at,sold=0}
+   end
+  end
+ end
+ table.sort(out,function(a,b) return (a.at or 0)>(b.at or 0) end)
+ return out
+end
+function M:AppendBoughtTooltip(tip,link)
+ if not self.db or not tip or not link then return end
+ local hist=self:BoughtHistory(link);if #hist==0 then return end
+ if not (IsControlKeyDown and IsControlKeyDown()) then
+  tip:AddLine('|cff8f8f8fHold Ctrl: what you paid|r');return
+ end
+ local last=hist[1]
+ local when=date and date('%m/%d %I:%M%p',last.at or time()):gsub(' 0',' '):lower() or ''
+ local each=last.qty>1 and (' ('..self:Coins(math.floor(last.cost/last.qty))..' each)') or ''
+ tip:AddDoubleLine('Last bought',self:Coins(last.cost)..each,.78,.63,1,1,1,1)
+ tip:AddDoubleLine(' ',when..(last.sold>0 and (', sold for '..self:Coins(last.net)) or ''),1,1,1,.7,.7,.7)
+ if #hist>1 then
+  local total,qty=0,0;for _,h in ipairs(hist) do total=total+h.cost;qty=qty+h.qty end
+  tip:AddDoubleLine('Bought '..#hist..' times','avg '..self:Coins(math.floor(total/qty)),.78,.63,1,.7,.7,.7)
+ end
+end
+-- Redraw the item tooltip when Ctrl goes down or up.
+M:RegisterHandler('MODIFIER_STATE_CHANGED',function(self,_,key)
+ if type(key)=='string' and not key:find('CTRL') then return end
+ local tip=GameTooltip;if not (tip and tip.IsShown and tip:IsShown() and tip.GetItem and tip.GetOwner) then return end
+ local _,link=tip:GetItem();if not link then return end
+ local owner=tip:GetOwner();local enter=owner and owner.GetScript and owner:GetScript('OnEnter')
+ if enter then pcall(enter,owner) end
+end)
+
 -- Window --------------------------------------------------------------------
 local function label(parent,text,x,y,w,font)
  local f=parent:CreateFontString(nil,'OVERLAY',font or 'GameFontHighlight');f:SetPoint('TOPLEFT',x,y)

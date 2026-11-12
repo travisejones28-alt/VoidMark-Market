@@ -1,3 +1,7 @@
+## 1.15.4
+- **Hold Ctrl over an item to see what you paid.** Item tooltips (bags, AH, mail, anywhere) show "Hold Ctrl: what you paid" for items you've bought; holding Ctrl shows the last price you paid, when, what it sold for if it sold, and your average if you bought it more than once. The tooltip updates as you press or release Ctrl.
+- 232 regressions.
+
 ## 1.15.3
 - **Fixed: Shopping tooltips showing "Items in this group may vary" with no stats.** Result rows now use the real item link from your saved scans (or build one for fixed-stat suffixes), so the tooltip shows the suffix stats and required level.
 - **Vs Avg finds your scan history more often.** Live searches and full scans can label the same gear differently (with or without item level); results now match saved prices by item + suffix.

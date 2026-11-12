@@ -396,6 +396,24 @@ check('1.15.3 Live results find scan data saved under another item-level label (
  M.db.market[scanKey]=nil;M:RebuildIndexes();jobs()
 end)
 
+check('1.15.4 Holding Ctrl over an item shows what you last paid and when',function()
+ M.db.flips={}
+ local link='|cff1eff00|Hitem:1020:0:0:0:0:0:-10|h[Sage\'s Sash of Intellect]|h|r'
+ M:RecordFlipBuy({name="Sage's Sash of Intellect",itemID=1020,marketKey=M:Key(1020,-10),quantity=1,cost=950})
+ M:RecordFlipBuy({name="Sage's Sash of Intellect",itemID=1020,marketKey=M:Key(1020,-10),quantity=1,cost=1150})
+ M:FlipBook()[2].at=M:FlipBook()[1].at+60
+ local lines={};local tip={AddLine=function(_,t) lines[#lines+1]=t end,AddDoubleLine=function(_,l,r) lines[#lines+1]=l..'='..r end}
+ local oldCtrl=IsControlKeyDown
+ IsControlKeyDown=function() return false end
+ M:AppendBoughtTooltip(tip,link);assert(#lines==1 and lines[1]:find('Hold Ctrl',1,true),'hint without Ctrl')
+ lines={};IsControlKeyDown=function() return true end
+ M:AppendBoughtTooltip(tip,link)
+ assert(lines[1]=='Last bought='..M:Coins(1150),'newest buy first: '..tostring(lines[1]))
+ assert(lines[3] and lines[3]:find('Bought 2 times',1,true) and lines[3]:find(M:Coins(1050),1,true),'average')
+ lines={};M:AppendBoughtTooltip(tip,'|cff1eff00|Hitem:1021|h[Other Item]|h|r');assert(#lines==0,'nothing for items never bought')
+ IsControlKeyDown=oldCtrl;M.db.flips={}
+end)
+
 check('1.14 Vs Avg compares against the exact suffix history and sorts deals first',function()
  fresh();M:SetView('browse');M.ahOpen=false
  local monkey,bear=M:Key(600,-10),M:Key(600,-12)
