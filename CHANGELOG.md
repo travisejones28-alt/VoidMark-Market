@@ -1,3 +1,11 @@
+## 1.14.2
+- **Search terms take options, like Auctionator's extended search:** `[armor] [slot]: [text] [max 75s] [lvl 15+ | lvl 15-30]`.
+  - `leather: agility max 50s`, `cloth: intellect lvl 15+`, `mail head: max 75s` (no text = every mail helm under 75s).
+  - Slots: head, shoulder, chest, waist/belt, legs, feet/boots, wrist/bracers, hands/gloves, back/cloak.
+  - A term's own max and level win over `/vmm flipmax` and the Level boxes.
+- **`/vmm flipstarter` now adds Azmork's list** (cloth magic / sorcerer / intellect 15+ / healing and physician under 75s, leather agility under 50s / monkey / tiger / helms under 75s, mail bear / strength / helms under 75s) and removes the 1.14.0 starter terms. Your own terms stay.
+- 223 regressions.
+
 ## 1.14.1
 - **Level range on Shopping:** Level [min] - [max] boxes next to Add to List. Applies to every Shopping search (search terms and typed names). Leave a box blank for no limit. The range shows under the results.
 - Term results show the item's name instead of "Item 14117" once the game has loaded it.

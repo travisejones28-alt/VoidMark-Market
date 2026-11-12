@@ -7,25 +7,77 @@ local _,M=...
 --    Monkey and Boots of the Bear never share a price).
 -- Terms are kept on this character only; item entries still sync as before.
 local MAX_TERMS,MIN_SAMPLES=30,2
--- "leather: of the Monkey" limits results to that armor type (Armor class 4).
+-- Term format (like Auctionator's extended search, in plain words):
+--   [armor] [slot]: [text] [max 75s] [lvl 15+ | lvl 15-30]
+--   "leather: agility max 50s", "cloth: intellect lvl 15+", "mail head: max 75s"
+-- Armor/slot are checked on the item (Armor class 4). With no text, armor is
+-- required and the AH is asked by category instead of by name.
 local ARMOR={cloth=1,leather=2,mail=3,plate=4}
-M.FLIP_STARTER={'leather: of Agility','leather: of the Monkey','leather: of the Tiger',
+local SLOT={head={'INVTYPE_HEAD'},shoulder={'INVTYPE_SHOULDER'},shoulders={'INVTYPE_SHOULDER'},
+ chest={'INVTYPE_CHEST','INVTYPE_ROBE'},waist={'INVTYPE_WAIST'},belt={'INVTYPE_WAIST'},legs={'INVTYPE_LEGS'},
+ feet={'INVTYPE_FEET'},boots={'INVTYPE_FEET'},wrist={'INVTYPE_WRIST'},bracers={'INVTYPE_WRIST'},
+ hands={'INVTYPE_HAND'},gloves={'INVTYPE_HAND'},back={'INVTYPE_CLOAK'},cloak={'INVTYPE_CLOAK'}}
+local INVTYPE_ENUM={INVTYPE_HEAD=1,INVTYPE_SHOULDER=3,INVTYPE_CHEST=5,INVTYPE_WAIST=6,INVTYPE_LEGS=7,
+ INVTYPE_FEET=8,INVTYPE_WRIST=9,INVTYPE_HAND=10,INVTYPE_CLOAK=16,INVTYPE_ROBE=20}
+-- Azmork's list (one list for everything).
+M.FLIP_STARTER={'cloth: magic','leather: agility max 50s','leather: monkey','mail: bear','cloth: sorcerer',
+ 'cloth: intellect lvl 15+','leather: tiger','leather head: max 75s','mail: strength','mail head: max 75s',
+ 'cloth: healing max 75s','cloth: physician max 75s'}
+-- 1.14.0 starter terms, replaced by /vmm flipstarter.
+M.OLD_FLIP_STARTER={'leather: of Agility','leather: of the Monkey','leather: of the Tiger',
  'cloth: of Healing','cloth: of Intellect','cloth: of the Sorcerer','cloth: of the Physician','cloth: of Magic',
  'mail: of the Bear','mail: of the Tiger','mail: of Strength'}
+-- "75s", "1g", "1g25s", "50c", "75" (silver) -> copper
+function M:ParseMoneyText(t)
+ t=tostring(t or ''):lower():gsub('%s','')
+ if t:match('^%d+$') then return tonumber(t)*100 end
+ local total,any=0,false
+ for n,u in t:gmatch('(%d+)([gsc])') do any=true;total=total+tonumber(n)*(u=='g' and 10000 or u=='s' and 100 or 1) end
+ if not any or t:gsub('%d+[gsc]','')~='' then return nil end
+ return total>0 and total or nil
+end
+-- Returns search text, armor subclass, and the full spec.
 function M:ParseShopTerm(term)
  term=tostring(term or '')
- local kind,rest=term:match('^%s*(%a+)%s*:%s*(.-)%s*$')
- if kind and ARMOR[kind:lower()] and #rest>=2 then return rest,ARMOR[kind:lower()] end
- return (term:match('^%s*(.-)%s*$')),nil
+ local spec={}
+ local head,rest=term:match('^%s*([%a ]-)%s*:%s*(.-)%s*$')
+ if head then
+  local ok=true
+  for w in head:lower():gmatch('%a+') do
+   if ARMOR[w] and not spec.armor then spec.armor=ARMOR[w]
+   elseif SLOT[w] and not spec.slot then spec.slot=SLOT[w]
+   else ok=false end
+  end
+  if ok and (spec.armor or spec.slot) then term=rest else spec={} end
+ end
+ term=' '..term..' '
+ term=term:gsub('%s[Mm][Aa][Xx]%s+(%S+)%s',function(v) spec.max=self:ParseMoneyText(v);return ' ' end)
+ term=term:gsub('%s[Ll][Vv][Ll]%s+(%d+)%s*%-%s*(%d+)%s',function(a,b) spec.minLevel,spec.maxLevel=tonumber(a),tonumber(b);return ' ' end)
+ term=term:gsub('%s[Ll][Vv][Ll]%s+(%d+)%+%s',function(a) spec.minLevel=tonumber(a);return ' ' end)
+ term=term:gsub('%s[Ll][Vv][Ll]%s+(%d+)%-%s',function(a) spec.maxLevel=tonumber(a);return ' ' end)
+ spec.text=term:match('^%s*(.-)%s*$')
+ if spec.minLevel and spec.maxLevel and spec.minLevel>spec.maxLevel then spec.minLevel,spec.maxLevel=spec.maxLevel,spec.minLevel end
+ return spec.text,spec.armor,spec
 end
-local function armorMatches(itemID,sub)
- if not sub then return true end
+-- A term is usable when it has text, or an armor type to search by category.
+function M:ShopTermValid(term)
+ local text,armor=self:ParseShopTerm(term)
+ return #text>=2 or armor~=nil
+end
+local function itemMatches(itemID,spec)
+ if not spec.armor and not spec.slot then return true end
  local info=(C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
  if not info then return true end
- local _,_,_,_,_,classID,subID=info(itemID)
+ local _,_,_,equip,_,classID,subID=info(itemID)
  if classID==nil then return true end -- unknown to the client yet: keep it
- return classID==4 and subID==sub
+ if spec.armor and not (classID==4 and subID==spec.armor) then return false end
+ if spec.slot then
+  local hit=false;for _,e in ipairs(spec.slot) do if equip==e then hit=true end end
+  if not hit then return false end
+ end
+ return true
 end
+M.ShopItemMatchesTerm=itemMatches
 function M:FlipMaxBuy()
  local v=tonumber(self.db.settings.flipMaxBuy)
  return (v and v>=1 and v<=1e10) and math.floor(v) or nil
@@ -45,13 +97,17 @@ function M:SetShopLevelRange(lo,hi)
  self.db.settings.shopMaxLevel=(hi and hi>=1 and hi<=80) and math.floor(hi) or 0
  self:RefreshUI()
 end
-function M:ApplyLevelQuery(q)
- local lo,hi=self:ShopLevelRange();q.minLevel=lo;q.maxLevel=hi;return q
+function M:ApplyLevelQuery(q,spec)
+ local lo,hi=self:ShopLevelRange()
+ if spec and (spec.minLevel or spec.maxLevel) then lo,hi=spec.minLevel,spec.maxLevel end
+ q.minLevel=lo;q.maxLevel=hi;return q
 end
 -- The AH query already limits level; this double-checks when the item is
 -- cached. Items the client doesn't know yet are kept.
-function M:LevelAllowed(itemID)
- local lo,hi=self:ShopLevelRange();if not lo and not hi then return true end
+function M:LevelAllowed(itemID,spec)
+ local lo,hi=self:ShopLevelRange()
+ if spec and (spec.minLevel or spec.maxLevel) then lo,hi=spec.minLevel,spec.maxLevel end
+ if not lo and not hi then return true end
  if not GetItemInfo then return true end
  local ok,_,_,_,_,req=pcall(GetItemInfo,itemID)
  req=ok and tonumber(req) or nil
@@ -66,6 +122,8 @@ end
 -- Adds the starter terms to the main Shopping list (one list for everything).
 function M:AddFlipStarter()
  local added=0
+ local book=self:ShopTermBook('Shopping')
+ if book then for _,old in ipairs(self.OLD_FLIP_STARTER) do for i=#book,1,-1 do if book[i]==old then table.remove(book,i) end end end end
  for _,t in ipairs(self.FLIP_STARTER) do if self:AddShopTerm('Shopping',t) then added=added+1 end end
  return added
 end
@@ -88,6 +146,7 @@ function M:AddShopTerm(list,text)
  if self.persistenceBlocked then return false,'Database read-only' end
  text=trim(text)
  if #text<2 or #text>40 then return false,'Search terms must be 2-40 characters' end
+ if not self:ShopTermValid(text) then return false,'Add search text, or an armor type like "leather head: max 75s"' end
  local book=self:ShopTermBook(list,true);if not book then return false,'Open a shopping list first' end
  for _,t in ipairs(book) do if type(t)=='string' and t:lower()==text:lower() then return false,'"'..text..'" is already in '..list end end
  if #book>=MAX_TERMS then return false,MAX_TERMS..' search terms per list maximum' end
@@ -137,9 +196,15 @@ function M:SearchShopTerms(list,onlyTerm)
  local run={list=list,total=0,done=0,found=0,rows={},byKey={}}
  self.termSearch=run;self.termRows={}
  for _,term in ipairs(terms) do
-  local text,armor=self:ParseShopTerm(term)
+  local text,armor,spec=self:ParseShopTerm(term)
+  local classFilters={}
+  if text=='' and armor then
+   -- Category search: Armor > subclass (> slot when it is one inventory type).
+   local inv=spec.slot and #spec.slot==1 and INVTYPE_ENUM[spec.slot[1]]
+   classFilters[1]={classID=4,subClassID=armor,inventoryType=inv or nil}
+  end
   local queued=self:QueueRequest({id='browse-term:'..term:lower(),kind='browse',priority=40,
-   query=self:ApplyLevelQuery({searchString=text,sorts={},filters={},itemClassFilters={}}),
+   query=self:ApplyLevelQuery({searchString=text,sorts={},filters={},itemClassFilters=classFilters},spec),
    done=function()
     if self.termSearch~=run then return end
     local result=C_AuctionHouse.GetBrowseResults() or {}
@@ -149,8 +214,8 @@ function M:SearchShopTerms(list,onlyTerm)
      if key and self:Finite(b.minPrice,1,1e12) then
       self:RecordLiveFloor(key,b.minPrice,b.totalQuantity)
       local old=run.byKey[key]
-      local max=self:FlipMaxBuy()
-      if (not old or b.minPrice<old.floor) and armorMatches(k.itemID,armor) and not (max and b.minPrice>max) and self:LevelAllowed(k.itemID) then
+      local max=spec.max or self:FlipMaxBuy()
+      if (not old or b.minPrice<old.floor) and itemMatches(k.itemID,spec) and not (max and b.minPrice>max) and self:LevelAllowed(k.itemID,spec) then
        local m=self.db.market[key];local info=C_AuctionHouse.GetItemKeyInfo and C_AuctionHouse.GetItemKeyInfo(k)
        local row={marketKey=key,itemID=k.itemID,name=(info and info.itemName) or (m and m.name) or self:ItemName(k.itemID) or ('Item '..k.itemID),
         floor=b.minPrice,quantity=tonumber(b.totalQuantity),fair=m and m.fairValue or 0,

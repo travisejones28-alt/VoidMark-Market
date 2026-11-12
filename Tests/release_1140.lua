@@ -169,6 +169,50 @@ check('1.14 Level range limits term sweeps and name searches; boxes save it',fun
  M:DeleteShoppingList('Flips');assert(ok,err)
 end)
 
+check('1.14.2 Term options: per-term max price and level, armor slot, category-only terms',function()
+ fresh()
+ assert(M:ParseMoneyText('75s')==7500 and M:ParseMoneyText('1g25s')==12500 and M:ParseMoneyText('50')==5000 and M:ParseMoneyText('x')==nil)
+ local t,a,sp=M:ParseShopTerm('leather: agility max 50s')
+ assert(t=='agility' and a==2 and sp.max==5000,'agility max')
+ t,a,sp=M:ParseShopTerm('cloth: intellect lvl 15+');assert(t=='intellect' and a==1 and sp.minLevel==15 and not sp.maxLevel)
+ t,a,sp=M:ParseShopTerm('mail head: max 75s');assert(t=='' and a==3 and sp.slot[1]=='INVTYPE_HEAD' and sp.max==7500)
+ t,a,sp=M:ParseShopTerm('Leather Chest: lvl 30-20');assert(sp.minLevel==20 and sp.maxLevel==30 and #sp.slot==2)
+ t,a=M:ParseShopTerm('Robe: of x');assert(t=='Robe: of x' and a==nil,'unknown prefix is plain text')
+ assert(not M:AddShopTerm('Flips','head: max 75s'),'no text and no armor is refused')
+ -- Sweep: category search for helms, slot + per-term max applied, per-term level beats the boxes.
+ M:SetView('browse');M.ahOpen=true;M.queue.nextSend=0
+ local A=C_AuctionHouse;local origGet,origSend,origInst,origInfo=A.GetBrowseResults,A.SendBrowseQuery,GetItemInfoInstant,GetItemInfo
+ local sent
+ A.SendBrowseQuery=function(q) sent=q end
+ GetItemInfoInstant=function(id) local r=({[900]={'INVTYPE_HEAD',3},[901]={'INVTYPE_CHEST',3},[902]={'INVTYPE_HEAD',2}})[id]
+  if r then return id,'Armor','x',r[1],0,4,r[2] end end
+ GetItemInfo=function(id) return 'X','l',2,30,30 end
+ A.GetBrowseResults=function() return {
+  {itemKey={itemID=900,itemSuffix=0,itemLevel=0},minPrice=7000,totalQuantity=1},
+  {itemKey={itemID=900,itemSuffix=-12,itemLevel=0},minPrice=9000,totalQuantity=1}, -- over 75s
+  {itemKey={itemID=901,itemSuffix=0,itemLevel=0},minPrice=100,totalQuantity=1},   -- chest
+  {itemKey={itemID=902,itemSuffix=0,itemLevel=0},minPrice=100,totalQuantity=1}} end -- leather
+ local ok,err=pcall(function()
+  M.db.settings.flipMaxBuy=200 -- global max is overridden by the term's own max
+  M.db.settings.shopMinLevel=40;M.db.settings.shopMaxLevel=50 -- boxes would exclude level 30
+  M:SetList('Flips');assert(M:AddShopTerm('Flips','mail head: max 75s lvl 20-35'))
+  M:OpenShoppingList('Flips');M.queue.nextSend=0;M:PumpQueue();emit('AUCTION_HOUSE_BROWSE_RESULTS_UPDATED')
+  assert(sent.searchString=='' and sent.itemClassFilters[1].classID==4 and sent.itemClassFilters[1].subClassID==3
+   and sent.itemClassFilters[1].inventoryType==1,'category query')
+  assert(sent.minLevel==20 and sent.maxLevel==35,'term level used')
+  local rows=M:ShoppingResultRows();assert(#rows==1 and rows[1].floor==7000,'only the mail helm under 75s: '..#rows)
+ end)
+ A.GetBrowseResults,A.SendBrowseQuery,GetItemInfoInstant,GetItemInfo=origGet,origSend,origInst,origInfo
+ M.db.settings.flipMaxBuy=0;M.db.settings.shopMinLevel=0;M.db.settings.shopMaxLevel=0
+ M.queue.waiting={};M.queue.dedupe={};M.queue.active=nil
+ M:DeleteShoppingList('Flips');assert(ok,err)
+ -- flipstarter swaps the old 1.14.0 terms for the new list.
+ M.db.shopTerms=nil;for _,o in ipairs(M.OLD_FLIP_STARTER) do M:AddShopTerm('Shopping',o) end;M:AddShopTerm('Shopping','my own term')
+ M:AddFlipStarter();local terms=M:ShopTerms('Shopping')
+ assert(#terms==#M.FLIP_STARTER+1 and terms[1]=='my own term','old starter replaced, own terms kept')
+ M.db.shopTerms=nil
+end)
+
 check('1.14 Vs Avg compares against the exact suffix history and sorts deals first',function()
  fresh();M:SetView('browse');M.ahOpen=false
  local monkey,bear=M:Key(600,-10),M:Key(600,-12)
