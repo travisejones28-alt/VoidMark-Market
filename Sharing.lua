@@ -2,6 +2,50 @@ local _,M=...
 -- Latest-state journal: one pending revision per variant/list entry, not one
 -- historical row per change. A receiver advances only after validating a page.
 local PREFIX='VMMkt2'
+-- 1.21 fast sync: extra prefixes ("lanes") each get their own client send
+-- budget, the economy name becomes a 5-character hash, and numbers in rows
+-- are packed (base-62, timestamps as offsets). Used only after the partner
+-- says it understands it ("C" message); older partners keep the 1.x format.
+local LANES={PREFIX,'VMMkt2b','VMMkt2c','VMMkt2d'}
+local LANE_SET={};for _,l in ipairs(LANES) do LANE_SET[l]=true end
+local B62='0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+local function b62(n)
+ n=math.floor(n);if n<=0 then return '0' end
+ local out='';while n>0 do local d=n%62;out=B62:sub(d+1,d+1)..out;n=(n-d)/62 end;return out
+end
+local B62V={};for i=1,62 do B62V[B62:sub(i,i)]=i-1 end
+local function unb62(t)
+ if type(t)~='string' or t=='' or #t>8 then return nil end
+ local n=0;for i=1,#t do local v=B62V[t:sub(i,i)];if not v then return nil end;n=n*62+v end;return n
+end
+local function econHash(id)
+ local h=5381;id=tostring(id):gsub('%s',''):lower()
+ for i=1,#id do h=(h*33+id:byte(i))%916132832 end -- 62^5
+ local t=b62(h);return ('0'):rep(5-#t)..t
+end
+local function packField(f,base)
+ if f:sub(1,1)=='!' then return '!'..f end
+ if f:match('^%d+$') and #f>=3 and tostring(tonumber(f))==f then
+  local n=tonumber(f)
+  if n>=1000000000 and n>=base then local t='!^'..b62(n-base);if #t<#f then return t end end
+  local t='!'..b62(n);if #t<#f then return t end
+ end
+ return f
+end
+local function unpackField(f,base)
+ if f:sub(1,2)=='!!' then return f:sub(2) end
+ if f:sub(1,2)=='!^' then local n=unb62(f:sub(3));return n and tostring(base+n) or nil end
+ if f:sub(1,1)=='!' then local n=unb62(f:sub(2));return n and tostring(n) or nil end
+ return f
+end
+local function packRow(line,base)
+ local out={};for v in (line..','):gmatch('([^,]*),') do out[#out+1]=packField(v,base) end;return table.concat(out,',')
+end
+local function unpackRow(line,base)
+ local out={};for v in (line..','):gmatch('([^,]*),') do local u=unpackField(v,base);if not u then return nil end;out[#out+1]=u end
+ return table.concat(out,',')
+end
+M.SyncPack={b62=b62,unb62=unb62,hash=econHash,pack=packRow,unpack=unpackRow,lanes=LANES}
 local STAMP_EVERY=1800
 local function secret(v) return issecretvalue and issecretvalue(v) end
 local function unitCharacter(unit)
@@ -304,6 +348,16 @@ function M:StartSharing()
   end
   if not self.shareRegistered then self.shareRun.status='Addon-message registration failed (result '..tostring(v)..')' end
  end
+ if self.shareRegistered and not self.shareLanes then
+  local lanes={PREFIX}
+  for i=2,#LANES do
+   local ok,v=pcall(function() return select(-1,api.RegisterAddonMessagePrefix(LANES[i])) end)
+   local success=Enum and Enum.RegisterAddonMessagePrefixResult and Enum.RegisterAddonMessagePrefixResult.Success or 0
+   local duplicate=Enum and Enum.RegisterAddonMessagePrefixResult and Enum.RegisterAddonMessagePrefixResult.DuplicatePrefix or 1
+   if ok and (v==true or v==success or v==duplicate) then lanes[#lanes+1]=LANES[i] end
+  end
+  self.shareLanes=lanes
+ end
  local d=self.db;local j=d.shareJournal
  -- 1.7: re-run seeding once so trusted prices observed before pairing (or
  -- older than the freshness window) are offered to the partner.
@@ -338,8 +392,8 @@ local function channel(self)
  end
  return 'WHISPER'
 end
-local function send(self,ch,body)
- local msg=self.economyID..'\t'..body
+local function send(self,ch,body,lane,short)
+ local msg=(short and ('#'..econHash(self.economyID)) or self.economyID)..'\t'..body
  if #msg>240 then return false end
  local target
  if ch=='WHISPER' then
@@ -351,7 +405,7 @@ local function send(self,ch,body)
  end
  -- The legacy compatibility wrapper can return (nil, enum). Read the
  -- final return value, and do not mistake a nil/false result for success.
- local ok,r=pcall(function() return select(-1,C_ChatInfo.SendAddonMessage(PREFIX,msg,ch,target)) end)
+ local ok,r=pcall(function() return select(-1,C_ChatInfo.SendAddonMessage(lane or PREFIX,msg,ch,target)) end)
  local success=Enum and Enum.SendAddonMessageResult and Enum.SendAddonMessageResult.Success or 0
  local sent=ok and (r==true or r==success)
  self.shareRun.lastChannel=ch
@@ -371,7 +425,50 @@ local function inFlight(r) return r.pages and #r.pages or 0 end
 local function dataReady(r,j,now)
  if r.cursor==nil or now<(r.throttleUntil or 0) then return false end
  if r.sentHi and r.sentHi>r.cursor and now>=(r.retry or 0) then return true end -- timed out: resend
- return math.max(r.cursor,r.sentHi or r.cursor)<j.seq and inFlight(r)<WINDOW
+ return math.max(r.cursor,r.sentHi or r.cursor)<j.seq and inFlight(r)<(r.window or WINDOW)
+end
+-- Fast mode (partner on 1.21+): packed pages spread over the lanes, each lane
+-- with its own byte budget and throttle backoff, 8 pages in flight per lane.
+local function fastPages(self,r,j,ch,now)
+ local lanes=self.shareLanes or {PREFIX}
+ local n=math.max(1,math.min(#lanes,tonumber(r.peerLanes) or 1))
+ r.window=8*n;r.lb=r.lb or {};r.lbAt=r.lbAt or {};r.lu=r.lu or {}
+ for i=1,n do local last=r.lbAt[i] or now;r.lbAt[i]=now;r.lb[i]=math.min(BURST,(r.lb[i] or BURST)+(now-last)*RATE) end
+ local header='#'..econHash(self.economyID)
+ local base=math.floor(time())-8000000;local base62=b62(base)
+ for _=1,r.window do
+  if not dataReady(r,j,now) then return end
+  if r.sentHi and r.sentHi>r.cursor and now>=(r.retry or 0) then goBack(r) end
+  local lo=math.max(r.cursor,r.sentHi or r.cursor);local hi=math.max(lo,r.skipped or lo);local rows={}
+  local limit=math.min(j.seq,hi+500)
+  local overhead=#header+1+#('E\t'..j.epoch..'\t'..lo..'\t'..limit..'\t'..base62..'\t')
+  local used=0
+  while hi<limit do
+   local line=j.rows[hi+1]
+   if line then line=packRow(line,base) end
+   if line and #line+overhead>238 then hi=hi+1;r.oversized=(r.oversized or 0)+1;line=nil
+   elseif line and used+(#rows>0 and 1 or 0)+#line+overhead>238 then break
+   else hi=hi+1 end
+   if line then used=used+(#rows>0 and 1 or 0)+#line;rows[#rows+1]=line end
+  end
+  if #rows==0 and hi<j.seq then r.skipped=hi;return end
+  r.skipped=nil
+  if hi<=lo then return end
+  local body=table.concat({'E',j.epoch,lo,hi,base62,table.concat(rows,';')},'\t')
+  local cost=#body+#header+1
+  local lane
+  for k=1,n do local i=((r.laneNext or 0)+k-1)%n+1;if now>=(r.lu[i] or 0) and r.lb[i]>=cost then lane=i;break end end
+  if not lane then return end
+  r.laneNext=lane
+  if send(self,ch,body,lanes[lane],true) then
+   r.lb[lane]=r.lb[lane]-cost
+   if not r.sentHi or r.sentHi<=r.cursor then r.retry=now+4 end
+   r.sentHi=hi;r.pages=r.pages or {};r.pages[#r.pages+1]=hi
+   r.status='Sending changes '..hi..' / '..j.seq..' (fast, '..n..' lanes)'
+  else
+   r.lu[lane]=now+1.5 -- that lane is throttled: the others carry on
+  end
+ end
 end
 function M:PumpSharing()
  if self.db then self:AutomaticBankScan(GetTime()) end
@@ -400,7 +497,11 @@ function M:PumpSharing()
   if send(self,ch,r.reply) then r.reply=nil else r.next=now+5 end;return
  end
  if r.infoPending and r.lastContact then
-  if send(self,ch,table.concat({'I',j.epoch,j.seq,self.db.lastDepthSnapshotAt or 0},'\t')) then r.infoPending=nil else r.next=now+5 end
+  if send(self,ch,table.concat({'I',j.epoch,j.seq,self.db.lastDepthSnapshotAt or 0},'\t')) then r.infoPending=nil;r.capPending=true else r.next=now+5 end
+  return
+ end
+ if r.capPending and r.lastContact then
+  if send(self,ch,table.concat({'C',j.epoch,3,#(self.shareLanes or {PREFIX})},'\t')) then r.capPending=nil else r.next=now+5 end
   return
  end
  if not r.hello or now>=r.hello then
@@ -417,6 +518,8 @@ function M:PumpSharing()
   elseif not sent then r.status='Message rejected on '..ch..' (result '..tostring(r.lastSendError)..'); retrying' end
   return
  end
+ if r.peerV3 then return fastPages(self,r,j,ch,now) end
+ r.window=nil
  refill(r,now)
  -- Pipelined pages: keep up to WINDOW pages in flight instead of waiting for
  -- each reply. The receiver applies pages strictly in order and replies with
@@ -454,10 +557,11 @@ function M:PumpSharing()
 end
 function M:ReceiveSharing(prefix,msg,ch,sender)
  if secret(prefix) or secret(msg) or secret(ch) or secret(sender) then return end
- if prefix~=PREFIX or not self.db or self.persistenceBlocked or not self.db.syncPeer or nameKey(sender)~=nameKey(self.db.syncPeer) or
+ if not LANE_SET[prefix] or not self.db or self.persistenceBlocked or not self.db.syncPeer or nameKey(sender)~=nameKey(self.db.syncPeer) or
   (ch~='WHISPER' and ch~='PARTY' and ch~='RAID' and ch~='INSTANCE_CHAT') or type(msg)~='string' or #msg>240 then return end
  local f=fields(msg,'\t')
- if (f[1] or ''):gsub('%s',''):lower()~=self.economyID:gsub('%s',''):lower() then self.shareRun.status='Rejected peer: realm/faction mismatch';self:RefreshUI();return end
+ local head=f[1] or ''
+ if head:gsub('%s',''):lower()~=self.economyID:gsub('%s',''):lower() and head~='#'..econHash(self.economyID) then self.shareRun.status='Rejected peer: realm/faction mismatch';self:RefreshUI();return end
  if not f[3] or not f[3]:match('^%d+%-%d+$') then return end
  local r=self.shareRun;local j=self.db.shareJournal;local db=self.db.shareReceived
  local peer=self.db.syncPeer;local rx=db[peer]
@@ -488,6 +592,36 @@ function M:ReceiveSharing(prefix,msg,ch,sender)
   else r.sentHi=n;r.pages={};r.retry=0 end
   if n==j.seq and r.lastAck~=n then self.db.syncLastSentAt=time() end
   r.lastAck=n;r.status=n==j.seq and 'Up to date' or 'Sending changes'
+ elseif f[2]=='C' and #f==5 then
+  -- Partner understands fast pages (and how many lanes it listens on).
+  local v,n=tonumber(f[4]),tonumber(f[5])
+  if whole(v,1,99) and whole(n,1,#LANES) then r.peerV3=v>=3;r.peerLanes=n end
+ elseif f[2]=='E' and #f==7 and rx and f[3]==rx.epoch then
+  local lo,hi,base=tonumber(f[4]),tonumber(f[5]),unb62(f[6])
+  if not whole(lo,0,1e12) or not whole(hi,lo+1,1e12) or not base then return end
+  if lo<rx.seq then ack();return end -- already have it
+  local staged={}
+  if f[7]~='' then for _,line in ipairs(fields(f[7],';')) do
+   local raw=unpackRow(line,base);local p=raw and decode(self,raw);if not p then return end;staged[#staged+1]=p
+  end end
+  r.buf=r.buf or {}
+  if lo>rx.seq then
+   -- Lanes can deliver out of order: hold it until the gap arrives.
+   local count=0;for _ in pairs(r.buf) do count=count+1 end
+   if count<96 then r.buf[lo]={hi=hi,staged=staged} end
+   return
+  end
+  local page={hi=hi,staged=staged}
+  while page do
+   for _,p in ipairs(page.staged) do if not apply(self,p) then r.status='Shopping list limit reached; transfer paused';self:RefreshUI();return end end
+   r.buf[rx.seq]=nil;rx.seq=page.hi
+   page=r.buf[rx.seq]
+  end
+  for k in pairs(r.buf) do if k<rx.seq then r.buf[k]=nil end end
+  r.lastContact=GetTime();r.offlineUntil=nil;self.db.syncLastReceivedAt=time();ack()
+  if rx.total and rx.seq>=rx.total then self.db.syncLastReceivedCompleteAt=time() end
+  if self.view=='browse' then self.browseNamesDirty=self.browseNamesDirty or GetTime()+1 end
+  r.status='Received through change '..rx.seq..' (fast)';self:RefreshUI()
  elseif f[2]=='D' and #f==6 and rx and f[3]==rx.epoch then
   local lo,hi=tonumber(f[4]),tonumber(f[5])
   if not whole(lo,0,1e12) or not whole(hi,lo+1,1e12) then return end
@@ -565,6 +699,7 @@ function M:SyncReport()
   'Last fully acknowledged send: '..self:SyncTime(self.db.syncLastSentAt),
   'Received prices: '..tostring(r.priceCount or 'Counting')..' | outbound revisions: '..tostring(r.cursor or 0)..' / '..j.seq,
   'Inbound revisions: '..tostring(rx.seq or 0)..' / '..tostring(rx.total or 'Awaiting peer metadata'),
+  'Sync mode: '..(r.peerV3 and ('fast, '..math.min(#(self.shareLanes or {1}),tonumber(r.peerLanes) or 1)..' lanes') or 'standard (partner not on 1.21 yet)'),
   'Scan: '..tostring(self.scanState.status)..' | progress: '..tostring(self.scanState.progress or 0),
   'Diagnostics: '..tostring(r.lastSendError or diag.error or 'No recorded error'),
   '', 'Bank scans automatically while its Auction House is open and cooldown permits.',

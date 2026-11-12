@@ -77,7 +77,7 @@ check('Ungrouped accounts resume lost data and ACKs after reload; unchanged floo
   local delivery=packets;packets={}
   for _,v in ipairs(delivery) do
    selectClient(v.from=='Bank' and 'Main' or 'Bank')
-   if dropData and v[2]:find('\tD\t',1,true) then dropData=false
+   if dropData and (v[2]:find('\tD\t',1,true) or v[2]:find('\tE\t',1,true)) then dropData=false
    elseif not dropData and dropAck and v.from=='Main' and v[2]:find('\tQ\t',1,true) then dropAck=false
    else M:ReceiveSharing(v[1],v[2],v[3],v[4]) end
   end

@@ -1,3 +1,11 @@
+## 1.21.0
+- **Faster bank-to-main sync** (both characters need 1.21; until then the old format is used automatically):
+  - Messages go out over 4 channels ("lanes") instead of 1. The game limits how fast each channel can send, so more channels means more data per second. If one is throttled, the others keep going.
+  - Smaller messages: the realm/faction name is sent as a 5-character code, and prices and timestamps are packed, so more prices fit in each message.
+  - Up to 8 messages in flight per lane (32 total instead of 8). The receiver puts pages back in order if they arrive out of order.
+  - VoidMark > Sync shows "Sync mode: fast, 4 lanes" once both sides are on 1.21.
+- 250 regressions.
+
 ## 1.20.3
 - **Flip Ledger now includes what happened before it existed.** On first load it rebuilds buys and sales from Market's older log: confirmed Market buys, "You won" invoices (buys from anywhere) and "Auction successful" invoices (sales), matched oldest buy first. Rows already in the Flip Ledger are never added twice. Chat says how many were added. `/vmm flipsrebuild` runs it again.
 - 247 regressions.
