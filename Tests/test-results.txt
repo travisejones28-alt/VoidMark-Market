@@ -176,7 +176,7 @@ PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
 PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
 PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
-BENCH scan: 97 frames (1.6s at 60fps, 3.2s at 30fps), worst frame 12.1ms, cpu 0.95s | after:prune=3 after:share-scan=18 done=1 model=58 processing=17
+BENCH scan: 124 frames (2.1s at 60fps, 4.1s at 30fps), worst frame 12.4ms, cpu 1.26s | after:prune=3 after:share-scan=20 done=1 model=78 processing=22
 PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.13 history stores only the fields it needs; latest keeps the full snapshot
 PASS 1.9.13 history saved by older versions is shrunk once at login without losing prices

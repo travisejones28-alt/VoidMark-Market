@@ -480,6 +480,8 @@ check('1.22.18 Two suffixes of one item get separate sell tiles and counts',func
   local tiles=M:SellTiles(M.sellingRows);assert(#tiles==2,'tiles: '..#tiles)
   assert(tiles[1].count==1 and tiles[2].count==1)
   local r=M.sellingRows[1];assert(M:BagCount(r.marketKey,7406,r.name)==1)
+  -- Selecting one fills quantity 1, not both belts.
+  M.selectedRow=nil;M:SelectSellRow(r,false);assert(M.postQty:GetText()=='1','qty '..tostring(M.postQty:GetText()))
  end)
  C_Container,C_TooltipInfo=old,oldT;assert(ok,err)
 end)

@@ -1,3 +1,7 @@
+## 1.22.19
+- Selecting an item on Selling fills the quantity with how many of *that suffix* you have. It counted both Pagan Belts (Intellect and Sorcerer) as 2, and the post failed with "Invalid price, duration, quantity or item variant".
+- 267 regressions.
+
 ## 1.22.18
 - **Different suffixes of one item are no longer mixed up.** Forever's item links leave out the suffix, so Pagan Belt of Intellect and Pagan Belt of the Sorcerer looked like the same item:
   - The sell list shows each with its real name (from the item's tooltip) as its own tile, and Max counts only that one.

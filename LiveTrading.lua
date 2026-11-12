@@ -156,7 +156,7 @@ function M:SelectSellRow(row,check)
  if changed then
   self.postQuote=nil;self.sellListPage=1
   self:SetPostPrice(nil)
-  if self.postQty then self.postQty:SetText(tostring(math.max(1,tonumber(row.quantity) or 1,self:BagCount(row.marketKey,row.itemID)))) end
+  if self.postQty then self.postQty:SetText(tostring(math.max(1,tonumber(row.quantity) or 1,self:BagCount(row.marketKey,row.itemID,row.name)))) end
  end
  if check and changed and self.ahOpen and self.view=='selling' then self:CheckPost(row) end
  self:RefreshUI()
