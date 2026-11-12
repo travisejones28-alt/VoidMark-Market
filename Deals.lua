@@ -393,11 +393,60 @@ local function putLow(book,k,day,floor)
  if not t[day] or floor<t[day] then t[day]=floor end
  for d in pairs(t) do if type(d)~='number' or d<day-30 then t[d]=nil end end
 end
+-- Size cap: past the limit, the items not seen for the longest are dropped.
+M.DAILY_LOW_CAP,M.DAILY_LOW_BASE_CAP=6000,3000
+function M:PruneDailyLows(name,cap)
+ local book=self.db[name];if type(book)~='table' then return 0 end
+ local list={}
+ for k,t in pairs(book) do
+  local newest=-1;if type(t)=='table' then for d in pairs(t) do if type(d)=='number' and d>newest then newest=d end end end
+  list[#list+1]={k=k,d=newest}
+ end
+ if #list<=cap then return 0 end
+ table.sort(list,function(a,b) return a.d<b.d end)
+ local drop=#list-math.floor(cap*0.85)
+ for i=1,drop do book[list[i].k]=nil end
+ return drop
+end
 function M:RecordDailyLow(key,floor)
  if self.persistenceBlocked or key==nil or not self:Finite(floor,1,1e12) then return end
  local _,id=self:ParseKey(key);local day=math.floor(time()/DAY);floor=math.floor(floor)
  putLow(lowBook(self,'dailyLows'),tostring(key),day,floor)
- if id then putLow(lowBook(self,'dailyLowsBase'),id,day,floor) end
+ if id then
+  putLow(lowBook(self,'dailyLowsBase'),id,day,floor)
+  self.lastLiveKey=self.lastLiveKey or {};self.lastLiveKey[id]=key
+ end
+ self.dailyLowWrites=(self.dailyLowWrites or 0)+1
+ if self.dailyLowWrites%250==0 then
+  self:PruneDailyLows('dailyLows',self.DAILY_LOW_CAP);self:PruneDailyLows('dailyLowsBase',self.DAILY_LOW_BASE_CAP)
+ end
+end
+-- /vmm check: how this item is labeled, and what Market has saved for it.
+function M:CheckItem(link)
+ if type(link)~='string' or not link:find('item:',1,true) then
+  local tip=GameTooltip;if tip and tip.GetItem and tip:IsShown() then local _,l=tip:GetItem();link=l end
+ end
+ if type(link)~='string' or link=='' then self:Print('Hover an item and type /vmm check, or type /vmm check then Shift-click an item.');return false end
+ local key=self.LinkIdentity and self:LinkIdentity(link)
+ local _,id,suffix=self:ParseKey(key)
+ local direct=key~=nil and self.db.market[key]
+ local m=self:MarketForKey(key)
+ local mk;if m then for k,v in pairs(self.db.market) do if v==m then mk=k;break end end end
+ local month=m and self:MarketWindow(m,30)
+ local lows=0;for _ in pairs(self.db.dailyLows and self.db.dailyLows[tostring(key)] or {}) do lows=lows+1 end
+ local blows=0;for _ in pairs(self.db.dailyLowsBase and self.db.dailyLowsBase[id] or {}) do blows=blows+1 end
+ local ref,samples,approx=self:DealReference(key)
+ local live=self.lastLiveKey and id and self.lastLiveKey[id]
+ local req=self:ItemRequiredLevel(id)
+ self:Print('Check: '..link:gsub('|','||'))
+ self:Print(('  link key %s (item %s, suffix %s)'):format(tostring(key),tostring(id),tostring(suffix)))
+ self:Print('  last live-search key '..tostring(live)..(live~=nil and live~=key and ' |cffff8060(different from the link key)|r' or ''))
+ self:Print('  saved prices: '..(direct and 'found under the link key' or m and ('found under '..tostring(mk)..' (matched by item + suffix)') or 'none')
+  ..(month and (', '..month.samples..' scan samples in 30 days') or ''))
+ self:Print(('  daily lows: %d days this suffix, %d days all suffixes'):format(lows,blows))
+ self:Print('  Vs Avg reference: '..(ref and (self:Coins(ref)..' from '..tostring(samples)..' samples'..(approx and ' (all suffixes, ~)' or '')) or 'none yet'))
+ self:Print('  required level: '..tostring(req or 'not loaded')..'  |  ledger buys: '..#self:BoughtHistory(link)..', sales: '..#self:SoldHistory(link))
+ return true
 end
 local function median(v)
  if #v==0 then return nil end

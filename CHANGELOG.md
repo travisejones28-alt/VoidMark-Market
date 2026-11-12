@@ -1,3 +1,12 @@
+## 1.19.0
+- **Item tooltips show "Last Bought" and "Last Sold"** (per item, always on), like the flipping addon your friend uses. Hold Ctrl for when, which character bought it, what it sold for after the cut, and averages if you've traded it more than once.
+- **Never sell below what you paid.** For an item you bought and still hold, the suggested post price never goes under what you paid plus the 5% AH cut. Selling says "held at what you paid + AH cut" when that kicks in. A higher "Never below" you set still wins. Turn it off with `/vmm paidfloor off`.
+- **Flips to list first.** On Selling, items you bought and haven't sold are grouped at the top under "Flips to list"; Skip walks through them. (The game needs one click per post, so this is as close to one-click as an addon can get.)
+- **"You paid" moved into the Selling info line** (it overlapped the Post button).
+- **`/vmm check`**: hover an item (or type `/vmm check ` and Shift-click it) to print how the game labels it, whether Market has saved prices for it, its daily lows, its Vs Avg reference and its ledger buys/sales.
+- Daily price history is capped (6000 items, 3000 base items); the items not seen for longest are dropped first.
+- 242 regressions.
+
 ## 1.18.0
 Second pass over Auctionator 345 (reference only; no Auctionator code used).
 - **Import takes Azmork's whole Auctionator list, filters included.** Auctionator saves each term as `text;category;...;minLevel;maxLevel;...;maxPrice;quality`. Market used to keep only the word; now it converts category (armor type and slot), required level, max price and quality: `agility;Armor/Leather;...;0.5` becomes `leather: agility max 50s`. A list named "shopping" goes into your main Shopping list.

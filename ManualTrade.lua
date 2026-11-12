@@ -123,7 +123,7 @@ function M:CheckPost(row)
   local replaceFallback=draft.fallback and draft.fallbackUnit and self:GetPostPrice()==draft.fallbackUnit
   draft.fallback=nil;draft.reason=nil
   draft.at=result.received;draft.floor=result.rows[1] and result.rows[1].unit;draft.listings=result.all or {}
-  local unit,clamped=self:SuggestPostUnit(row,draft.floor,draft.commodity);draft.atMinimum=clamped
+  local unit,clamped,why=self:SuggestPostUnit(row,draft.floor,draft.commodity);draft.atMinimum=clamped;draft.minWhy=why
   if (self:PostPriceEmpty() or replaceFallback) and unit then self:SetPostPrice(unit) end
   local now=readBag(self,row);draft.max=now and now.max;draft.commodity=now and now.commodity
   if now and self.postQty and not draft.qtyTouched then self.postQty:SetText(tostring(now.max)) end
@@ -142,7 +142,7 @@ end
 function M:UseScanPrice(draft,reason)
  if self.postQuote~=draft or draft.at then return end
  draft.at=GetTime();draft.fallback=true;draft.reason=reason;draft.listings={}
- local unit,clamped=self:SuggestPostUnit(draft.row,nil,draft.commodity);draft.atMinimum=clamped
+ local unit,clamped,why=self:SuggestPostUnit(draft.row,nil,draft.commodity);draft.atMinimum=clamped;draft.minWhy=why
  if unit and self:PostPriceEmpty() then self:SetPostPrice(unit);draft.fallbackUnit=unit end
  local why=reason and (' ('..tostring(reason)..')') or ''
  self:Print(unit and ('Live price did not answer'..why..'; using the last scan price. Check it before posting.')

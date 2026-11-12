@@ -397,21 +397,23 @@ check('1.15.3 Live results find scan data saved under another item-level label (
  M.db.market[scanKey]=nil;M:RebuildIndexes();jobs()
 end)
 
-check('1.15.4 Holding Ctrl over an item shows what you last paid and when',function()
+check('1.15.4 Item tooltips show Last Bought / Last Sold; Ctrl adds when, who and averages',function()
  M.db.flips={}
  local link='|cff1eff00|Hitem:1020:0:0:0:0:0:-10|h[Sage\'s Sash of Intellect]|h|r'
  M:RecordFlipBuy({name="Sage's Sash of Intellect",itemID=1020,marketKey=M:Key(1020,-10),quantity=1,cost=950})
  M:RecordFlipBuy({name="Sage's Sash of Intellect",itemID=1020,marketKey=M:Key(1020,-10),quantity=1,cost=1150})
  M:FlipBook()[2].at=M:FlipBook()[1].at+60
+ M:RecordFlipSale("Sage's Sash of Intellect",1,4900,245)
  local lines={};local tip={AddLine=function(_,t) lines[#lines+1]=t end,AddDoubleLine=function(_,l,r) lines[#lines+1]=l..'='..r end}
  local oldCtrl=IsControlKeyDown
  IsControlKeyDown=function() return false end
- M:AppendBoughtTooltip(tip,link);assert(#lines==1 and lines[1]:find('Hold Ctrl',1,true),'hint without Ctrl')
+ M:AppendBoughtTooltip(tip,link)
+ assert(lines[1]=='Last Bought='..M:Coins(1150) and lines[2]=='Last Sold='..M:Coins(4900) and lines[3]:find('Hold Ctrl',1,true),table.concat(lines,' / '))
  lines={};IsControlKeyDown=function() return true end
  M:AppendBoughtTooltip(tip,link)
- assert(lines[1]=='Last bought='..M:Coins(1150),'newest buy first: '..tostring(lines[1]))
- assert(lines[3] and lines[3]:find('Bought 2 times',1,true) and lines[3]:find(M:Coins(1050),1,true),'average')
- lines={};M:AppendBoughtTooltip(tip,'|cff1eff00|Hitem:1021|h[Other Item]|h|r');assert(#lines==0,'nothing for items never bought')
+ local all=table.concat(lines,' / ')
+ assert(all:find('  bought=',1,true) and all:find('after cut',1,true) and all:find('Bought 2 times=avg '..M:Coins(1050),1,true),all)
+ lines={};M:AppendBoughtTooltip(tip,'|cff1eff00|Hitem:1021|h[Other Item]|h|r');assert(#lines==0,'nothing for items never traded')
  IsControlKeyDown=oldCtrl;M.db.flips={}
 end)
 
@@ -476,7 +478,7 @@ check('1.16 Selling shows what you paid for the selected item',function()
  assert(M:SellPaidText({name='Never Bought'})=='')
  M:SetView('selling');M.selectedRow={name='Lupine Vest of Agility',itemID=5,itemLink='|cff1eff00|Hitem:5|h[Lupine Vest of Agility]|h|r'}
  local ok,err=pcall(function() M:RenderUI() end)
- if ok and M.sellScreen and M.sellScreen.paid then assert(M.sellScreen.paid:GetText():find('You paid',1,true),'label') end
+ if ok and M.sellScreen and M.sellScreen.info then assert(M.sellScreen.info:GetText():find('You paid',1,true),'paid shown in the info line') end
  M.selectedRow=nil;M:SetView('browse');M.db.flips={};assert(ok,err)
 end)
 
@@ -562,6 +564,45 @@ check('1.18 An unconfirmed item buy no longer blocks buying; in-flight buys and 
  local f=add('pending',false);assert(M:HasUnresolvedPurchase(),'in flight blocks')
  for k in pairs(M.db.pending) do M.db.pending[k]=nil end
  assert(M:LedgerTotals().reserved==0)
+end)
+
+check('1.19 Never sell below what you paid: post price is held at paid + AH cut; held flips listed first',function()
+ M.db.flips={};M.db.sellFloors={}
+ M:RecordFlipBuy({name='Lupine Vest of Agility',itemID=1050,marketKey=1050,quantity=1,cost=1900})
+ local row={name='Lupine Vest of Agility',itemID=1050,marketKey=1050,itemLink='|cff1eff00|Hitem:1050|h[Lupine Vest of Agility]|h|r'}
+ assert(M:PaidFloor(row)==2000,'1900 / 0.95')
+ local unit,held,why=M:SuggestPostUnit(row,1500,false)
+ assert(unit==2000 and held and why=='paid','held at paid: '..tostring(unit))
+ assert(M:SuggestPostUnit(row,5000,false)==4900,'above the floor: normal undercut')
+ -- A higher custom minimum still wins.
+ M.db.sellFloors[1050]=3000;unit,held,why=M:SuggestPostUnit(row,1500,false);assert(unit==3000 and why=='minimum')
+ M.db.sellFloors={}
+ SlashCmdList.VOIDMARKMARKET('paidfloor off');assert(M:PaidFloor(row)==nil and M:SuggestPostUnit(row,1500,false)==1400)
+ SlashCmdList.VOIDMARKMARKET('paidfloor on');assert(M:PaidFloor(row)==2000)
+ -- Sold: no floor any more.
+ M:RecordFlipSale('Lupine Vest of Agility',1,4000,200);assert(M:PaidFloor(row)==nil)
+ -- Held flips first in the Selling bag list.
+ M:RecordFlipBuy({name='Zebra Flip of the Bear',itemID=1051,marketKey=1051,quantity=1,cost=100})
+ local tiles=M:SellTiles({{name='Apple',itemID=1,marketKey=1,quantity=1},{name='Zebra Flip of the Bear',itemID=1051,marketKey=1051,quantity=1}})
+ assert(tiles[1].row.name=='Zebra Flip of the Bear' and tiles[1].held,'held flip first')
+ M.db.flips={}
+end)
+
+check('1.19 Daily lows are capped; /vmm check reports how an item is labeled and what is saved',function()
+ M.db.dailyLows={};local today=math.floor(time()/86400)
+ for i=1,120 do M.db.dailyLows['k'..i]={[today-(i%25)]=100} end
+ local dropped=M:PruneDailyLows('dailyLows',100);local n=0;for _ in pairs(M.db.dailyLows) do n=n+1 end
+ assert(dropped==35 and n==85,'pruned to 85% of the cap: '..n)
+ for _,t in pairs(M.db.dailyLows) do for d in pairs(t) do assert(d>=today-24) end end
+ M.db.dailyLows={};M.db.dailyLowsBase={}
+ local printed={};local oldPrint=M.Print;M.Print=function(_,t) printed[#printed+1]=t end
+ local ok,err=pcall(function()
+  assert(M:CheckItem('|cff1eff00|Hitem:1060:0:0:0:0:0:-10|h[Test Item of the Bear]|h|r'))
+  local all=table.concat(printed,'\n')
+  assert(all:find('link key',1,true) and all:find('saved prices: none',1,true) and all:find('Vs Avg reference: none yet',1,true),all)
+  printed={};assert(not M:CheckItem(nil) and printed[1]:find('Hover an item',1,true))
+ end)
+ M.Print=oldPrint;assert(ok,err)
 end)
 
 check('1.14 Vs Avg compares against the exact suffix history and sorts deals first',function()

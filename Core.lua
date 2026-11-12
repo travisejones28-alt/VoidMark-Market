@@ -1,6 +1,6 @@
 local addonName, M = ...
 _G.VoidMarkMarket = M
-M.name, M.version = addonName or 'VoidMarkMarket', '1.18.0'
+M.name, M.version = addonName or 'VoidMarkMarket', '1.19.0'
 M.eventHandlers, M.runtimeLog, M.jobs = {}, {}, {}
 M.ahOpen = false
 M.scanState = {running=false, phase='idle', status='No scan yet', progress=0}
@@ -252,6 +252,11 @@ SlashCmdList.VOIDMARKMARKET=function(msg)
     local max=M:FlipMaxBuy()
     M:Print(max and ('Search terms only show items at '..M:Coins(max)..' or less. /vmm flipmax 0 turns it off.') or 'No max price on search terms. Set one in silver: /vmm flipmax 15')
   elseif msg=='flips' or msg=='ledger' then M:ShowFlipLedger()
+  elseif msg=='check' or msg:match('^check%s') then M:CheckItem(raw:match('^%S+%s+(.+)$'))
+  elseif msg=='paidfloor' or msg:match('^paidfloor%s') then
+    local v=msg:match('^paidfloor%s+(%a+)')
+    if v=='on' then M.db.settings.sellNeverBelowPaid=true elseif v=='off' then M.db.settings.sellNeverBelowPaid=false end
+    M:Print('Never sell below what you paid: '..(M.db.settings.sellNeverBelowPaid==false and 'OFF' or 'ON')..'. /vmm paidfloor on|off')
   elseif msg=='flipstarter' then
     local n=M:AddFlipStarter();M:Print(n..' starter search terms added to your Shopping list (old starter terms replaced).');M:RefreshUI()
   elseif msg=='debug' then M.db.settings.debug=not M.db.settings.debug; M:Print('Debug '..tostring(M.db.settings.debug))

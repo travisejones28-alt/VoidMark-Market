@@ -51,10 +51,13 @@ function M:SellTiles(rows)
    if instant and id then local ok,_,typ,_,_,_,cid=pcall(instant,id);if ok and typ then class,classID=typ,tonumber(cid) or 98 end end
    t.class,t.classID=class,classID
    t.fav=k~=nil and self.db.sellFavourites[k] and true or false
+   -- Flips you bought and haven't sold (Flip Ledger) come first, ready to list.
+   t.held=self.HeldFlip and self:HeldFlip(r.name,r.itemLink,k)~=nil or false
    tiles[#tiles+1]=t;if k~=nil then byKey[k]=t end
   end
  end
  table.sort(tiles,function(a,b)
+  if a.held~=b.held then return a.held end
   if a.fav~=b.fav then return a.fav end
   if a.classID~=b.classID then return a.classID<b.classID end
   return tostring(a.row.name)<tostring(b.row.name)
@@ -169,8 +172,6 @@ function M:InitializeSellScreen(f)
  end)
  label(h,'g',217,-115,10,'GameFontHighlightSmall')
  s.info=label(h,'',232,-116,450,'GameFontHighlightSmall')
- -- What you paid for this item (Flip Ledger), to price it for a profit.
- s.paid=label(h,'',350,-62,215,'GameFontHighlightSmall')
  -- Listings
  local l=panel(s,312,-156,692,358);s.list=l
  s.cols={label(l,'Unit price',14,-10,200),label(l,'Available',230,-10,120),label(l,'Total',370,-10,180),label(l,'Yours?',580,-10,90)}
@@ -242,7 +243,7 @@ function M:RenderSellScreen()
  -- Bag tiles
  local tiles=self:SellTiles(rows);local y,col,group=0,0,nil;local hi,ti=0,0
  for _,t in ipairs(tiles) do
-  local g=t.fav and 'Favourites' or t.class
+  local g=t.held and 'Flips to list' or t.fav and 'Favourites' or t.class
   if g~=group then
    group=g;if col>0 then y=y-40;col=0 end
    hi=hi+1;local hd=s.headers[hi]
@@ -291,10 +292,10 @@ function M:RenderSellScreen()
  elseif not self.ahOpen then info='Open the Auction House to check prices and post.'
  elseif q and not q.at then info='Checking live price...'
  elseif q and q.fallback then info='Live price did not answer - using your last scan price. Click Refresh to try again.'
- elseif q then info=q.floor and ('Lowest other: '..money(self,q.floor)..(q.atMinimum and ' | held at your minimum' or (' | your price undercuts by '..money(self,self.db.settings.sellUndercut or 1)))) or 'No other listings - your price sets the market.'
+ elseif q then info=q.floor and ('Lowest other: '..money(self,q.floor)..(q.atMinimum and (q.minWhy=='paid' and ' | held at what you paid + AH cut' or ' | held at your minimum') or (' | your price undercuts by '..money(self,self.db.settings.sellUndercut or 1)))) or 'No other listings - your price sets the market.'
  else info='Click Refresh to check the live price.' end
- s.info:SetText(info)
- s.paid:SetText(self.SellPaidText and self:SellPaidText(r) or '')
+ local paid=r and self.SellPaidText and self:SellPaidText(r) or ''
+ s.info:SetText(paid~='' and (paid..'  |  '..info) or info)
  self:UpdateSellSummary()
  -- Listings
  local mode=self.sellMode or 'current'

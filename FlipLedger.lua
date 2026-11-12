@@ -244,7 +244,7 @@ function M:BoughtHistory(link)
   return false
  end
  for _,f in ipairs(self:FlipBook()) do
-  if f.cost and same(f.name,f.key) then out[#out+1]={cost=f.cost,qty=f.qty or 1,at=f.at,sold=f.sold or 0,net=self:FlipNumbers(f).net,soldAt=f.soldAt} end
+  if f.cost and same(f.name,f.key) then out[#out+1]={cost=f.cost,qty=f.qty or 1,at=f.at,sold=f.sold or 0,net=self:FlipNumbers(f).net,soldAt=f.soldAt,char=f.char} end
  end
  if #out==0 then -- buys from before the Flip Ledger
   for _,e in ipairs(self.db.ledger or {}) do
@@ -256,21 +256,58 @@ function M:BoughtHistory(link)
  table.sort(out,function(a,b) return (a.at or 0)>(b.at or 0) end)
  return out
 end
+-- Sales of the hovered item, newest first (per-unit price the buyer paid).
+function M:SoldHistory(link)
+ local name=nameOf(link);local out={}
+ if not name then return out end
+ for _,f in ipairs(self:FlipBook()) do
+  if (f.sold or 0)>0 and type(f.name)=='string' and f.name:lower()==name:lower() then
+   out[#out+1]={unit=math.floor((f.gross or 0)/f.sold+0.5),net=self:FlipNumbers(f).net,qty=f.sold,at=f.soldAt or f.at}
+  end
+ end
+ table.sort(out,function(a,b) return (a.at or 0)>(b.at or 0) end)
+ return out
+end
+local function charName(id) return type(id)=='string' and (id:match('^([^%-]+)') or id) or nil end
+local function when(t) return t and date and (date('%m/%d %I:%M%p',t):gsub(' 0',' '):lower()) or '' end
+-- Item tooltips: "Last Bought" / "Last Sold" always (like the per-item lines
+-- other flippers use); hold Ctrl for dates, who bought it and averages.
 function M:AppendBoughtTooltip(tip,link)
  if not self.db or not tip or not link then return end
- local hist=self:BoughtHistory(link);if #hist==0 then return end
+ local hist,sold=self:BoughtHistory(link),self:SoldHistory(link)
+ if #hist==0 and #sold==0 then return end
+ local last=hist[1];local ls=sold[1]
+ if last then tip:AddDoubleLine('Last Bought',self:Coins(math.floor(last.cost/math.max(1,last.qty))),.78,.63,1,1,1,1) end
+ if ls then tip:AddDoubleLine('Last Sold',self:Coins(ls.unit),.78,.63,1,1,1,1) end
  if not (IsControlKeyDown and IsControlKeyDown()) then
-  tip:AddLine('|cff8f8f8fHold Ctrl: what you paid|r');return
+  tip:AddLine('|cff8f8f8fHold Ctrl: when, who and averages|r');return
  end
- local last=hist[1]
- local when=date and date('%m/%d %I:%M%p',last.at or time()):gsub(' 0',' '):lower() or ''
- local each=last.qty>1 and (' ('..self:Coins(math.floor(last.cost/last.qty))..' each)') or ''
- tip:AddDoubleLine('Last bought',self:Coins(last.cost)..each,.78,.63,1,1,1,1)
- tip:AddDoubleLine(' ',when..(last.sold>0 and (', sold for '..self:Coins(last.net)) or ''),1,1,1,.7,.7,.7)
+ if last then
+  local who=charName(last.char)
+  tip:AddDoubleLine('  bought',when(last.at)..(who and (' by '..who) or '')..(last.qty>1 and (' (x'..last.qty..')') or ''),.7,.7,.7,.7,.7,.7)
+ end
+ if ls then tip:AddDoubleLine('  sold',when(ls.at)..', '..self:Coins(ls.net)..' after cut',.7,.7,.7,.7,.7,.7) end
  if #hist>1 then
   local total,qty=0,0;for _,h in ipairs(hist) do total=total+h.cost;qty=qty+h.qty end
   tip:AddDoubleLine('Bought '..#hist..' times','avg '..self:Coins(math.floor(total/qty)),.78,.63,1,.7,.7,.7)
  end
+ if #sold>1 then
+  local total,qty=0,0;for _,h in ipairs(sold) do total=total+h.unit*h.qty;qty=qty+h.qty end
+  tip:AddDoubleLine('Sold '..#sold..' times','avg '..self:Coins(math.floor(total/qty)),.78,.63,1,.7,.7,.7)
+ end
+end
+-- Oldest buy of this item you haven't sold yet (nil if none).
+function M:HeldFlip(name,link,key)
+ return openFlips(self,nameOf(link,name),key)[1]
+end
+-- Lowest post price that still gets back what you paid after the AH cut.
+function M:PaidFloor(row)
+ if type(row)~='table' or self.db.settings.sellNeverBelowPaid==false then return nil end
+ local f=self:HeldFlip(row.name,row.itemLink,row.marketKey);if not f or not f.cost then return nil end
+ local cut=tonumber(self.db.settings.ahCut) or 0.05;if not self:Finite(cut,0,0.3) then cut=0.05 end
+ local unit=f.cost/math.max(1,f.qty or 1)
+ if unit<=0 then return nil end
+ return math.ceil(unit/(1-cut))
 end
 M:RegisterHandler('MODIFIER_STATE_CHANGED',function(self,_,key)
  if type(key)=='string' and not key:find('CTRL') then return end

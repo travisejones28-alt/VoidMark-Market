@@ -118,9 +118,14 @@ function M:SuggestPostUnit(row,floor,commodity)
  -- Items: highest whole silver below the lowest listing (16s -> 15s).
  if unit and commodity==false then unit=self:WholeSilver(unit) end
  local min=row and row.marketKey and self.db.sellFloors and self.db.sellFloors[row.marketKey]
- if unit and self:Finite(min,1,1e12) and unit<min then
+ local why='minimum'
+ if not self:Finite(min,1,1e12) then min=nil end
+ -- Never below what you paid (Flip Ledger) plus the AH cut, unless turned off.
+ local paid=self.PaidFloor and self:PaidFloor(row)
+ if paid and (not min or paid>min) then min=paid;why='paid' end
+ if unit and min and unit<min then
   min=math.ceil(min); if commodity==false then min=self:WholeSilver(min,true) end
-  return min,true
+  return min,true,why
  end
  return unit
 end
