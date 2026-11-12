@@ -1,3 +1,7 @@
+## 1.15.1
+- **Fixed: Lvl column stuck on "--".** Items the game hadn't loaded yet never showed a level, because nothing asked for them or redrew when they arrived. Visible rows now ask the game to load the item (once) and the list redraws when it arrives.
+- 229 regressions.
+
 ## 1.15.0
 - **Flip Ledger** (Shopping > **Flip Ledger**, or `/vmm flips`): every item you buy, what you paid, what it sold for (after the AH cut), profit, and whether you're still holding it.
   - Buys are recorded when confirmed. Sales are read from "Auction successful" mail when you open your mailbox, matched to the oldest unsold buy of the same item. Sales with no buy record are listed too.

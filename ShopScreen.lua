@@ -542,7 +542,7 @@ function M:RenderShopScreen()
    r.c[1]:SetText(price);r.c[2]:SetText(o.name or '?')
    r.c[3]:SetText(o.quantity and tostring(o.quantity) or '--')
    r.c[4]:SetText(self:DealText(o))
-   local lv=self:RowLevel(o);r.c[5]:SetText(lv and tostring(lv) or '|cff8f8f8f--|r')
+   local lv=self:RowLevel(o,true);r.c[5]:SetText(lv and tostring(lv) or '|cff8f8f8f--|r')
   end
  end
  -- Scroll thumb

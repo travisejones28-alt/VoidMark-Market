@@ -353,6 +353,23 @@ check('1.15 Flip Ledger: confirmed buys record what you paid; mailbox sale invoi
  f:Hide();M.flipFilter=nil;M.db.flips={}
 end)
 
+check('1.15.1 Lvl fills in once the game loads an uncached item',function()
+ fresh();M:SetView('browse');M.ahOpen=false
+ local oldInfo,oldC=GetItemInfo,C_Item;local loaded,asked=false,{}
+ GetItemInfo=function(id) if id==970 and loaded then return 'X','l',2,30,23 end end
+ C_Item=setmetatable({RequestLoadItemDataByID=function(id) asked[#asked+1]=id end},{__index=oldC})
+ local ok,err=pcall(function()
+  M.browseRows={{marketKey=970,itemID=970,name='Watcher\'s Cinch of Intellect',floor=1000,quantity=1,status='LIVE BROWSE'}}
+  M:RenderUI();local s=M.shopScreen
+  assert(s.rows[1].c[5]:GetText():find('--',1,true) and asked[1]==970,'asked the game to load it')
+  M:RenderUI();assert(#asked==1,'asked only once')
+  loaded=true;M.uiDirty=false;emit('GET_ITEM_INFO_RECEIVED',970,true)
+  assert(M.uiDirty,'arrival redraws');M:RenderUI()
+  assert(s.rows[1].c[5]:GetText()=='23','level shown: '..s.rows[1].c[5]:GetText())
+ end)
+ GetItemInfo,C_Item=oldInfo,oldC;assert(ok,err)
+end)
+
 check('1.14 Vs Avg compares against the exact suffix history and sorts deals first',function()
  fresh();M:SetView('browse');M.ahOpen=false
  local monkey,bear=M:Key(600,-10),M:Key(600,-12)

@@ -130,17 +130,31 @@ function M:SetVariantTooltip(tip,key,itemID,link)
 end
 
 -- Required level of an item (nil until the game has loaded it).
-function M:ItemRequiredLevel(itemID)
- if not GetItemInfo or not tonumber(itemID) then return nil end
- local ok,_,_,_,_,req=pcall(GetItemInfo,tonumber(itemID))
- req=ok and tonumber(req) or nil
+-- request=true asks the game to load an uncached item (once per session) and
+-- redraws when it arrives; only visible rows ask, so a long list never floods it.
+local levelAsked={}
+function M:ItemRequiredLevel(itemID,request)
+ itemID=tonumber(itemID);if not itemID then return nil end
+ local info=(C_Item and C_Item.GetItemInfo) or GetItemInfo
+ local req
+ if info then local ok,_,_,_,_,r=pcall(info,itemID);req=ok and tonumber(r) or nil end
+ if not req and request and not levelAsked[itemID] then
+  levelAsked[itemID]=true
+  local load=C_Item and C_Item.RequestLoadItemDataByID
+  if load then pcall(load,itemID) end
+  self.levelWaiting=self.levelWaiting or {};self.levelWaiting[itemID]=true
+ end
  return req
 end
-function M:RowLevel(row)
+function M:RowLevel(row,request)
  if type(row)~='table' then return nil end
- if row.reqLevel==nil then row.reqLevel=self:ItemRequiredLevel(row.itemID) end
+ if row.reqLevel==nil then row.reqLevel=self:ItemRequiredLevel(row.itemID,request) end
  return row.reqLevel
 end
+M:RegisterHandler('GET_ITEM_INFO_RECEIVED',function(self,_,id)
+ id=tonumber(id)
+ if id and self.levelWaiting and self.levelWaiting[id] then self.levelWaiting[id]=nil;self:RefreshUI() end
+end)
 function M:LevelRangeText()
  local lo,hi=self:ShopLevelRange()
  if lo and hi then return 'level '..lo..'-'..hi elseif lo then return 'level '..lo..'+' elseif hi then return 'level '..hi..' or lower' end
