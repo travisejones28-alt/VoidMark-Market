@@ -1,3 +1,7 @@
+## 1.13.1
+- **Cancelling: inbound gold tally.** Under the list: **Inbound** = gold from sold auctions on its way by mail (count and when the next mail arrives), and **Listed** = what your active auctions bring in if they all sell. Both after the AH cut (5% by default).
+- 212 regressions.
+
 ## 1.13.0
 - **Shopping tab now matches Auctionator's layout and behavior** (rebuilt in Market's own code, VoidMark colors):
   - Top bar: Search Term box with a clear button, **Search** (turns into **Cancel** while searching), **More...** and **Add to List**. An empty box with a list open searches the whole list.

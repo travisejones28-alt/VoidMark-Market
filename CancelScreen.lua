@@ -48,6 +48,7 @@ function M:InitializeCancelScreen(f)
  list:SetScript('OnMouseWheel',function(_,d) self.cancelPage=math.max(1,(self.cancelPage or 1)-(d>0 and 1 or -1));self:RefreshUI() end)
  s.empty=label(list,'',14,-220,976,'GameFontHighlight');s.empty:SetJustifyH('CENTER')
  s.summary=label(s,'',0,-482,1004,'GameFontHighlight')
+ s.inbound=label(s,'',360,-482,644,'GameFontHighlight');s.inbound:SetJustifyH('RIGHT')
  s.refresh=button(s,'Refresh',0,-510,150,function() self:RequestOwnedAuctionsDiagnostic() end,30)
  s.check=button(s,'Check undercuts',158,-510,190,function() self:CheckAllUndercuts() end,30)
  s.cancel=button(s,'Cancel selected...',356,-510,190,function() self:ReviewCancel(self.selectedRow) end,30)
@@ -74,6 +75,17 @@ function M:RenderCancelScreen()
  local sel=self.selectedRow
  local selText=sel and sel.reason and (' | '..tostring(sel.name)..': '..sel.reason) or ''
  s.summary:SetText(#rows>0 and ('|cffff6655'..u..' undercut|r   |cff72e7aa'..l..' lowest|r   '..n..' not checked'..selText) or '')
+ local sold,soldN,listed,listedN,nextIn=self:InboundGold()
+ local cut=math.floor((self.db.settings.ahCut or 0.05)*100+0.5)
+ local inbound=''
+ if soldN>0 then
+  inbound='|cffffd100Inbound:|r '..self:Coins(sold)..'  |cff999999('..soldN..' sold'..(nextIn and (', next mail '..self:FormatTimeLeft(nextIn)) or '')..')|r'
+ end
+ if listedN>0 then
+  inbound=inbound..(inbound~='' and '     ' or '')..'|cffc8a0ffListed:|r '..self:Coins(listed)..'  |cff999999(if all sell)|r'
+ end
+ if inbound~='' then inbound=inbound..'  |cff777777after '..cut..'% AH cut|r' end
+ s.inbound:SetText(inbound)
  local empty=''
  if #rows==0 then empty=self.ahOpen and 'You have no auctions up. Click Refresh if you just posted.' or 'Open the Auction House to see your auctions.' end
  s.empty:SetText(empty);s.empty:SetShown(empty~='')

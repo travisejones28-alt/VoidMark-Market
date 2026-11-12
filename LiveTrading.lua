@@ -262,6 +262,23 @@ function M:CheckAllUndercuts()
  run.live=true
  self:RefreshUI();return run.total>0
 end
+-- Gold on its way: sold auctions are paid by mail (~1 hour after the sale).
+-- Values are after the AH cut. Also what the still-listed auctions are worth
+-- if every one sells at its current price.
+function M:InboundGold()
+ local keep=1-(self.db and self.db.settings.ahCut or 0.05)
+ local sold,soldN,listed,listedN,nextIn=0,0,0,0,nil
+ for _,o in ipairs(self.ownedRows or {}) do
+  local v=(tonumber(o.unit) or 0)*(tonumber(o.quantity) or 0)
+  if v>0 and v<1e13 then
+   if self:OwnedSold(o) then
+    sold=sold+v;soldN=soldN+1
+    local t=tonumber(o.timeLeft);if t and t>=60 and (not nextIn or t<nextIn) then nextIn=t end
+   else listed=listed+v;listedN=listedN+1 end
+  end
+ end
+ return math.floor(sold*keep),soldN,math.floor(listed*keep),listedN,nextIn
+end
 function M:UndercutSummary()
  local u,l,n=0,0,0
  for _,o in ipairs(self.ownedRows or {}) do

@@ -176,7 +176,7 @@ PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
 PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
 PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
-BENCH scan: 71 frames (1.2s at 60fps, 2.4s at 30fps), worst frame 12.7ms, cpu 0.69s | after:prune=4 after:share-scan=12 done=1 model=41 processing=13
+BENCH scan: 70 frames (1.2s at 60fps, 2.3s at 30fps), worst frame 12.1ms, cpu 0.66s | after:prune=6 after:share-scan=12 done=1 model=40 processing=11
 PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.13 history stores only the fields it needs; latest keeps the full snapshot
 PASS 1.9.13 history saved by older versions is shrunk once at login without losing prices
@@ -212,4 +212,5 @@ PASS 1.13 Recent searches: delete and copy to the open list
 PASS 1.13 Lists: rename keeps items, delete removes, the main list is protected
 PASS 1.13 More... filters (exact name, max price, min available) and CSV export
 PASS 1.13 Searching one list entry only queues that item
-ALL 211 TESTS PASSED
+PASS 1.13.1 Cancelling shows inbound gold from sold auctions and the value still listed
+ALL 212 TESTS PASSED
