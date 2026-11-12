@@ -104,10 +104,17 @@ function M:PlaySaleSound()
  end
  return played
 end
+-- "Quiet when partner is online": this character stays silent while the synced
+-- character is online, so only one chime plays. Default: on for Voidmark Bank.
+function M:SaleSoundQuietHere()
+ local v=self.db.settings.saleSoundQuietWithPartner
+ if v==nil then v=self.IsBankCharacter and self:IsBankCharacter() or false end
+ return v and self.PartnerOnline and self:PartnerOnline() or false
+end
 -- Message (banner + chat) and sound switch on and off separately in Settings.
 function M:ShowSaleAlert(a,from)
  local message=self.db.settings.saleAlerts~=false
- local sound=self.db.settings.saleAlertSound~=false
+ local sound=self.db.settings.saleAlertSound~=false and not self:SaleSoundQuietHere()
  if not message and not sound then return end
  local text=self:SaleAlertText(a,from)
  if sound then self:PlaySaleSound() end

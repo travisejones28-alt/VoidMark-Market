@@ -282,12 +282,13 @@ function M:InitializeUI()
     {'saleAlerts','Sale message','Purple banner on screen and a chat line when an auction sells.'},
     {'saleAlertSound','Sale sound','Play the sale chime when an auction sells.'},
     {'saleAlertsShare','Send to partner','Show this character\'s sales on your synced character too.'},
-    {'sellNeverBelowPaid','Never sell below what I paid','Suggested post prices never go under what you paid + the AH cut.'}}
+    {'sellNeverBelowPaid','Never sell below what I paid','Suggested post prices never go under what you paid + the AH cut.'},
+    {'saleSoundQuietWithPartner','Quiet when partner online','No sale sound on this character while the synced one is online, so only one chimes. On by default for Voidmark Bank.'}}
   for i,t in ipairs(toggles) do
-    local x=(i-1)*248
+    local x=((i-1)%4)*248;local y=-452-math.floor((i-1)/4)*30
     local c=CreateFrame('CheckButton',nil,self.settingsFrame,'UICheckButtonTemplate')
-    c:SetPoint('TOPLEFT',x,-452);c:SetSize(28,28);c.key=t[1]
-    label(self.settingsFrame,t[2],x+32,-460,212)
+    c:SetPoint('TOPLEFT',x,y);c:SetSize(28,28);c.key=t[1]
+    label(self.settingsFrame,t[2],x+32,y-8,212)
     c:SetScript('OnClick',function(b)
       if self.persistenceBlocked then return end
       self.db.settings[b.key]=b:GetChecked() and true or false
@@ -347,7 +348,11 @@ function M:RenderUI()
   if view=='tools' then return end
   if view=='settings' then
     self.settingsFrame:Show(); self.syncState:SetText(self:SharingStatus()); self.minimapToggle:SetChecked(not (s.minimap and s.minimap.hide))
-    for _,c in ipairs(self.flipToggles or {}) do c:SetChecked(self.db.settings[c.key]~=false) end
+    for _,c in ipairs(self.flipToggles or {}) do
+      local v=self.db.settings[c.key]
+      if v==nil and c.key=='saleSoundQuietWithPartner' then v=self.IsBankCharacter and self:IsBankCharacter() or false end
+      c:SetChecked(v~=false)
+    end
     return
   end
   if view=='market' or view=='banker' then

@@ -1,3 +1,7 @@
+## 1.22.10
+- **Only one chime when both characters are online.** New Settings switch "Quiet when partner online": that character plays no sale sound while the synced character is online (banner and chat still show). On by default for Voidmark Bank, off elsewhere, so the main chimes for both its own sales and the bank's. When the bank is on alone, it chimes as usual.
+- 258 regressions.
+
 ## 1.22.9
 - **Sale chime:** sales now play your LockChime sound (Media\LockChime.ogg) instead of the coin sound. If the file can't play, the coin sound is used.
 - **Settings:** "Sale message" (purple banner + chat line) and "Sale sound" (the chime) now switch on and off separately; turning the message off no longer silences the sound.

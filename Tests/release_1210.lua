@@ -264,4 +264,31 @@ check('1.22.9 Sale chime plays from Media; message and sound switch independentl
  PlaySoundFile,PlaySound,M.SaleToast=oldFile,oldSound,oldToast;M.db.settings.saleAlerts=nil;M.db.settings.saleAlertSound=nil
  if not ok then error(err,0) end
 end)
+
+check('1.22.10 With both characters online only one chimes: the bank stays quiet, the main plays',function()
+ local files={};local oldFile,oldToast=PlaySoundFile,M.SaleToast
+ PlaySoundFile=function(p) files[#files+1]=p;return true end;M.SaleToast=function() end
+ local oldBank,oldOnline=M.IsBankCharacter,M.PartnerOnline
+ local ok,err=pcall(function()
+  M.db.settings.saleSoundQuietWithPartner=nil
+  -- Bank, partner online: no sound (banner still shows).
+  M.IsBankCharacter=function() return true end;M.PartnerOnline=function() return true end
+  M:ShowSaleAlert({name='X',qty=1});assert(#files==0,'bank quiet while main is online')
+  -- Bank alone: it plays.
+  M.PartnerOnline=function() return false end;M:ShowSaleAlert({name='X',qty=1});assert(#files==1,'bank plays when alone')
+  -- Main, partner online: it plays (including sales relayed from the bank).
+  M.IsBankCharacter=function() return false end;M.PartnerOnline=function() return true end
+  M:ShowSaleAlert({name='X',qty=1},'Voidmark Bank');assert(#files==2,'main plays')
+  -- The switch overrides the default either way.
+  M.db.settings.saleSoundQuietWithPartner=true;M:ShowSaleAlert({name='X',qty=1});assert(#files==2,'main set to quiet')
+  M.db.settings.saleSoundQuietWithPartner=false;M.IsBankCharacter=function() return true end
+  M:ShowSaleAlert({name='X',qty=1});assert(#files==3,'bank set to always play')
+  -- Real partner check: contact within the heartbeat window.
+  M.PartnerOnline=oldOnline;M.db.syncPeer='main';M.shareRun={lastContact=GetTime()};assert(M:PartnerOnline())
+  advance(70);assert(not M:PartnerOnline(),'silent partner counts as offline')
+  M.db.syncPeer=nil
+ end)
+ PlaySoundFile,M.SaleToast,M.IsBankCharacter,M.PartnerOnline=oldFile,oldToast,oldBank,oldOnline;M.db.settings.saleSoundQuietWithPartner=nil;M.shareRun={}
+ if not ok then error(err,0) end
+end)
 end

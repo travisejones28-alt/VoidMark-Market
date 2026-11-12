@@ -663,6 +663,12 @@ end)
 -- Backup detection when a chat-frame filter is unavailable on the client.
 M:RegisterHandler('CHAT_MSG_SYSTEM',function(self,_,msg) self:HandlePeerOfflineNotice(msg) end)
 
+function M:IsBankCharacter() return (unitCharacter('player') or ''):lower()=='voidmark bank' end
+-- Synced partner answered within the heartbeat window (both characters online).
+function M:PartnerOnline()
+ local r=self.shareRun
+ return self.db and self.db.syncPeer~=nil and r~=nil and r.lastContact~=nil and GetTime()-r.lastContact<65
+end
 function M:AutomaticBankScan(now)
  if now<(self.autoScanCheck or 0) then return end
  self.autoScanCheck=now+5
