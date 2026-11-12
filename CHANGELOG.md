@@ -1,3 +1,11 @@
+## 1.22.0
+- **Sale alerts.** The moment an auction sells (AH open or not): a coin sound, a message in the middle of the screen and in chat:
+  "Sold Lupine Vest of Agility for 49s - you get 46s 55c | flipped for +32s 55c (paid 14s)".
+  - The price comes from your listing (Listings), what you paid from the Flip Ledger. If the listing isn't known, it says the price shows when the mail arrives.
+  - **Sent to your other character** over the sync link, so the bank selling shows on your main ("Voidmark Bank: Sold ..."). Needs both on 1.22.
+  - `/vmm salealerts off` turns them off; `/vmm salesound off` keeps the message without the sound.
+- 251 regressions.
+
 ## 1.21.0
 - **Faster bank-to-main sync** (both characters need 1.21; until then the old format is used automatically):
   - Messages go out over 4 channels ("lanes") instead of 1. The game limits how fast each channel can send, so more channels means more data per second. If one is throttled, the others keep going.

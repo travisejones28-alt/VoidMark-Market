@@ -486,7 +486,7 @@ function M:PumpSharing()
  if now<(r.next or 0) then return end;r.next=now+0.15
  if (InCombatLockdown and InCombatLockdown()) or (C_ChatInfo.InChatMessagingLockdown and C_ChatInfo.InChatMessagingLockdown()) then r.status='Paused by client restrictions';return end
  local j=self.db.shareJournal
- if not r.reply and not (r.infoPending and r.lastContact) and r.hello and now<r.hello and not dataReady(r,j,now) then return end
+ if not r.reply and not (r.infoPending and r.lastContact) and not (r.alerts and r.alerts[1] and r.lastContact) and r.hello and now<r.hello and not dataReady(r,j,now) then return end
  local ch=channel(self)
  if ch=='WHISPER' and r.offlineUntil and now<r.offlineUntil then return end
  if ch~='WHISPER' then r.offlineUntil=nil end
@@ -495,6 +495,14 @@ function M:PumpSharing()
  end
  if r.reply then
   if send(self,ch,r.reply) then r.reply=nil else r.next=now+5 end;return
+ end
+ -- Sale alerts go out ahead of price pages (dropped after 30 minutes undelivered).
+ if r.alerts and r.alerts[1] then
+  while r.alerts[1] and now-(r.alerts[1].at or now)>1800 do table.remove(r.alerts,1) end
+  if r.alerts[1] and r.lastContact and self.EncodeSaleAlert then
+   if send(self,ch,self:EncodeSaleAlert(j.epoch,r.alerts[1])) then table.remove(r.alerts,1) else r.next=now+2 end
+   return
+  end
  end
  if r.infoPending and r.lastContact then
   if send(self,ch,table.concat({'I',j.epoch,j.seq,self.db.lastDepthSnapshotAt or 0},'\t')) then r.infoPending=nil;r.capPending=true else r.next=now+5 end
@@ -592,6 +600,8 @@ function M:ReceiveSharing(prefix,msg,ch,sender)
   else r.sentHi=n;r.pages={};r.retry=0 end
   if n==j.seq and r.lastAck~=n then self.db.syncLastSentAt=time() end
   r.lastAck=n;r.status=n==j.seq and 'Up to date' or 'Sending changes'
+ elseif f[2]=='N' and #f==9 then
+  if self.ReceiveSaleAlert then self:ReceiveSaleAlert(f,sender) end
  elseif f[2]=='C' and #f==5 then
   -- Partner understands fast pages (and how many lanes it listens on).
   local v,n=tonumber(f[4]),tonumber(f[5])

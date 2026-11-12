@@ -73,4 +73,44 @@ check('1.21 receiver: fast pages applied in order even when lanes deliver them o
  -- Unknown prefixes are ignored.
  M:ReceiveSharing('Other',page(3,4,400),'WHISPER',peer);assert(rx.seq==3)
 end)
+
+check('1.22 Sale alert: coin sound, on-screen message with price and flip profit, sent to the partner',function()
+ local old=C_ChatInfo;local sent={}
+ C_ChatInfo={RegisterAddonMessagePrefix=function() return 0 end,SendAddonMessage=function(prefix,msg) sent[#sent+1]={prefix,msg};return 0 end}
+ local oldSound,oldRaid,oldFrame=PlaySound,RaidNotice_AddMessage,RaidWarningFrame
+ local sounds,notices=0,{}
+ PlaySound=function() sounds=sounds+1 end;RaidWarningFrame={};RaidNotice_AddMessage=function(_,t) notices[#notices+1]=t end
+ local ok,err=pcall(function()
+  reset();M:PairPeer('Bank');jobs()
+  M.db.flips={};M:RecordFlipBuy({name='Lupine Vest of Agility',quantity=1,cost=1400})
+  M.ownedRows={{auctionID=11,name='Lupine Vest',unit=4900,quantity=1,status=0}} -- base name on the listing
+  emit('CHAT_MSG_SYSTEM','A buyer has been found for your auction of Lupine Vest of Agility.')
+  assert(sounds==1 and #notices==1,'sound + on-screen')
+  local t=notices[1]
+  assert(t:find(M:Coins(4900),1,true) and t:find(M:Coins(4655),1,true) and t:find('+'..M:Coins(3255),1,true),t)
+  -- Sent to the partner once contact is up.
+  local r=M.shareRun;M.shareRegistered=true;r.lastContact=GetTime();r.hello=GetTime()+100;r.next=0
+  M:PumpSharing()
+  local msg;for _,m in ipairs(sent) do if m[2]:find('\tN\t',1,true) then msg=m[2] end end
+  assert(msg and #msg<=240,'alert sent')
+  -- Partner side: shown with who sold it; a repeat is ignored.
+  notices={};sounds=0
+  M:ReceiveSharing('VMMkt2',msg,'WHISPER','Bank-TestRealm')
+  assert(#notices==1 and notices[1]:find('Bank:',1,true) and notices[1]:find('flipped for',1,true),notices[1] or 'none')
+  M:ReceiveSharing('VMMkt2',msg,'WHISPER','Bank-TestRealm');assert(#notices==1,'no duplicate')
+  -- Unknown listing and no buy: still alerts, without numbers.
+  notices={};M.ownedRows={}
+  emit('CHAT_MSG_SYSTEM','A buyer has been found for your auction of Mystery Cloak.')
+  assert(notices[1]:find('price shows when the mail arrives',1,true))
+  -- Off switches.
+  notices={};sounds=0;SlashCmdList.VOIDMARKMARKET('salesound off')
+  emit('CHAT_MSG_SYSTEM','A buyer has been found for your auction of Mystery Cloak.');assert(sounds==0 and #notices==1)
+  SlashCmdList.VOIDMARKMARKET('salealerts off');notices={}
+  emit('CHAT_MSG_SYSTEM','A buyer has been found for your auction of Mystery Cloak.');assert(#notices==0)
+  SlashCmdList.VOIDMARKMARKET('salealerts on');SlashCmdList.VOIDMARKMARKET('salesound on')
+  assert(not M:HandleAuctionSold('Some other system message'))
+ end)
+ C_ChatInfo=old;PlaySound,RaidNotice_AddMessage,RaidWarningFrame=oldSound,oldRaid,oldFrame;M.db.flips={};M.ownedRows=nil
+ if not ok then error(err,0) end
+end)
 end
