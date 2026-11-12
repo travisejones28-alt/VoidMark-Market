@@ -114,13 +114,32 @@ function M:LevelAllowed(itemID,spec)
  if not req then return true end
  return not (lo and req<lo) and not (hi and req>hi)
 end
+-- Saved market for a live result. Live searches can label gear with its item
+-- level while full scans don't (or the reverse), so fall back to the same item
+-- and suffix under any level.
+function M:MarketForKey(key)
+ if key==nil then return nil end
+ local m=self.db.market[key];if type(m)=='table' then return m end
+ local _,id,suffix=self:ParseKey(key);if not id then return nil end
+ suffix=tonumber(suffix) or 0
+ local best
+ for _,k in ipairs(self.itemIndex and self.itemIndex[id] or {}) do
+  local mm=self.db.market[k]
+  if type(mm)=='table' and (tonumber(mm.itemSuffix) or 0)==suffix and (not best or (mm.lastSeen or 0)>(best.lastSeen or 0)) then best=mm end
+ end
+ return best
+end
 -- Show the exact variant (random suffix) on GameTooltip: auction link first,
 -- then the item key, then the base item. Returns how it was shown.
 function M:SetVariantTooltip(tip,key,itemID,link)
  if type(link)=='string' and link~='' and tip.SetHyperlink then tip:SetHyperlink(link);return 'link' end
+ local m=self:MarketForKey(key)
+ if m and type(m.itemLink)=='string' and m.itemLink~='' and tip.SetHyperlink then tip:SetHyperlink(m.itemLink);return 'link' end
  local _,id,suffix,level=self:ParseKey(key)
  id=id or tonumber(itemID)
  if not id then return nil end
+ -- Fixed-stat suffixes (positive IDs) render exactly from a built link.
+ if (tonumber(suffix) or 0)>0 and tip.SetHyperlink then tip:SetHyperlink(('item:%d:0:0:0:0:0:%d'):format(id,suffix));return 'built' end
  if tip.SetItemKey and (tonumber(suffix) or 0)~=0 then
   local ok=pcall(tip.SetItemKey,tip,id,tonumber(level) or 0,tonumber(suffix) or 0)
   if ok then return 'key' end
@@ -313,7 +332,7 @@ end
 -- Reference price for one exact market: 30-day median of full scans, else the
 -- model's fair value once it is trusted. Nil when there is no real history.
 function M:DealReference(key)
- local m=key~=nil and self.db.market[key]
+ local m=self:MarketForKey(key)
  if type(m)~='table' then return nil end
  local month=self:MarketWindow(m,30)
  if month and month.samples>=MIN_SAMPLES then return month.median,month.samples end

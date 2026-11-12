@@ -380,6 +380,22 @@ check('1.15.2 Listings: the selected auction verdict sits in the header, not on 
  M.selectedRow=nil;M:SetView('browse')
 end)
 
+check('1.15.3 Live results find scan data saved under another item-level label (Vs Avg and tooltip link)',function()
+ local scanKey=M:Key(1010,-10,24)            -- full scan: gear labeled with its item level
+ local liveKey=M:Key(1010,-10)               -- live search: no level
+ local h={};for i=1,3 do h[i]={at=time()-i*3600,median=2000} end
+ M.db.market[scanKey]={itemID=1010,itemSuffix=-10,itemLevel=24,marketKey=scanKey,name="Sage's Sash of Intellect",latest={},history=h,
+  itemLink='|cff1eff00|Hitem:1010:0:0:0:0:0:-10:123|h[Sage\'s Sash of Intellect]|h|r',lastSeen=time()}
+ M:RebuildIndexes();jobs()
+ assert(M:MarketForKey(liveKey)==M.db.market[scanKey],'found by item + suffix')
+ assert(M:MarketForKey(M:Key(1010,-11))==nil,'other suffixes never match')
+ assert(M:DealRatio({marketKey=liveKey,floor=1000})==50,'Vs Avg uses the scan history')
+ local shown;local tip={SetHyperlink=function(_,l) shown=l end,SetItemKey=function() shown='key' end,SetItemByID=function() end}
+ assert(M:SetVariantTooltip(tip,liveKey,1010)=='link' and shown:find('1010:0:0:0:0:0:-10',1,true),'scan link used for the tooltip')
+ assert(M:SetVariantTooltip(tip,M:Key(1011,15),1011)=='built' and shown=='item:1011:0:0:0:0:0:15','fixed suffix builds a link')
+ M.db.market[scanKey]=nil;M:RebuildIndexes();jobs()
+end)
+
 check('1.14 Vs Avg compares against the exact suffix history and sorts deals first',function()
  fresh();M:SetView('browse');M.ahOpen=false
  local monkey,bear=M:Key(600,-10),M:Key(600,-12)

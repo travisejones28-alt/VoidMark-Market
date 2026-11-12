@@ -1,3 +1,8 @@
+## 1.15.3
+- **Fixed: Shopping tooltips showing "Items in this group may vary" with no stats.** Result rows now use the real item link from your saved scans (or build one for fixed-stat suffixes), so the tooltip shows the suffix stats and required level.
+- **Vs Avg finds your scan history more often.** Live searches and full scans can label the same gear differently (with or without item level); results now match saved prices by item + suffix.
+- 231 regressions.
+
 ## 1.15.2
 - **Fixed: text overlap on Listings.** The selected auction's undercut verdict ran into the Listed/Inbound gold line. It now shows in the header above the list, on its own.
 - Undercut verdicts are in plain words ("Nobody else is selling this. Keep it.", "Undercut 12% (cheapest now 30s). Small gap: keep it.").
