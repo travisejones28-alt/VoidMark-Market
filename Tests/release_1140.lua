@@ -644,6 +644,26 @@ check('1.20.1 A failed scan says why, and that older prices are still used',func
  M.scanState.phase=old;M.scanState.fullScanDiagnostic=oldD
 end)
 
+check('1.20.2 On a buy page, search-term pages wait so the item search goes first; starter list is greens only',function()
+ local q=M.queue;q.waiting={};q.dedupe={};q.active=nil;q.nextSend=0
+ local sent={};local oldSend=M.SendAHRequest;M.SendAHRequest=function(_,r) sent[#sent+1]=r.id end
+ local ok,err=pcall(function()
+  M:QueueRequest({id='browse-term:cloth: magic',kind='browse',priority=40,query={}})
+  M:QueueRequest({id='browse-term:leather: tiger:more',kind='browsemore',priority=60})
+  M:QueueRequest({id='search:buy',kind='search',priority=30})
+  M.shopBuy={}
+  M:PumpQueue();assert(sent[1]=='search:buy','buy search first: '..tostring(sent[1]))
+  assert(#q.waiting==2,'term pages held, not dropped')
+  q.active=nil;q.nextSend=0;M:PumpQueue();assert(#sent==1,'nothing else while on the buy page')
+  M.shopBuy=nil;q.nextSend=0;M:PumpQueue();assert(sent[2]=='browse-term:leather: tiger:more','resumes after')
+ end)
+ M.SendAHRequest=oldSend;q.waiting={};q.dedupe={};q.active=nil;M.shopBuy=nil;assert(ok,err)
+ for _,t in ipairs(M.FLIP_STARTER) do assert(t:find('^green '),t) end
+ M.db.shopTerms=nil;for _,o in ipairs(M.OLD_FLIP_STARTER_2) do M:AddShopTerm('Shopping',o) end
+ M:AddFlipStarter();local terms=M:ShopTerms('Shopping');assert(#terms==#M.FLIP_STARTER and terms[1]:find('^green'),'old list replaced')
+ M.db.shopTerms=nil
+end)
+
 check('1.14 Vs Avg compares against the exact suffix history and sorts deals first',function()
  fresh();M:SetView('browse');M.ahOpen=false
  local monkey,bear=M:Key(600,-10),M:Key(600,-12)

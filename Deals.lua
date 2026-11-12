@@ -28,7 +28,13 @@ function M:InventoryTypeFilter(equip)
  return tonumber(e) or INVTYPE_ENUM[equip]
 end
 -- Azmork's list (one list for everything).
-M.FLIP_STARTER={'cloth: magic','leather: agility max 50s','leather: monkey','mail: bear','cloth: sorcerer',
+-- "green" asks the AH for greens only: far fewer result pages, so the list
+-- search finishes much faster (these suffixes are green items).
+M.FLIP_STARTER={'green cloth: magic','green leather: agility max 50s','green leather: monkey','green mail: bear','green cloth: sorcerer',
+ 'green cloth: intellect lvl 15+','green leather: tiger','green leather head: max 75s','green mail: strength','green mail head: max 75s',
+ 'green cloth: healing max 75s','green cloth: physician max 75s'}
+-- 1.15-1.20 starter terms (no quality), replaced by /vmm flipstarter.
+M.OLD_FLIP_STARTER_2={'cloth: magic','leather: agility max 50s','leather: monkey','mail: bear','cloth: sorcerer',
  'cloth: intellect lvl 15+','leather: tiger','leather head: max 75s','mail: strength','mail head: max 75s',
  'cloth: healing max 75s','cloth: physician max 75s'}
 -- 1.14.0 starter terms, replaced by /vmm flipstarter.
@@ -197,7 +203,7 @@ end
 function M:AddFlipStarter()
  local added=0
  local book=self:ShopTermBook('Shopping')
- if book then for _,old in ipairs(self.OLD_FLIP_STARTER) do for i=#book,1,-1 do if book[i]==old then table.remove(book,i) end end end end
+ if book then for _,list in ipairs({self.OLD_FLIP_STARTER,self.OLD_FLIP_STARTER_2}) do for _,old in ipairs(list) do for i=#book,1,-1 do if book[i]==old then table.remove(book,i) end end end end end
  for _,t in ipairs(self.FLIP_STARTER) do if self:AddShopTerm('Shopping',t) then added=added+1 end end
  return added
 end

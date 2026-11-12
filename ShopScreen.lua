@@ -516,6 +516,7 @@ function M:RenderShopScreen()
  -- Buy view replaces the results (Auctionator-style)
  local buying=self.shopBuy~=nil
  s.results:SetShown(not buying);s.exportResults:SetShown(not buying);s.status:SetShown(not buying)
+ if s.flipLedger then s.flipLedger:SetShown(not buying) end
  if buying then s.buyView:Show();return self:RenderShopBuy() end
  s.buyView:Hide()
  local lo,hi=self:ShopLevelRange()

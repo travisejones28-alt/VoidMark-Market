@@ -84,12 +84,20 @@ function M:PumpQueue()
     return
   end
   if GetTime()<q.nextSend or not self:ThrottleReady() then return end
-  while q.waiting[1] do
-    r=table.remove(q.waiting,1)
-    if r.valid and not r.valid() or GetTime()-r.at>120 then
-      q.dedupe[r.id]=nil; if r.fail then r.fail('Stale request cancelled') end
-    else break end
-    r=nil
+  -- While you're on an item's buy page, background search-term pages wait so
+  -- the item's own listing search goes out next and nothing competes with it.
+  local hold=self.shopBuy~=nil
+  local i=1
+  while q.waiting[i] do
+    local w=q.waiting[i]
+    if hold and type(w.id)=='string' and w.id:find('^browse%-term:') then w.at=GetTime();i=i+1
+    else
+      r=table.remove(q.waiting,i)
+      if r.valid and not r.valid() or GetTime()-r.at>120 then
+        q.dedupe[r.id]=nil; if r.fail then r.fail('Stale request cancelled') end
+      else break end
+      r=nil
+    end
   end
   if not r then return end
   q.active=r; r.sent=GetTime(); r.timeout=r.kind=='replicate' and 60 or 15; r.attempt=1

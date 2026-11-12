@@ -1,3 +1,9 @@
+## 1.20.2
+- **Faster buy pages:** while you're on an item's buy page, the background search-term pages wait, so the item's listing search goes out next instead of queuing behind them. They carry on when you go back.
+- **Faster list searches:** `/vmm flipstarter` now adds the terms as greens only (`green cloth: magic`, ...). The AH sends far fewer result pages. Run `/vmm flipstarter` again to switch; your own terms are kept.
+- The Flip Ledger button no longer shows through the buy page.
+- 246 regressions.
+
 ## 1.20.1
 - **Flip history is never thrown away.** The Flip Ledger keeps 5000 rows in detail (was 1500). Past that, the oldest fully sold rows are folded into per-item totals that still count in By item, By suffix and all-time totals. Items you still hold are never removed.
 - **Failed scans say why** on the status line (for example "no replicate response after 180s"), and that your last good prices are still in use.
