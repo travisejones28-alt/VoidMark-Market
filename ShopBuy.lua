@@ -118,7 +118,11 @@ function M:ShopBuyCheck(b)
  if not self.ahOpen then lines[#lines+1]='Open the Auction House.';return false,lines end
  if b.searching then lines[#lines+1]=gold('Searching the Auction House...');return false,lines end
  if b.status then lines[#lines+1]=b.status;return false,lines end
- if self:HasUnresolvedPurchase() then lines[#lines+1]=red('A purchase result is still unknown. Check the Ledger before buying again.');return false,lines end
+ if self:HasUnresolvedPurchase() then
+  local p=self:OldestUnresolvedPurchase()
+  lines[#lines+1]=red('Did your last purchase'..(p and p.name and (' ('..p.name..')') or '')..' go through? Check chat or your mailbox, then click below.')
+  return false,lines
+ end
  local unit,total,minU,maxU,q=self:ShopBuyPrices(b)
  if not total then
   if b.commodity and (b.quantity or 0)>0 then lines[#lines+1]=red('Only '..(b.max or 0)..' available.')
@@ -247,6 +251,10 @@ function M:InitializeShopBuyView(s)
  label(v,'Total price',14,-182,80,'GameFontNormal');v.total=label(v,'',104,-182,170,'GameFontHighlight')
  v.buyNow=button(v,'Buy Now',14,-218,242,function() self:ShopBuyNow() end,28)
  v.status=label(v,'',14,-258,262,'GameFontHighlightSmall');v.status:SetJustifyV('TOP')
+ -- Unknown purchase result: settle it here instead of the Ledger.
+ v.gotIt=button(v,'I got it',14,-330,118,function() self:ShopSettleUnknown(true) end,24)
+ v.didnt=button(v,"Didn't get it",138,-330,118,function() self:ShopSettleUnknown(false) end,24)
+ v.gotIt:Hide();v.didnt:Hide()
  v.money=label(v,'',14,-470,262,'GameFontHighlightSmall')
  -- Listings (right)
  local list=self.panel(v,286,-96,398,394);v.list=list
@@ -314,6 +322,8 @@ function M:RenderShopBuy()
  v.buyNow:SetEnabled(ok and true or false)
  v.refresh:SetEnabled(self.ahOpen and not b.searching and true or false)
  v.status:SetText(table.concat(lines,'\n\n'))
+ local unresolved=self:HasUnresolvedPurchase() and not (self.execution and self.execution.state=='pending')
+ v.gotIt:SetShown(unresolved and true or false);v.didnt:SetShown(unresolved and true or false)
  local money=GetMoney and GetMoney()
  v.money:SetText(self:Finite(money,0,1e14) and ('Your gold: '..self:Coins(money)) or '')
 end

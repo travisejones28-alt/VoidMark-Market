@@ -147,9 +147,52 @@ M:RegisterHandler('AUCTION_HOUSE_PURCHASE_COMPLETED',function(self,_,id)
     end
   end
 end)
+-- "You won an auction for X" (system chat) settles an item purchase whose
+-- result event never arrived, e.g. the AH closed right after Buy Now.
+function M:AuctionWonName(msg)
+  if type(msg)~='string' then return nil end
+  local template=ERR_AUCTION_WON_S or 'You won an auction for %s'
+  local prefix,suffix=template:match('^(.-)%%s(.*)$'); if not prefix then return nil end
+  prefix=prefix:gsub('(%W)','%%%1'); suffix=suffix:gsub('(%W)','%%%1')
+  local name=msg:match('^'..prefix..'(.-)'..suffix..'$')
+  if name and name:find('|h') then name=name:match('%[(.-)%]') or name end
+  return name~='' and name or nil
+end
+function M:ResolveWonAuction(msg)
+  local name=self:AuctionWonName(msg); if not name then return false end
+  local want=name:lower();local best
+  for _,p in pairs(self.db.pending) do
+    local n=type(p.name)=='string' and p.name:lower() or ''
+    if not p.commodity and p.character==self.characterID and n~=''
+      and (n==want or want:sub(1,#n)==n or n:sub(1,#want)==want)
+      and (not best or (p.id or 0)<(best.id or 0)) then best=p end
+  end
+  if not best then return false end
+  self:ResolvePurchase(best,'confirmed','Observed "auction won" system message')
+  local x=self.execution
+  if x and x.order==best then x.state='complete'; x.message='Purchase confirmed' end
+  self:RefreshUI();return true
+end
+M:RegisterHandler('CHAT_MSG_SYSTEM',function(self,_,msg) self:ResolveWonAuction(msg) end)
+function M:OldestUnresolvedPurchase()
+  local best
+  for _,p in pairs(self.db.pending) do
+    if p.character==self.characterID and (not best or (p.id or 0)<(best.id or 0)) then best=p end
+  end
+  return best
+end
+-- "I got it" / "Didn't get it" in Shopping's buy view (same as the Ledger buttons).
+function M:ShopSettleUnknown(got)
+  local p=self:OldestUnresolvedPurchase();if not p then return false end
+  self:ReviewPending(p,got)
+  local x=self.execution;if x and x.order==p then x.state='idle';x.message=nil end
+  self:Print((got and 'Marked bought: ' or 'Marked not bought: ')..tostring(p.name or 'item'))
+  if self.ShopBuyRefresh and self.shopBuy and self.ahOpen then self:ShopBuyRefresh() end
+  self:RefreshUI();return true
+end
 M:RegisterHandler('AUCTION_HOUSE_CLOSED',function(self)
   local x=self.execution
-  if x.state=='pending' then x.order.status='unknown'; x.state='unknown'; x.message='AH closed before result; spend remains reserved'
+  if x.state=='pending' then x.order.status='unknown'; x.state='unknown'; x.message='AH closed before the result. If chat says you won the auction, this clears itself.'
   elseif x.state=='quoting' or x.state=='quoted' then self:InvalidateQuote('AH closed; quote discarded')
   elseif x.state~='complete' and x.state~='unknown' then x.state='stale'; x.message='AH closed; revalidate after reopening' end
   self:RefreshUI()

@@ -288,6 +288,31 @@ check('1.14.5 Tooltips show the exact suffix (link, then item key) and sit below
  GameTooltip=old;M.shopBuy=nil;assert(ok,err)
 end)
 
+check('1.14.6 Auction-won chat settles a purchase whose result never came; buy view can settle it too',function()
+ local function order(id,name) local e=M:AddLedger('purchase',{marketKey=id,itemID=id,name=name,quantity=1,cost=698,status='unknown',commodity=false})
+  M.db.pending[e.id]=e;return e end
+ for k in pairs(M.db.pending) do M.db.pending[k]=nil end
+ local a=order(980,'Greenweave Sandals of Healing')
+ assert(M:HasUnresolvedPurchase())
+ assert(M:AuctionWonName('You won an auction for Greenweave Sandals of Healing')=='Greenweave Sandals of Healing')
+ assert(not M:ResolveWonAuction('You won an auction for Something Else'),'other items do not match')
+ emit('CHAT_MSG_SYSTEM','You won an auction for Greenweave Sandals of Healing')
+ assert(a.status=='confirmed' and not M:HasUnresolvedPurchase(),'chat confirmed it')
+ -- Buy view buttons.
+ local b=order(981,'Lupine Vest of Agility')
+ M:SetView('browse');M.ahOpen=true;M:RenderUI()
+ M.shopBuy={key=981,name='Lupine Vest of Agility',market={itemID=981,marketKey=981,name='Lupine Vest of Agility'},rows={}}
+ M.execution={state='unknown',order=b,shop=M.shopBuy,message='x'}
+ local ok,lines=M:ShopBuyCheck(M.shopBuy);assert(not ok and lines[#lines]:find('Lupine Vest',1,true))
+ M:RenderShopBuy();local v=M.shopScreen.buyView
+ assert(v.gotIt:IsShown() and v.didnt:IsShown(),'settle buttons shown')
+ local oldRefresh=M.ShopBuyRefresh;M.ShopBuyRefresh=function() end
+ v.didnt.scripts.OnClick(v.didnt);M.ShopBuyRefresh=oldRefresh
+ assert(b.status=='failed' and not M:HasUnresolvedPurchase(),'marked not bought')
+ M:RenderShopBuy();assert(not v.gotIt:IsShown(),'buttons hide once settled')
+ M.shopBuy=nil;M.execution={state='idle'};M.ahOpen=false
+end)
+
 check('1.14 Vs Avg compares against the exact suffix history and sorts deals first',function()
  fresh();M:SetView('browse');M.ahOpen=false
  local monkey,bear=M:Key(600,-10),M:Key(600,-12)

@@ -1,3 +1,9 @@
+## 1.14.6
+- **Fixed: buying stuck on "A purchase result is still unknown".** If the AH closed (or the result never arrived) after Buy Now, Market blocked every later purchase until you settled it in the Ledger.
+  - The "You won an auction for ..." chat message now confirms it automatically.
+  - Shopping's buy view shows **I got it** / **Didn't get it** to settle it right there.
+- 227 regressions.
+
 ## 1.14.5
 - **Fixed: item tooltips on Shopping.** Hovering the item in the buy view showed the base item ("Greenweave Sandals", no "of Healing" stats) and opened upward over the search bar. Tooltips now show the exact variant you're buying (auction link, or the item's suffix), and the buy-view tooltip opens below the icon. Result rows show the suffix too.
 - 226 regressions.
