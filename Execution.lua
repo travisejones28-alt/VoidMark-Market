@@ -186,7 +186,11 @@ function M:ResolveWonAuction(msg)
   if x and x.order==best then x.state='complete'; x.message='Purchase confirmed' end
   self:RefreshUI();return true
 end
-M:RegisterHandler('CHAT_MSG_SYSTEM',function(self,_,msg) self:ResolveWonAuction(msg) end)
+M:RegisterHandler('CHAT_MSG_SYSTEM',function(self,_,msg)
+  local name=self:AuctionWonName(msg)
+  if name and self.RecentAHNotice and self.RecentAHNotice(self,'won',name,'chat') then return end
+  self:ResolveWonAuction(msg)
+end)
 function M:OldestUnresolvedPurchase()
   local best
   for _,p in pairs(self.db.pending) do

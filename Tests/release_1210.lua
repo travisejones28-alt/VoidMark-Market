@@ -150,4 +150,43 @@ check('1.22.2 Tooltip: an item missing from the latest full scan says "none list
  M:AppendMarketTooltip(tip,'|Hitem:1070|h[x]|h');assert(lines[#lines]:find('none listed now',1,true))
  M.db.market[key]=nil;M.db.latestScan=oldScan;M.LinkIdentity=oldLink;M.db.syncPeer=nil;M.db.shareReceived={}
 end)
+
+check('1.22.6 Forever AH notifications: a sale (with its auction ID) alerts and relays; a win records the buy',function()
+ local old=C_ChatInfo;local sent={}
+ C_ChatInfo={RegisterAddonMessagePrefix=function() return 0 end,SendAddonMessage=function(prefix,msg) sent[#sent+1]={prefix,msg};return 0 end}
+ local oldSound,oldRaid,oldFrame=PlaySound,RaidNotice_AddMessage,RaidWarningFrame
+ local notices={};PlaySound=function() end;RaidWarningFrame={};RaidNotice_AddMessage=function(_,t) notices[#notices+1]=t end
+ local ok,err=pcall(function()
+  reset();M:PairPeer('Bank');jobs();M.db.flips={}
+  M:RecordFlipBuy({name='Twilight Cuffs of the Physician',quantity=1,cost=2200})
+  M:RecordFlipBuy({name='Twilight Cuffs of the Physician',quantity=1,cost=1000})
+  M.ownedRows={{auctionID=501,name='Twilight Cuffs',unit=5000,quantity=1,status=0},{auctionID=502,name='Twilight Cuffs',unit=3500,quantity=1,status=0}}
+  -- The exact auction (502, 35s) sold: the price comes from that auction, not the first match.
+  emit('AUCTION_HOUSE_SHOW_FORMATTED_NOTIFICATION',4,'|cff1eff00|Hitem:1:0|h[Twilight Cuffs of the Physician]|h|r',502)
+  assert(#notices==1 and notices[1]:find(M:Coins(3500),1,true),notices[1] or 'none')
+  -- The chat echo of the same sale is not counted again.
+  emit('CHAT_MSG_SYSTEM','A buyer has been found for your auction of Twilight Cuffs of the Physician.')
+  assert(#notices==1,'no double alert')
+  -- Relayed to the partner.
+  local r=M.shareRun;M.shareRegistered=true;r.lastContact=GetTime();r.hello=GetTime()+100;r.next=0;M:PumpSharing()
+  local relayed=false;for _,m in ipairs(sent) do if m[2]:find('\tN\t',1,true) then relayed=true end end
+  assert(relayed,'sent to the main')
+  -- Two real sales of the same item from the AH both alert.
+  notices={}
+  emit('AUCTION_HOUSE_SHOW_FORMATTED_NOTIFICATION',4,'Twilight Cuffs of the Physician',501)
+  assert(#notices==1 and notices[1]:find(M:Coins(5000),1,true))
+  -- A win on the normal AH is recorded from the notification + the bid sent.
+  M.execution={state='idle'};M:NoteOutsideBid(900,1234)
+  emit('AUCTION_HOUSE_SHOW_FORMATTED_NOTIFICATION',2,'[Superior Belt of Agility]',900)
+  local found;for _,f in ipairs(M:FlipBook()) do if f.name=='Superior Belt of Agility' then found=f end end
+  assert(found and found.cost==1234,'won buy recorded')
+  emit('CHAT_MSG_SYSTEM','You won an auction for Superior Belt of Agility')
+  local n=0;for _,f in ipairs(M:FlipBook()) do if f.name=='Superior Belt of Agility' then n=n+1 end end
+  assert(n==1,'chat echo of the win not recorded twice')
+  -- Other notifications are ignored.
+  assert(not M:HandleAHNotification(0,'Something',1))
+ end)
+ C_ChatInfo=old;PlaySound,RaidNotice_AddMessage,RaidWarningFrame=oldSound,oldRaid,oldFrame;M.db.flips={};M.ownedRows=nil
+ if not ok then error(err,0) end
+end)
 end

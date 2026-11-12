@@ -176,7 +176,7 @@ PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
 PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
 PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
-BENCH scan: 112 frames (1.9s at 60fps, 3.7s at 30fps), worst frame 12.3ms, cpu 1.11s | after:prune=4 after:share-scan=19 done=1 model=71 processing=17
+BENCH scan: 103 frames (1.7s at 60fps, 3.4s at 30fps), worst frame 12.2ms, cpu 1.04s | after:prune=3 after:share-scan=17 done=1 model=61 processing=21
 PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.13 history stores only the fields it needs; latest keeps the full snapshot
 PASS 1.9.13 history saved by older versions is shrunk once at login without losing prices
@@ -254,4 +254,5 @@ PASS 1.21 receiver: fast pages applied in order even when lanes deliver them out
 PASS 1.22 Sale alert: coin sound, on-screen message with price and flip profit, sent to the partner
 PASS 1.22.1 Settings has checkboxes for sale alerts, coin sound, sending to partner and the paid floor
 PASS 1.22.2 Tooltip: an item missing from the latest full scan says "none listed now" instead of just "14h old"
-ALL 253 TESTS PASSED
+PASS 1.22.6 Forever AH notifications: a sale (with its auction ID) alerts and relays; a win records the buy
+ALL 254 TESTS PASSED

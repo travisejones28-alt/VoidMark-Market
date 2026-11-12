@@ -26,9 +26,15 @@ end
 
 -- One of your current auctions for this item (exact name first, then a base
 -- name match); each sale claims a different listing.
-local function claimListing(self,name)
+local function claimListing(self,name,auctionID)
  local rows=self.ownedRows or {}
  self.saleClaimed=self.saleClaimed or {}
+ -- The AH notification can name the exact auction: use it when it does.
+ if auctionID then
+  for _,o in ipairs(rows) do
+   if o.auctionID==auctionID and self:Finite(o.unit,1,1e12) then self.saleClaimed[auctionID]=true;return o end
+  end
+ end
  for pass=1,2 do
   for _,o in ipairs(rows) do
    local id=o.auctionID or o
@@ -40,10 +46,10 @@ local function claimListing(self,name)
  end
 end
 
-function M:BuildSaleAlert(name)
+function M:BuildSaleAlert(name,auctionID)
  local cut=tonumber(self.db.settings.ahCut) or 0.05;if not self:Finite(cut,0,0.3) then cut=0.05 end
  local a={name=name,qty=1}
- local o=claimListing(self,name)
+ local o=claimListing(self,name,auctionID)
  local flip=self.HeldFlip and self:HeldFlip(name)
  if o then a.qty=math.max(1,math.floor(tonumber(o.quantity) or 1));a.gross=math.floor(o.unit*a.qty+0.5)
  elseif flip and flip.listPrice then a.qty=1;a.gross=flip.listPrice end
@@ -82,10 +88,23 @@ function M:ShowSaleAlert(a,from)
  self.lastSaleAlert={text=text,at=time()}
 end
 
+-- The same sale can be reported by both the AH notification and a chat line;
+-- count it once. Two real sales from the same source are never merged.
+-- Returns true when the OTHER source reported this within 5 seconds.
+local function recent(self,kind,name,source)
+ local now=GetTime and GetTime() or 0;local base=kind..'|'..tostring(name):lower()
+ self.recentAHNotices=self.recentAHNotices or {}
+ local other=self.recentAHNotices[base..'|'..(source=='chat' and 'ah' or 'chat')]
+ if other and now-other<5 then self.recentAHNotices[base..'|'..(source=='chat' and 'ah' or 'chat')]=nil;return true end
+ self.recentAHNotices[base..'|'..source]=now
+ return false
+end
+M.RecentAHNotice=recent
 -- Local sale: show it here and queue it for the partner.
-function M:HandleAuctionSold(msg)
- local name=self:SoldAuctionName(msg);if not name or not self.db then return false end
- local a=self:BuildSaleAlert(name)
+function M:HandleAuctionSold(msg,itemName,auctionID)
+ local name=itemName or self:SoldAuctionName(msg);if not name or not self.db then return false end
+ if recent(self,'sold',name,itemName and 'ah' or 'chat') then return true end
+ local a=self:BuildSaleAlert(name,auctionID)
  self:ShowSaleAlert(a)
  if self.db.syncPeer and self.db.settings.saleAlertsShare~=false and self.shareRun then
   local r=self.shareRun;r.alerts=r.alerts or {}
@@ -97,6 +116,26 @@ function M:HandleAuctionSold(msg)
  return true
 end
 M:RegisterHandler('CHAT_MSG_SYSTEM',function(self,_,msg) self:HandleAuctionSold(msg) end)
+-- Forever's AH reports sales and wins with AUCTION_HOUSE_SHOW_FORMATTED_NOTIFICATION
+-- (notification, item text, auction ID); the chat frame prints it itself, so
+-- no CHAT_MSG_SYSTEM ever fires for them. Enum.AuctionHouseNotification:
+-- 2 = AuctionWon, 4 = AuctionSold, 5 = AuctionExpired.
+function M:HandleAHNotification(notification,text,auctionID)
+ local N=Enum and Enum.AuctionHouseNotification or {}
+ local sold,won=N.AuctionSold or 4,N.AuctionWon or 2
+ if type(text)~='string' or text=='' then return false end
+ local name=text:match('%[(.-)%]') or text
+ name=name:gsub('|c%x%x%x%x%x%x%x%x',''):gsub('|r',''):match('^%s*(.-)%s*$')
+ if name=='' then return false end
+ if notification==sold then return self:HandleAuctionSold(nil,name,tonumber(auctionID)) end
+ if notification==won and self.ResolveWonAuction then
+  if recent(self,'won',name,'ah') then return true end
+  local template=ERR_AUCTION_WON_S or 'You won an auction for %s'
+  return self:ResolveWonAuction(template:format(name))
+ end
+ return false
+end
+M:RegisterHandler('AUCTION_HOUSE_SHOW_FORMATTED_NOTIFICATION',function(self,_,notification,text,auctionID) self:HandleAHNotification(notification,text,auctionID) end)
 
 -- Wire format for the partner (sent by Sharing): N, epoch, id, name, qty, gross, net, paid
 local function enc(s) return (tostring(s):gsub('[%%%c,;|/\t]',function(c) return ('%%%02X'):format(c:byte()) end)) end

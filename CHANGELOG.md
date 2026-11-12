@@ -1,3 +1,10 @@
+## 1.22.6
+- **Fixed: no sale alert when an auction sold.** Forever's AH reports "A buyer has been found..." and "You won an auction..." through its own notification event (AUCTION_HOUSE_SHOW_FORMATTED_NOTIFICATION), which the chat frame prints itself; no system chat message is ever sent, so 1.22 never saw them. Market now listens to that event:
+  - Sales alert (sound, screen, chat) and are sent to the synced character. The notification names the exact auction, so the alert uses that auction's price.
+  - Wins on the normal AH are recorded in the Flip Ledger again.
+  - If a chat message for the same sale also arrives, it isn't counted twice.
+- 254 regressions.
+
 ## 1.22.5
 - **Fixed: the AH's own "Auctions" tab showing over the VOIDMARK MARKET title** when a Market tab is open. Market's page now sits well above the native Auctions view (frame level +200, was +30). Blizzard's frames are not hidden or changed, so bag items keep working while the AH is open.
 - 253 regressions.
