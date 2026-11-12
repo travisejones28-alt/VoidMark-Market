@@ -9,11 +9,31 @@ end
 function M:QueueRequest(r)
   if not self:CanUseAuctionHouse() then if r.fail then r.fail('Auction House closed') end; return false end
   local q=self.queue
-  if q.dedupe[r.id] then if r.fail then r.fail('A search for this item is already running') end; return false,'duplicate' end
+  local old=q.dedupe[r.id]
+  if old and old.kind=='search' and r.kind=='search' then return self:JoinSearch(old,r) end
+  if old then if r.fail then r.fail('A search for this item is already running') end; return false,'duplicate' end
   if #q.waiting>=100 then if r.fail then r.fail('Queue full') end; return false end
   q.sequence=q.sequence+1; r.token=q.sequence; r.priority=r.priority or 10; r.at=GetTime(); r.attempt=0
   q.dedupe[r.id]=r; q.waiting[#q.waiting+1]=r
   table.sort(q.waiting,function(a,b) if a.priority==b.priority then return a.token<b.token end; return a.priority>b.priority end)
+  self:RefreshUI(); return true
+end
+-- A second search for an item already queued or running (a price check, the
+-- last buy page, the next buy in a chain) rides along with it instead of failing.
+-- A buy needs fresh listings, so a joined price check stops using cached results.
+function M:JoinSearch(old,r)
+  local d1,f1,v1,d2,f2,v2=old.done,old.fail,old.valid,r.done,r.fail,r.valid
+  old.done=function(x) if d1 then pcall(d1,x) end; if d2 then d2(x) end end
+  old.fail=function(x) if f1 then pcall(f1,x) end; if f2 then f2(x) end end
+  if v1 and v2 then old.valid=function() return v1() or v2() end else old.valid=nil end
+  if not r.allowCached and old.allowCached then
+    old.allowCached=nil
+    if old.polled and not old.reading then old.polled=nil; old.fresh=true; old.resend=true; old.more=nil; old.sent=GetTime() end
+  end
+  if (r.priority or 0)>(old.priority or 0) then
+    old.priority=r.priority
+    table.sort(self.queue.waiting,function(a,b) if a.priority==b.priority then return a.token<b.token end; return a.priority>b.priority end)
+  end
   self:RefreshUI(); return true
 end
 function M:FinishRequest(r,ok,result)
@@ -45,9 +65,9 @@ function M:SendAHRequest(r)
     local has=A.HasSearchResults and A.HasSearchResults(r.key)
     if r.more then
       if r.commodity then A.RequestMoreCommoditySearchResults(r.key.itemID) else A.RequestMoreItemSearchResults(r.key) end
-    elseif has and r.commodity and A.RefreshCommoditySearchResults then A.RefreshCommoditySearchResults(r.key.itemID)
-    elseif has and not r.commodity and A.RefreshItemSearchResults then A.RefreshItemSearchResults(r.key)
-    elseif has then error('Fresh search refresh API missing; close and reopen AH')
+    elseif has and not r.fresh and r.commodity and A.RefreshCommoditySearchResults then r.refreshed=true;A.RefreshCommoditySearchResults(r.key.itemID)
+    elseif has and not r.fresh and not r.commodity and A.RefreshItemSearchResults then r.refreshed=true;A.RefreshItemSearchResults(r.key)
+    elseif has and not r.fresh then error('Fresh search refresh API missing; close and reopen AH')
     else
       local sorts={}; if Enum and Enum.AuctionHouseSortOrder then sorts={{sortOrder=Enum.AuctionHouseSortOrder.Price,reverseSort=false}} end
       A.SendSearchQuery(r.key,sorts,true)
@@ -68,13 +88,16 @@ function M:PumpQueue()
       self:FullScanSlow(r)
     end
   elseif r and GetTime()-r.at>90 then self:FinishRequest(r,false,'Request total deadline exceeded'); return
-  elseif r and GetTime()-r.sent>r.timeout then
+  elseif r and GetTime()-r.sent>(r.refreshed and not r.allowCached and not r.more and 5 or r.timeout) then
     q.stats.timeouts=q.stats.timeouts+1
     if r.kind~='replicate' and r.attempt<2 and not r.reading then
       r.attempt=r.attempt+1; r.sent=GetTime(); r.resend=true; r.polled=nil; q.stats.retries=q.stats.retries+1
+      -- Forever sometimes ignores a refresh of an item already searched: retry with a new search.
+      if r.refreshed then r.refreshed=nil; r.fresh=true end
     else self:FinishRequest(r,false,'Request timed out; no fresh response'); return end
   end
   if self.execution and (self.execution.state=='quoting' or self.execution.state=='quoted' or self.execution.state=='pending') then return end
+  if r and self:PreemptForBuy(r) then r=nil end
   if r then
     self:PollSearch(r)
     if r.resend and self:ThrottleReady() then
@@ -103,6 +126,23 @@ function M:PumpQueue()
   q.active=r; r.sent=GetTime(); r.timeout=r.kind=='replicate' and 60 or 15; r.attempt=1
   local ok,err=pcall(self.SendAHRequest,self,r)
   if not ok then self:FinishRequest(r,false,tostring(err)) else q.stats.sent=q.stats.sent+1 end
+end
+-- On an item's buy page, its listing search must not wait behind a background
+-- request already in flight (a search-term page, your auctions, a price check).
+-- Put that request back in line and send the buy search now.
+local BACKGROUND={browse=true,browsemore=true,owned=true}
+function M:PreemptForBuy(r)
+  local q=self.queue
+  if not self.shopBuy or r.reading then return false end
+  if not (BACKGROUND[r.kind] or (r.kind=='search' and r.allowCached)) then return false end
+  local buy=false
+  for _,w in ipairs(q.waiting) do if w.kind=='search' and not w.allowCached and w.priority>=90 then buy=true;break end end
+  if not buy then return false end
+  q.active=nil; self:CancelJob('results')
+  r.preempted=true; r.resend=nil; r.more=nil; r.refreshed=nil; r.polled=nil; r.at=GetTime(); r.attempt=0
+  table.insert(q.waiting,r)
+  table.sort(q.waiting,function(a,b) if a.priority==b.priority then return a.token<b.token end; return a.priority>b.priority end)
+  return true
 end
 function M:Search(m,priority,done,fail,valid,allowCached)
   local key=self:ItemKey(m); local commodity=self:IsCommodity(key)

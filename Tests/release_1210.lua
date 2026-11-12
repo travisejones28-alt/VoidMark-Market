@@ -357,4 +357,42 @@ check('1.22.14 Commodity sale with no listing loaded: post price recorded at pos
  assert(shown and shown.unit==320 and shown.estimate,'partner sees it as an estimate')
  M.db.market[leather]=nil;M.nameIndex['Mageroyal']=nil;M.nameIndex['Thick Leather']=nil
 end)
+
+check('1.22.15 Buy page search jumps a background request in flight; ignored refresh retries as a new search',function()
+ local q=M.queue;q.waiting={};q.dedupe={};q.active=nil;q.nextSend=0;M.execution=nil;local oldOpen=M.ahOpen;M.ahOpen=true
+ local sent={};local oldSend,oldReady=M.SendAHRequest,M.ThrottleReady;M.SendAHRequest=function(_,r) sent[#sent+1]=r.id end
+ M.ThrottleReady=function() return true end
+ local ok,err=pcall(function()
+  M:QueueRequest({id='owned',kind='owned',priority=85})
+  M:PumpQueue();assert(sent[1]=='owned' and q.active.id=='owned')
+  M.shopBuy={}
+  M:QueueRequest({id='search:buy',kind='search',priority=90})
+  q.nextSend=0;M:PumpQueue()
+  assert(sent[2]=='search:buy' and q.active.id=='search:buy','buy search sent right away: '..tostring(sent[2]))
+  assert(#q.waiting==1 and q.waiting[1].id=='owned','owned auctions put back in line, not dropped')
+  -- A price check (allowCached) is also background; a real purchase search is never bumped.
+  q.active.reading=true;M:PumpQueue();assert(q.active.id=='search:buy')
+  q.active=nil;q.dedupe['search:buy']=nil;M.shopBuy=nil;q.nextSend=0;M:PumpQueue();assert(sent[3]=='owned','owned resumes after')
+ end)
+ M.SendAHRequest=oldSend;q.waiting={};q.dedupe={};q.active=nil;M.shopBuy=nil;assert(ok,err)
+ -- Chain buy: the next buy page's search joins a price check of the same item instead of failing.
+ local got,checked={},0
+ assert(M:QueueRequest({id='search:y',kind='search',priority=20,allowCached=true,done=function() checked=checked+1 end}))
+ assert(M:QueueRequest({id='search:y',kind='search',priority=90,done=function(x) got[#got+1]=x end}),'joined, not refused')
+ local w=q.waiting[1];assert(#q.waiting==1 and w.priority==90 and not w.allowCached,'upgraded to a fresh buy search')
+ q.active=table.remove(q.waiting,1);M:FinishRequest(q.active,true,'rows');assert(got[1]=='rows' and checked==1,'both callers answered')
+ q.waiting={};q.dedupe={};q.active=nil
+ -- A refresh the server ignores gives up after 5s and sends a new search instead.
+ local A=C_AuctionHouse;local calls={}
+ local saved={A.HasSearchResults,A.RefreshItemSearchResults,A.SendSearchQuery}
+ A.HasSearchResults=function() return true end
+ A.RefreshItemSearchResults=function() calls[#calls+1]='refresh' end
+ A.SendSearchQuery=function() calls[#calls+1]='new' end
+ local r={id='search:x',kind='search',key={itemID=1},commodity=false}
+ M:SendAHRequest(r);assert(calls[1]=='refresh' and r.refreshed)
+ q.active=r;r.sent=GetTime()-6;r.at=GetTime();r.timeout=15;r.attempt=1;q.dedupe[r.id]=r
+ M:PumpQueue();assert(r.fresh and calls[2]=='new','after 5s the retry is a new search, not another refresh: '..tostring(calls[2]))
+ A.HasSearchResults,A.RefreshItemSearchResults,A.SendSearchQuery=saved[1],saved[2],saved[3]
+ M.ThrottleReady=oldReady;M.ahOpen=oldOpen;q.active=nil;q.dedupe={};q.waiting={}
+end)
 end

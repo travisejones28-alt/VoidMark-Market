@@ -1,3 +1,9 @@
+## 1.22.15
+- **Buy pages load faster.** Clicking an item no longer waits behind a background request that's already running (a search-term page, your auctions, a price check). That request is put back in line and the item's search goes out right away.
+- **Chain buying no longer fails with "A search for this item is already running."** A second search for the same item now joins the one already running and gets the same results.
+- If the server ignores a refresh of an item you already looked at, Market sends a new search after 5 seconds instead of waiting up to 45.
+- 262 regressions.
+
 ## 1.22.14
 - **Sale banners for herbs, leather and other stackables show a price.** Mageroyal and Thick Leather sold with "Price shows when the sale mail arrives":
   - Posting with Market now saves the post price at the moment you post (stack posts don't always send the event it waited for) and reloads your auctions a few seconds later.
