@@ -94,17 +94,50 @@ function M:AppendMarketTooltip(tip,link,count)
  tip:AddDoubleLine(name,self:Coins(p.floor),1,.82,0,r,g,b)
  if count then tip:AddDoubleLine('Auction x'..count,self:Coins(p.floor*count),1,.82,0,r,g,b) end
 end
--- Stack size of the hovered bag slot, when the tooltip owner is a bag button.
-function M:TooltipStackCount(tip)
+-- Item ID from a link, for checking that a slot really holds the hovered item.
+local function linkItemID(link)
+ return type(link)=='string' and tonumber(link:match('item:(%d+)')) or nil
+end
+-- Mail APIs return (name, itemID, texture, count, quality, canUse) on current
+-- clients and (name, texture, count, quality, canUse) on older ones. The
+-- trailing canUse boolean (or a matching item ID) tells the shapes apart.
+local function mailCount(want,a,b,c,d,e,f)
+ if type(f)=='boolean' or (want and b==want) then return tonumber(d) end
+ if type(e)=='boolean' then return tonumber(c) end
+ return nil
+end
+-- Stack size of the hovered item. Only trusted when we can prove the source:
+-- a mail attachment slot, or a bag slot that holds this exact item. Any button
+-- with a GetID (mail, merchant, bank tabs...) used to be read as "bag slot N",
+-- which showed another item's stack size.
+function M:TooltipStackCount(tip,link)
  local owner=tip and tip.GetOwner and tip:GetOwner()
- if type(owner)~='table' or not owner.GetID then return end
+ if type(owner)~='table' then return end
+ local name=owner.GetName and owner:GetName()
+ if type(name)=='string' then
+  local i=tonumber(name:match('^SendMailAttachment(%d+)$'))
+  if i then return GetSendMailItem and mailCount(linkItemID(link),GetSendMailItem(i)) or nil end
+  i=tonumber(name:match('^OpenMailAttachmentButton(%d+)$'))
+  if i then
+   local mail=InboxFrame and InboxFrame.openMailID
+   return mail and GetInboxItem and mailCount(linkItemID(link),GetInboxItem(mail,i)) or nil
+  end
+ end
+ if not owner.GetID then return end
  local slot=owner:GetID()
  local bag=owner.GetBagID and owner:GetBagID() or (owner.GetParent and owner:GetParent() and owner:GetParent().GetID and owner:GetParent():GetID())
  if type(bag)~='number' or type(slot)~='number' then return end
+ local want=linkItemID(link)
  if C_Container and C_Container.GetContainerItemInfo then
-  local info=C_Container.GetContainerItemInfo(bag,slot);return type(info)=='table' and info.stackCount or nil
+  local info=C_Container.GetContainerItemInfo(bag,slot)
+  if type(info)~='table' then return end
+  if want and info.itemID and info.itemID~=want then return end
+  if want and not info.itemID and linkItemID(info.hyperlink)~=want then return end
+  return info.stackCount
  elseif GetContainerItemInfo then
-  local _,count=GetContainerItemInfo(bag,slot);return count
+  local _,count,_,_,_,_,slotLink=GetContainerItemInfo(bag,slot)
+  if want and linkItemID(slotLink)~=want then return end
+  return count
  end
 end
 function M:InitializePriceTooltips()
@@ -114,7 +147,7 @@ function M:InitializePriceTooltips()
   if not tip or not tip.GetItem then return end
   local _,link=tip:GetItem()
   if link then
-   local ok,count=pcall(self.TooltipStackCount,self,tip)
+   local ok,count=pcall(self.TooltipStackCount,self,tip,link)
    self:AppendMarketTooltip(tip,link,ok and count or nil)
    if self.AppendDisenchantTooltip then pcall(self.AppendDisenchantTooltip,self,tip,link) end
   end

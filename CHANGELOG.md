@@ -1,3 +1,7 @@
+## 1.12.2
+- **Fixed: wrong "Auction xN" on tooltips.** Hovering a mail attachment (or any button numbered like a bag slot) showed the stack size of whatever sat in that backpack slot, e.g. "Auction x20" on 2 Rosecap. Mail attachments now use their own count, and a bag slot is only trusted when it holds the hovered item.
+- 203 regressions.
+
 ## 1.12.1
 - **Fixed: prices showing old after a scan.** A full scan has two parts: reading every auction (needs the Auction House open), then saving prices item by item. Closing the Auction House during the second part stopped it, so some items kept yesterday's price and age ("1d old") even though you scanned today. Saving now finishes after the Auction House closes; only the reading part still needs it open.
 - 202 regressions.
