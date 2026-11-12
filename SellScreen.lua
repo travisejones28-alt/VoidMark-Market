@@ -42,7 +42,10 @@ function M:SellTiles(rows)
  local tiles,byKey={},{}
  for _,r in ipairs(rows or {}) do
   local k=r.marketKey
-  local t=k~=nil and byKey[k]
+  -- Forever links drop the suffix: different suffixes share a key, so the
+  -- real name (from the tooltip) keeps them apart.
+  local gk=k~=nil and (tostring(k)..'|'..tostring(r.name or '')) or nil
+  local t=gk and byKey[gk]
   if t then t.count=t.count+(r.quantity or 1)
   else
    t={row=r,count=r.quantity or 1,key=k}
@@ -53,7 +56,7 @@ function M:SellTiles(rows)
    t.fav=k~=nil and self.db.sellFavourites[k] and true or false
    -- Flips you bought and haven't sold (Flip Ledger) come first, ready to list.
    t.held=self.HeldFlip and self:HeldFlip(r.name,r.itemLink,k)~=nil or false
-   tiles[#tiles+1]=t;if k~=nil then byKey[k]=t end
+   tiles[#tiles+1]=t;if gk then byKey[gk]=t end
   end
  end
  table.sort(tiles,function(a,b)

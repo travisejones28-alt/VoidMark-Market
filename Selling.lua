@@ -28,6 +28,16 @@ function M:RefreshInventory()
             plan.itemID=info.itemID
             plan.name=m and m.name or info.itemName or (GetItemInfo and GetItemInfo(info.itemID)) or
               ('Item '..tostring(info.itemID))
+            -- Forever's links drop the suffix, so a scan can file another suffix's
+            -- price under this item. Use the real name from the item's tooltip and
+            -- never offer a price that belongs to a different suffix.
+            local full=self.BagItemFullName and self:BagItemFullName(currentBag,currentSlot)
+            if full then
+              if m and type(m.name)=='string' and m.name:lower()~=full:lower() and m.name:find(' of ',1,true) then
+                plan.variantMismatch=m.name;plan.price=nil;plan.reason='Last scan price was for '..m.name
+              end
+              plan.name=full
+            end
             plan.quantity=qty;plan.bag=currentBag;plan.slot=currentSlot
             plan.itemLink=info.hyperlink
             plan.icon=info.iconFileID

@@ -449,4 +449,51 @@ check('1.22.17 Tooltip title name finds the buy even when AH and bag suffix numb
  -- /vmm flipsync and /vmm tipcheck run without errors.
  SlashCmdList.VOIDMARKMARKET('flipsync');SlashCmdList.VOIDMARKMARKET('tipcheck')
 end)
+
+check('1.22.18 Sell list uses the bag item real name and never another suffix scan price',function()
+ local old,oldT=C_Container,C_TooltipInfo
+ local key=M:LinkIdentity('|Hitem:15929:0:0:0:0:0:0|h[Fortified Cloak]|h',15929)
+ M.db.market[key]={itemID=15929,marketKey=key,name='Fortified Cloak of Frost Protection',lastSeen=time(),latest={floor=575},history={}}
+ C_Container={GetContainerNumSlots=function(bag) return bag==0 and 1 or 0 end,
+  GetContainerItemInfo=function() return {itemID=15929,stackCount=1,hyperlink='|Hitem:15929:0:0:0:0:0:0|h[Fortified Cloak]|h'} end}
+ C_TooltipInfo={GetBagItem=function() return {lines={{leftText='Fortified Cloak of Healing'}}} end}
+ local ok,err=pcall(function()
+  M:RefreshInventory();jobs()
+  local r=M.sellingRows[1]
+  assert(r and r.name=='Fortified Cloak of Healing',tostring(r and r.name))
+  assert(r.variantMismatch=='Fortified Cloak of Frost Protection' and r.price==nil,'no other-suffix price')
+  assert(M:SellPaidText(r):find('No scan price for this suffix',1,true))
+  -- Same name: price kept.
+  C_TooltipInfo={GetBagItem=function() return {lines={{leftText='Fortified Cloak of Frost Protection'}}} end}
+  M:RefreshInventory();jobs();r=M.sellingRows[1];assert(not r.variantMismatch)
+ end)
+ C_Container,C_TooltipInfo=old,oldT;M.db.market[key]=nil;assert(ok,err)
+end)
+
+check('1.22.18 Two suffixes of one item get separate sell tiles and counts',function()
+ local old,oldT=C_Container,C_TooltipInfo
+ C_Container={GetContainerNumSlots=function(bag) return bag==0 and 2 or 0 end,
+  GetContainerItemInfo=function(_,slot) return {itemID=7406,stackCount=1,hyperlink='|Hitem:7406:0:0:0:0:0:0|h[Pagan Belt]|h'} end}
+ C_TooltipInfo={GetBagItem=function(_,slot) return {lines={{leftText=slot==1 and 'Pagan Belt of Intellect' or 'Pagan Belt of the Sorcerer'}}} end}
+ local ok,err=pcall(function()
+  M:RefreshInventory();jobs()
+  local tiles=M:SellTiles(M.sellingRows);assert(#tiles==2,'tiles: '..#tiles)
+  assert(tiles[1].count==1 and tiles[2].count==1)
+  local r=M.sellingRows[1];assert(M:BagCount(r.marketKey,7406,r.name)==1)
+ end)
+ C_Container,C_TooltipInfo=old,oldT;assert(ok,err)
+end)
+
+check('1.22.18 Tooltip never shows another suffix price',function()
+ local key=M:LinkIdentity('|Hitem:7406:0:0:0:0:0:0|h[Pagan Belt]|h',7406)
+ M.db.market[key]={itemID=7406,marketKey=key,name='Pagan Belt of the Sorcerer',lastSeen=time(),latest={floor=440},history={}}
+ local title={GetText=function() return 'Pagan Belt of Intellect' end};_G.TT2TextLeft1=title
+ local lines={};local tip={GetName=function() return 'TT2' end,AddLine=function(_,t) lines[#lines+1]=t end,AddDoubleLine=function(_,l,r) lines[#lines+1]=l..'='..r end}
+ M:AppendMarketTooltip(tip,'|Hitem:7406:0:0:0:0:0:0|h[Pagan Belt]|h')
+ assert(lines[1] and lines[1]:find('No price for this suffix',1,true),table.concat(lines,' / '))
+ title.GetText=function() return 'Pagan Belt of the Sorcerer' end;lines={}
+ M:AppendMarketTooltip(tip,'|Hitem:7406:0:0:0:0:0:0|h[Pagan Belt]|h')
+ assert(lines[1] and lines[1]:find(M:Coins(440),1,true),table.concat(lines,' / '))
+ _G.TT2TextLeft1=nil;M.db.market[key]=nil
+end)
 end

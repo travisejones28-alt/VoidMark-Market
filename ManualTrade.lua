@@ -68,7 +68,11 @@ function M:FindBagItem(r)
    local b=get(bag,slot)
    if type(b)=='table' and b.itemID==r.itemID and not b.isBound then
     if b.hyperlink==r.itemLink and not b.isLocked then return bag,slot end
-    if not loose and not b.isLocked and r.marketKey~=nil and self:LinkIdentity(b.hyperlink,b.itemID)==r.marketKey then loose={bag,slot,b.hyperlink} end
+    if not loose and not b.isLocked and r.marketKey~=nil and self:LinkIdentity(b.hyperlink,b.itemID)==r.marketKey then
+     -- Same key can be another suffix on Forever: the names must match too.
+     local full=r.name and self.BagItemFullName and self:BagItemFullName(bag,slot)
+     if not full or full==r.name then loose={bag,slot,b.hyperlink} end
+    end
    end
   end
  end
@@ -100,7 +104,7 @@ local function readBag(self,r)
  if not whole(n,1e9) then return nil,'Item cannot currently be posted' end
  -- Like Auctionator: one post can use every unit in the bags (items become
  -- several auctions), capped by what the AH says can be posted.
- local total=self:BagCount(r.marketKey,b.itemID)
+ local total=self:BagCount(r.marketKey,b.itemID,r.name)
  return {loc=loc,k=k,commodity=commodity,max=math.max(1,math.min(n,total>0 and total or n))}
 end
 M.readBag=readBag
@@ -143,6 +147,7 @@ function M:UseScanPrice(draft,reason)
  if self.postQuote~=draft or draft.at then return end
  draft.at=GetTime();draft.fallback=true;draft.reason=reason;draft.listings={}
  local unit,clamped,why=self:SuggestPostUnit(draft.row,nil,draft.commodity);draft.atMinimum=clamped;draft.minWhy=why
+ if draft.row and draft.row.variantMismatch then unit=nil end -- that scan price is another suffix's
  if unit and self:PostPriceEmpty() then self:SetPostPrice(unit);draft.fallbackUnit=unit end
  local why=reason and (' ('..tostring(reason)..')') or ''
  self:Print(unit and ('Live price did not answer'..why..'; using the last scan price. Check it before posting.')

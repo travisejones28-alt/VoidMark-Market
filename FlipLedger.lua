@@ -483,6 +483,14 @@ end)
 -- Selling screen: "You paid 9s 99c (11/12)" for the selected bag item.
 function M:SellPaidText(row)
  if type(row)~='table' then return '' end
+ if row.variantMismatch then
+  local t=self:SellPaidTextInner(row)
+  return '|cffff8040No scan price for this suffix yet.|r'..(t~='' and ('  '..t) or '')
+ end
+ return self:SellPaidTextInner(row)
+end
+function M:SellPaidTextInner(row)
+ if type(row)~='table' then return '' end
  local link=row.itemLink or (row.name and ('['..row.name..']'))
  local hist=link and self:BoughtHistory(link) or {}
  local last=hist[1];if not last then return '' end
@@ -753,4 +761,29 @@ function M:TipCheck()
  end
  local n=0;for _ in pairs(self.db.partnerBuys or {}) do n=n+1 end
  self:Print('  matches: '..#self:BoughtHistory(link,full)..' | partner buys stored: '..n)
+end
+
+-- Full name of a bag item ("Fortified Cloak of Healing") from its tooltip; Forever
+-- links and GetItemInfo give only the base name. nil if not available.
+function M:BagItemFullName(bag,slot)
+ local T=C_TooltipInfo
+ if T and T.GetBagItem then
+  local ok,data=pcall(T.GetBagItem,bag,slot)
+  local line=ok and type(data)=='table' and type(data.lines)=='table' and data.lines[1]
+  if line and type(line.leftText)=='string' and line.leftText~='' then return line.leftText end
+ end
+ if not CreateFrame then return nil end
+ local tip=self.nameScanTip
+ if not tip then
+  local ok,f=pcall(CreateFrame,'GameTooltip','VoidMarkMarketNameScan',UIParent,'GameTooltipTemplate')
+  if not ok or not f then return nil end
+  tip=f;self.nameScanTip=f
+ end
+ if not (tip.SetOwner and tip.SetBagItem) then return nil end
+ pcall(tip.SetOwner,tip,WorldFrame or UIParent,'ANCHOR_NONE')
+ local ok=pcall(tip.SetBagItem,tip,bag,slot)
+ local fs=_G.VoidMarkMarketNameScanTextLeft1
+ local v=ok and fs and fs.GetText and fs:GetText()
+ if tip.Hide then tip:Hide() end
+ return type(v)=='string' and v~='' and v or nil
 end

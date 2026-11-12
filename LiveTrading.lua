@@ -172,10 +172,10 @@ function M:AfterPostRefresh(rows)
  self:SelectSellRow(t.row or t,false)
  self.sellCheckAt=GetTime()+0.75;self.sellCheckRow=t.row or t
 end
-function M:BagCount(key,itemID)
+function M:BagCount(key,itemID,name)
  local n=0
  for _,r in ipairs(self.sellingRows or {}) do
-  if (key~=nil and r.marketKey==key) or (key==nil and r.itemID==itemID) then n=n+(tonumber(r.quantity) or 0) end
+  if ((key~=nil and r.marketKey==key) or (key==nil and r.itemID==itemID)) and (not name or not r.name or r.name==name) then n=n+(tonumber(r.quantity) or 0) end
  end
  return n
 end

@@ -1,3 +1,11 @@
+## 1.22.18
+- **Different suffixes of one item are no longer mixed up.** Forever's item links leave out the suffix, so Pagan Belt of Intellect and Pagan Belt of the Sorcerer looked like the same item:
+  - The sell list shows each with its real name (from the item's tooltip) as its own tile, and Max counts only that one.
+  - A scan price saved under another suffix's name isn't used. The sell screen says "No scan price for this suffix yet", and the price comes from the live AH search, which already uses the exact item.
+  - Tooltips show "No price for this suffix yet" instead of the other suffix's price.
+  - Posting never picks the other suffix from your bags.
+- 267 regressions.
+
 ## 1.22.17
 - **Tooltip Last Bought matches on the item's full name.** Forever's tooltip title has the full name ("Greenweave Gloves of Healing") even when the item link doesn't. That name is now matched against the ledger, so a buy shows even if the AH and your bags number the suffix differently.
 - `/vmm tipcheck` while hovering an item prints what the tooltip compares (title, link, key, ledger rows).

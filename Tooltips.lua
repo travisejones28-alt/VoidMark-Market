@@ -90,6 +90,16 @@ function M:AppendMarketTooltip(tip,link,count)
  end
  local key=self:LinkIdentity(link)
  if not key then return end -- unresolved variant: never borrow another variant's price
+ -- Forever links drop the suffix: if the price on file is another suffix's
+ -- (tooltip title says "of Intellect", the scan said "of the Sorcerer"), use
+ -- the entry with this exact name, or show no price.
+ local title=self:TooltipTitle(tip);local m=self.db.market[key]
+ if title and m and type(m.name)=='string' and m.name:find(' of ',1,true) and m.name:lower()~=title:lower() then
+  local k=self.nameIndex and self.nameIndex[title]
+  if k then key=k else
+   tip:AddDoubleLine('Auction','|cff999999No price for this suffix yet|r',1,.82,0,.6,.6,.6);return
+  end
+ end
  local p=self:PriceObservation(key)
  if not p then
   if self.db.settings.tooltipNoData~=false and not bindBlocksAuction(link) then
@@ -175,4 +185,13 @@ function M:InitializePriceTooltips()
    if tip.HookScript then pcall(tip.HookScript,tip,'OnTooltipSetItem',function(t) pcall(append,t) end) end
   end
  end
+end
+
+-- Title line of a tooltip (the item's full name), without colour codes.
+function M:TooltipTitle(tip)
+ local nm=tip and tip.GetName and tip:GetName();local fs=nm and _G[nm..'TextLeft1']
+ if not (fs and fs.GetText) then return nil end
+ local ok,v=pcall(fs.GetText,fs)
+ if not ok or type(v)~='string' or v=='' then return nil end
+ return (v:gsub('|c%x%x%x%x%x%x%x%x',''):gsub('|r',''))
 end
