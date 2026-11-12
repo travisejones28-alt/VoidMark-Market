@@ -1,3 +1,9 @@
+## 1.22.17
+- **Tooltip Last Bought matches on the item's full name.** Forever's tooltip title has the full name ("Greenweave Gloves of Healing") even when the item link doesn't. That name is now matched against the ledger, so a buy shows even if the AH and your bags number the suffix differently.
+- `/vmm tipcheck` while hovering an item prints what the tooltip compares (title, link, key, ledger rows).
+- Fixed `/vmm flipsync` erroring.
+- 264 regressions.
+
 ## 1.22.16
 - **Your bank toon now knows what your main paid (and the other way round).** Each account keeps its own ledger, so an item bought on one character and mailed to the other showed no "Last Bought". Buys now go to your synced partner in the background, using the same send budget as price syncing.
   - Used for the tooltip's Last Bought, "You paid" on the sell screen, the Paid column in Listings, and the never-sell-below-paid floor.

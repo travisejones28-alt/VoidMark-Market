@@ -432,4 +432,21 @@ check('1.22.16 Buys reach the synced partner: bank tooltip shows what main paid;
  assert(ok,err);assert(sent and sent:find('Pagan Belt',1,true),'buy sent: '..tostring(sent))
  M.db.flips={};M.db.partnerBuys=nil;M.db.flipSyncSent=nil;M.db.syncPeer=oldPeer
 end)
+
+check('1.22.17 Tooltip title name finds the buy even when AH and bag suffix numbers differ',function()
+ M.db.flips={};M.db.partnerBuys=nil
+ local b=M:RecordFlipBuy({name='Greenweave Gloves of Healing',quantity=1,cost=600,marketKey=M:Key(2970,77)})
+ local title={GetText=function() return '|cff1eff00Greenweave Gloves of Healing|r' end}
+ _G.TestTipTextLeft1=title
+ local lines={};local tip={GetName=function() return 'TestTip' end,AddLine=function(_,t) lines[#lines+1]=t end,AddDoubleLine=function(_,l,r) lines[#lines+1]=l..'='..r end}
+ M:AppendBoughtTooltip(tip,'|cff1eff00|Hitem:2970:0:0:0:0:0:-5|h[Greenweave Gloves]|h|r')
+ assert(lines[1]=='Last Bought='..M:Coins(600),table.concat(lines,' / '))
+ -- A different suffix (title says so) still doesn't match.
+ title.GetText=function() return 'Greenweave Gloves of the Eagle' end;lines={}
+ M:AppendBoughtTooltip(tip,'|cff1eff00|Hitem:2970:0:0:0:0:0:-9|h[Greenweave Gloves]|h|r')
+ assert(#lines==0,table.concat(lines,' / '))
+ _G.TestTipTextLeft1=nil;M.db.flips={}
+ -- /vmm flipsync and /vmm tipcheck run without errors.
+ SlashCmdList.VOIDMARKMARKET('flipsync');SlashCmdList.VOIDMARKMARKET('tipcheck')
+end)
 end

@@ -176,7 +176,7 @@ PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
 PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
 PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
-BENCH scan: 130 frames (2.2s at 60fps, 4.3s at 30fps), worst frame 12.2ms, cpu 1.18s | after:prune=3 after:share-scan=37 done=1 model=68 processing=21
+BENCH scan: 114 frames (1.9s at 60fps, 3.8s at 30fps), worst frame 12.2ms, cpu 1.09s | after:prune=5 after:share-scan=25 done=1 model=66 processing=17
 PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.13 history stores only the fields it needs; latest keeps the full snapshot
 PASS 1.9.13 history saved by older versions is shrunk once at login without losing prices
@@ -264,4 +264,5 @@ PASS 1.22.13 Forever base-name links still find what you paid; Listings shows a 
 PASS 1.22.14 Commodity sale with no listing loaded: post price recorded at post time, else a marked market estimate
 PASS 1.22.15 Buy page search jumps a background request in flight; ignored refresh retries as a new search
 PASS 1.22.16 Buys reach the synced partner: bank tooltip shows what main paid; not in bank profit totals
-ALL 263 TESTS PASSED
+PASS 1.22.17 Tooltip title name finds the buy even when AH and bag suffix numbers differ
+ALL 264 TESTS PASSED

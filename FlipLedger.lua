@@ -354,19 +354,25 @@ end
 -- carry the base name ("Durable Belt") while AH names include the suffix
 -- ("Durable Belt of the Physician"): match on item + suffix when both keys are
 -- known, else on the name, allowing the base name + " of ...".
-function M:FlipMatcher(link)
+-- fullName: the tooltip's title line, which on Forever has the suffix even when
+-- the link doesn't. A name match then wins, since the AH and bag links can
+-- number the same suffix differently.
+function M:FlipMatcher(link,fullName)
  local name=nameOf(link);local key=self.LinkIdentity and self:LinkIdentity(link)
  local _,kid,ks=self:ParseKey(key)
  local lname=name and name:lower()
+ local full=type(fullName)=='string' and fullName~='' and fullName:lower() or nil
+ if full==lname then full=nil end
  return function(nm,k)
+  if full and type(nm)=='string' and nm:lower()==full then return true end
   if kid and k~=nil then local _,id,s=self:ParseKey(k);if id then return id==kid and (s or 0)==(ks or 0) end end
   if not lname or type(nm)~='string' then return false end
   local n=nm:lower()
   return n==lname or n:sub(1,#lname+4)==lname..' of '
  end
 end
-function M:BoughtHistory(link)
- local same=self:FlipMatcher(link)
+function M:BoughtHistory(link,fullName)
+ local same=self:FlipMatcher(link,fullName)
  local out={}
  for _,f in ipairs(self:FlipBook()) do
   if f.cost and same(f.name,f.key) then out[#out+1]={cost=f.cost,qty=f.qty or 1,at=f.at,sold=f.sold or 0,net=self:FlipNumbers(f).net,soldAt=f.soldAt,char=f.char} end
@@ -385,8 +391,8 @@ function M:BoughtHistory(link)
  return out
 end
 -- Sales of the hovered item, newest first (per-unit price the buyer paid).
-function M:SoldHistory(link)
- local same=self:FlipMatcher(link);local out={}
+function M:SoldHistory(link,fullName)
+ local same=self:FlipMatcher(link,fullName);local out={}
  for _,f in ipairs(self:FlipBook()) do
   if (f.sold or 0)>0 and same(f.name,f.key) then
    out[#out+1]={unit=math.floor((f.gross or 0)/f.sold+0.5),net=self:FlipNumbers(f).net,qty=f.sold,at=f.soldAt or f.at}
@@ -401,7 +407,9 @@ local function when(t) return t and date and (date('%m/%d %I:%M%p',t):gsub(' 0',
 -- other flippers use); hold Ctrl for dates, who bought it and averages.
 function M:AppendBoughtTooltip(tip,link)
  if not self.db or not tip or not link then return end
- local hist,sold=self:BoughtHistory(link),self:SoldHistory(link)
+ local full;local nm=tip.GetName and tip:GetName();local fs=nm and _G[nm..'TextLeft1']
+ if fs and fs.GetText then local ok,v=pcall(fs.GetText,fs);if ok and type(v)=='string' then full=v:gsub('|c%x%x%x%x%x%x%x%x',''):gsub('|r','') end end
+ local hist,sold=self:BoughtHistory(link,full),self:SoldHistory(link,full)
  if #hist==0 and #sold==0 then return end
  local last=hist[1];local ls=sold[1]
  if last then tip:AddDoubleLine('Last Bought',self:Coins(math.floor(last.cost/math.max(1,last.qty))),.78,.63,1,1,1,1) end
@@ -727,4 +735,22 @@ function M:ReceiveFlipBuys(f,sender)
   end
  end
  return true
+end
+
+-- /vmm tipcheck while hovering an item: why "Last Bought" does or doesn't show.
+function M:TipCheck()
+ local tip=GameTooltip
+ local link=tip and tip.IsShown and tip:IsShown() and tip.GetItem and select(2,tip:GetItem())
+ if not link then self:Print('Hover an item in your bags, then type /vmm tipcheck (bind it to a key or macro).');return end
+ local fs=_G.GameTooltipTextLeft1;local full=fs and fs.GetText and fs:GetText() or '?'
+ local key=self.LinkIdentity and self:LinkIdentity(link)
+ self:Print('Tooltip: '..tostring(full)..' | link name: '..tostring(nameOf(link))..' | key: '..tostring(key))
+ local base=(nameOf(link) or ''):lower();local shown=0
+ for _,f in ipairs(self:FlipBook()) do
+  if f.cost and type(f.name)=='string' and f.name:lower():sub(1,#base)==base and shown<5 then
+   shown=shown+1;self:Print('  ledger: '..f.name..' | key: '..tostring(f.key)..' | paid '..self:Coins(f.cost))
+  end
+ end
+ local n=0;for _ in pairs(self.db.partnerBuys or {}) do n=n+1 end
+ self:Print('  matches: '..#self:BoughtHistory(link,full)..' | partner buys stored: '..n)
 end
