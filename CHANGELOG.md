@@ -1,3 +1,12 @@
+## 1.18.0
+Second pass over Auctionator 345 (reference only; no Auctionator code used).
+- **Import takes Azmork's whole Auctionator list, filters included.** Auctionator saves each term as `text;category;...;minLevel;maxLevel;...;maxPrice;quality`. Market used to keep only the word; now it converts category (armor type and slot), required level, max price and quality: `agility;Armor/Leather;...;0.5` becomes `leather: agility max 50s`. A list named "shopping" goes into your main Shopping list.
+- **Quality in a term:** `green cloth: magic`, `blue: ...` (grey, white, green, blue, epic). The AH is asked for that quality only, so searches return fewer pages and finish faster.
+- **Exact name in quotes:** `"Lupine Vest of Agility"` only matches that name (Auctionator's exact search).
+- **An unconfirmed item buy no longer stops you buying** (Auctionator never blocks). You get a reminder with I got it / Didn't get it; its gold stays reserved until settled. A buy still in flight and unconfirmed commodity buys still block, so nothing gets bought twice.
+- Search terms can be up to 60 characters.
+- 240 regressions.
+
 ## 1.17.0
 Checked against Auctionator 345 (reference only; no Auctionator code used).
 - **Vs Avg fills in much sooner.** Like Auctionator's price history, every live search (search terms, typed searches, list searches) now records the day's lowest price, kept 30 days. Vs Avg uses those days plus full-scan history for the exact variant.

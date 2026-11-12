@@ -45,6 +45,9 @@ function M:ParseMoneyText(t)
  return total>0 and total or nil
 end
 -- Returns search text, armor subclass, and the full spec.
+-- Quality words in the prefix ("green cloth: magic"), Auctionator's quality numbers.
+local QUALITY={grey=0,gray=0,poor=0,white=1,common=1,green=2,uncommon=2,blue=3,rare=3,epic=4,purple=4}
+local QUALITY_WORD={[0]='grey',[1]='white',[2]='green',[3]='blue',[4]='epic'}
 function M:ParseShopTerm(term)
  term=tostring(term or '')
  local spec={}
@@ -54,9 +57,10 @@ function M:ParseShopTerm(term)
   for w in head:lower():gmatch('%a+') do
    if ARMOR[w] and not spec.armor then spec.armor=ARMOR[w]
    elseif SLOT[w] and not spec.slot then spec.slot=SLOT[w]
+   elseif QUALITY[w] and not spec.quality then spec.quality=QUALITY[w]
    else ok=false end
   end
-  if ok and (spec.armor or spec.slot) then term=rest else spec={} end
+  if ok and (spec.armor or spec.slot or spec.quality) then term=rest else spec={} end
  end
  term=' '..term..' '
  term=term:gsub('%s[Mm][Aa][Xx]%s+(%S+)%s',function(v) spec.max=self:ParseMoneyText(v);return ' ' end)
@@ -64,6 +68,8 @@ function M:ParseShopTerm(term)
  term=term:gsub('%s[Ll][Vv][Ll]%s+(%d+)%+%s',function(a) spec.minLevel=tonumber(a);return ' ' end)
  term=term:gsub('%s[Ll][Vv][Ll]%s+(%d+)%-%s',function(a) spec.maxLevel=tonumber(a);return ' ' end)
  spec.text=term:match('^%s*(.-)%s*$')
+ -- "Lupine Vest of Agility" in quotes = that exact name only.
+ local exact=spec.text:match('^"(.*)"$');if exact then spec.text=exact;spec.exact=true end
  if spec.minLevel and spec.maxLevel and spec.minLevel>spec.maxLevel then spec.minLevel,spec.maxLevel=spec.maxLevel,spec.minLevel end
  return spec.text,spec.armor,spec
 end
@@ -213,7 +219,7 @@ end
 function M:AddShopTerm(list,text)
  if self.persistenceBlocked then return false,'Database read-only' end
  text=trim(text)
- if #text<2 or #text>40 then return false,'Search terms must be 2-40 characters' end
+ if #text<2 or #text>60 then return false,'Search terms must be 2-60 characters' end
  if not self:ShopTermValid(text) then return false,'Add search text, or an armor type like "leather head: max 75s"' end
  local book=self:ShopTermBook(list,true);if not book then return false,'Open a shopping list first' end
  for _,t in ipairs(book) do if type(t)=='string' and t:lower()==text:lower() then return false,'"'..text..'" is already in '..list end end
@@ -231,7 +237,34 @@ function M:RemoveShopTerm(list,text)
 end
 
 -- Auctionator shopping list export: "List Name^term^term" (one list per line).
--- Advanced terms ("of the Monkey;;10;30") keep only the text before the first ';'.
+-- Extended terms are "text;category;minItemLevel;maxItemLevel;minLevel;maxLevel;
+-- minCrafted;maxCrafted;minPrice;maxPrice(gold);quality;tier;expansion;quantity"
+-- (Auctionator 345 Source/Search/Advanced.lua). Converted to Market terms.
+function M:CopperText(c)
+ c=math.floor(tonumber(c) or 0);local g,s,cp=math.floor(c/10000),math.floor(c/100)%100,c%100
+ local out=(g>0 and (g..'g') or '')..(s>0 and (s..'s') or '')..(cp>0 and (cp..'c') or '')
+ return out~='' and out or '0c'
+end
+function M:AuctionatorTermToMarket(raw)
+ local f={};for p in (tostring(raw or '')..';'):gmatch('(.-);') do f[#f+1]=p end
+ local text=trim(f[1] or '')
+ local prefix={}
+ -- 0/blank = any quality (a grey-only filter is never what a flip list means).
+ local q=tonumber(f[11]);if q and q>0 and QUALITY_WORD[q] then prefix[#prefix+1]=QUALITY_WORD[q] end
+ local cat={};for c in (tostring(f[2] or '')..'/'):gmatch('(.-)/') do if c~='' then cat[#cat+1]=c:lower() end end
+ if cat[1]=='armor' then
+  if cat[2] and ARMOR[cat[2]] then prefix[#prefix+1]=cat[2] end
+  if cat[3] then local w=cat[3]:match('^(%a+)');if w and SLOT[w] then prefix[#prefix+1]=w end end
+ end
+ local opts={}
+ local lo,hi=tonumber(f[5]),tonumber(f[6]);lo=(lo and lo>0) and lo or nil;hi=(hi and hi>0) and hi or nil
+ if lo and hi then opts[#opts+1]='lvl '..lo..'-'..hi elseif lo then opts[#opts+1]='lvl '..lo..'+' elseif hi then opts[#opts+1]='lvl '..hi..'-' end
+ local maxGold=tonumber(f[10]);if maxGold and maxGold>0 then opts[#opts+1]='max '..self:CopperText(maxGold*10000) end
+ local body=text..(#opts>0 and ((text~='' and ' ' or '')..table.concat(opts,' ')) or '')
+ local hasArmor=false;for _,w in ipairs(prefix) do if ARMOR[w] then hasArmor=true end end
+ if #prefix>0 and (body~='' or hasArmor) then return table.concat(prefix,' ')..': '..body end
+ return body
+end
 function M:ImportAuctionatorLists(raw)
  if self.persistenceBlocked then return false,'Database read-only' end
  if type(raw)~='string' or #raw>35000 then return false,'Invalid import' end
@@ -240,10 +273,13 @@ function M:ImportAuctionatorLists(raw)
   if line:find('^',1,true) then
    local parts={};for p in (line..'^'):gmatch('(.-)%^') do parts[#parts+1]=p end
    local name=trim(parts[1]):sub(1,24)
+   -- Same list regardless of case ("shopping" -> your main "Shopping" list).
+   if name:lower()=='shopping' then name='Shopping' end
+   for existing in pairs(self.db.shoppingLists or {}) do if type(existing)=='string' and existing:lower()==name:lower() then name=existing end end
    if name~='' and self:ListBook(name,true) then
     lists=lists+1
     for i=2,#parts do
-     local term=trim((parts[i]:match('^([^;]*)') or ''):gsub('^"(.*)"$','%1'))
+     local term=parts[i]:find(';',1,true) and self:AuctionatorTermToMarket(parts[i]) or trim(parts[i])
      if self:AddShopTerm(name,term) then terms=terms+1 end
     end
    end
@@ -265,7 +301,9 @@ function M:SearchShopTerms(list,onlyTerm)
  self.termSearch=run;self.termRows={}
  for _,term in ipairs(terms) do
   local text,armor,spec=self:ParseShopTerm(term)
-  local classFilters={}
+  local classFilters,filters={},{}
+  local qf=spec.quality and Enum and Enum.AuctionHouseFilter and ({[0]='PoorQuality','CommonQuality','UncommonQuality','RareQuality','EpicQuality'})[spec.quality]
+  if qf and Enum.AuctionHouseFilter[qf] then filters[1]=Enum.AuctionHouseFilter[qf] end
   if text=='' and armor then
    -- Category search: Armor > subclass (> slot when it is one inventory type).
    local inv=spec.slot and #spec.slot==1 and self:InventoryTypeFilter(spec.slot[1])
@@ -284,8 +322,11 @@ function M:SearchShopTerms(list,onlyTerm)
       self:RecordLiveFloor(key,b.minPrice,b.totalQuantity)
       local old=run.byKey[key]
       local max=spec.max or self:FlipMaxBuy()
-      if (not old or b.minPrice<old.floor) and itemMatches(k.itemID,spec) and not (max and b.minPrice>max) and self:LevelAllowed(k.itemID,spec) then
-       local m=self.db.market[key];local info=C_AuctionHouse.GetItemKeyInfo and C_AuctionHouse.GetItemKeyInfo(k)
+      local info=(spec.quality or spec.exact) and C_AuctionHouse.GetItemKeyInfo and C_AuctionHouse.GetItemKeyInfo(k) or nil
+      local keep=not (info and spec.quality and info.quality~=nil and info.quality~=spec.quality)
+       and not (info and spec.exact and type(info.itemName)=='string' and info.itemName:lower()~=text:lower())
+      if keep and (not old or b.minPrice<old.floor) and itemMatches(k.itemID,spec) and not (max and b.minPrice>max) and self:LevelAllowed(k.itemID,spec) then
+       local m=self.db.market[key];info=info or (C_AuctionHouse.GetItemKeyInfo and C_AuctionHouse.GetItemKeyInfo(k))
        local row={marketKey=key,itemID=k.itemID,name=(info and info.itemName) or (m and m.name) or self:ItemName(k.itemID) or ('Item '..k.itemID),
         floor=b.minPrice,quantity=tonumber(b.totalQuantity),fair=m and m.fairValue or 0,
         confidence=m and m.confidence or 'Unknown',status='LIVE BROWSE',term=term}
@@ -309,7 +350,7 @@ function M:SearchShopTerms(list,onlyTerm)
     self:RefreshUI()
   end
   local queued=self:QueueRequest({id=id,kind='browse',priority=40,
-   query=self:ApplyLevelQuery({searchString=text,sorts={},filters={},itemClassFilters=classFilters},spec),
+   query=self:ApplyLevelQuery({searchString=text,sorts={},filters=filters,itemClassFilters=classFilters},spec),
    done=done,fail=fail})
   if queued then run.total=run.total+1 end
  end

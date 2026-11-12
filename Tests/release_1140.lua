@@ -55,7 +55,8 @@ check('1.14 Import accepts an Auctionator list export as search terms',function(
  fresh()
  local ok,msg=M:ImportShoppingTransfer('Greens Flip^of the Monkey^"of the Tiger"^of the Bear;;10;30\r\n')
  assert(ok and msg:find('3 search terms',1,true),tostring(msg))
- assert(table.concat(M:ShopTerms('Greens Flip'),',')=='of the Monkey,of the Tiger,of the Bear')
+ -- 1.18: quotes keep Auctionator's exact-name meaning; item-level fields (3-4) are not required level.
+ assert(table.concat(M:ShopTerms('Greens Flip'),',')=='of the Monkey,"of the Tiger",of the Bear',table.concat(M:ShopTerms('Greens Flip'),','))
  local bad=M:ImportShoppingTransfer('just text');assert(not bad,'plain text is still rejected')
  M:DeleteShoppingList('Greens Flip')
 end)
@@ -293,22 +294,22 @@ check('1.14.6 Auction-won chat settles a purchase whose result never came; buy v
   M.db.pending[e.id]=e;return e end
  for k in pairs(M.db.pending) do M.db.pending[k]=nil end
  local a=order(980,'Greenweave Sandals of Healing')
- assert(M:HasUnresolvedPurchase())
+ assert(M:HasUnknownPurchase() and not M:HasUnresolvedPurchase(),'unknown item buy: reminder, not a block')
  assert(M:AuctionWonName('You won an auction for Greenweave Sandals of Healing')=='Greenweave Sandals of Healing')
  assert(not M:ResolveWonAuction('You won an auction for Something Else'),'other items do not match')
  emit('CHAT_MSG_SYSTEM','You won an auction for Greenweave Sandals of Healing')
- assert(a.status=='confirmed' and not M:HasUnresolvedPurchase(),'chat confirmed it')
+ assert(a.status=='confirmed' and not M:HasUnknownPurchase(),'chat confirmed it')
  -- Buy view buttons.
  local b=order(981,'Lupine Vest of Agility')
  M:SetView('browse');M.ahOpen=true;M:RenderUI()
  M.shopBuy={key=981,name='Lupine Vest of Agility',market={itemID=981,marketKey=981,name='Lupine Vest of Agility'},rows={}}
  M.execution={state='unknown',order=b,shop=M.shopBuy,message='x'}
- local ok,lines=M:ShopBuyCheck(M.shopBuy);assert(not ok and lines[#lines]:find('Lupine Vest',1,true))
+ local ok,lines=M:ShopBuyCheck(M.shopBuy);local seen=false;for _,l in ipairs(lines) do if l:find('Lupine Vest',1,true) then seen=true end end;assert(seen,'reminder shown')
  M:RenderShopBuy();local v=M.shopScreen.buyView
  assert(v.gotIt:IsShown() and v.didnt:IsShown(),'settle buttons shown')
  local oldRefresh=M.ShopBuyRefresh;M.ShopBuyRefresh=function() end
  v.didnt.scripts.OnClick(v.didnt);M.ShopBuyRefresh=oldRefresh
- assert(b.status=='failed' and not M:HasUnresolvedPurchase(),'marked not bought')
+ assert(b.status=='failed' and not M:HasUnknownPurchase(),'marked not bought')
  M:RenderShopBuy();assert(not v.gotIt:IsShown(),'buttons hide once settled')
  M.shopBuy=nil;M.execution={state='idle'};M.ahOpen=false
 end)
@@ -508,6 +509,59 @@ check('1.17 A failed AH search ends that request instead of waiting for a timeou
  emit('AUCTION_HOUSE_BROWSE_FAILURE')
  assert(failed=='Auction House search failed' and q.active==nil)
  q.dedupe={}
+end)
+
+check('1.18 Auctionator extended terms import with their category, level, price and quality',function()
+ fresh();M.db.shopTerms=nil
+ local c=function(t) return M:AuctionatorTermToMarket(t) end
+ assert(c('agility;Armor/Leather;0;0;0;0;0;0;0;0.5;0;0;0;0')=='leather: agility max 50s',c('agility;Armor/Leather;0;0;0;0;0;0;0;0.5;0;0;0;0'))
+ assert(c('intellect;Armor/Cloth;0;0;15;0;0;0;0;0;0;0;0;0')=='cloth: intellect lvl 15+')
+ assert(c(';Armor/Leather/Head;0;0;0;0;0;0;0;0.75;0;0;0;0')=='leather head: max 75s')
+ assert(c('healing;Armor/Cloth;0;0;20;40;0;0;0;1.25;2;0;0;0')=='green cloth: healing lvl 20-40 max 1g25s')
+ assert(c('"Lupine Vest";;0;0;0;0')=='"Lupine Vest"')
+ -- A list called "shopping" goes into your main Shopping list (one list for everything).
+ local ok,msg=M:ImportShoppingTransfer('shopping^magic;Armor/Cloth;0;0;0;0;0;0;0;0;0;0;0;0^agility;Armor/Leather;0;0;0;0;0;0;0;0.5;0;0;0;0')
+ assert(ok,msg);local t=M:ShopTerms('Shopping')
+ assert(t[1]=='cloth: magic' and t[2]=='leather: agility max 50s' and not M.db.shoppingLists['shopping'],'merged into Shopping')
+ -- The converted terms parse back with the right filters.
+ local text,armor,spec=M:ParseShopTerm('green cloth: healing lvl 20-40 max 1g25s')
+ assert(text=='healing' and armor==1 and spec.quality==2 and spec.minLevel==20 and spec.maxLevel==40 and spec.max==12500)
+ text,armor,spec=M:ParseShopTerm('"Lupine Vest of Agility"');assert(text=='Lupine Vest of Agility' and spec.exact)
+ M.db.shopTerms=nil
+end)
+
+check('1.18 Quality and exact-name terms: greens-only query to the server, other qualities and names dropped',function()
+ fresh();M:SetView('browse');M.ahOpen=true;M.queue.nextSend=0
+ local A=C_AuctionHouse;local o={A.GetBrowseResults,A.SendBrowseQuery,A.GetItemKeyInfo,Enum.AuctionHouseFilter}
+ local sent
+ Enum.AuctionHouseFilter=Enum.AuctionHouseFilter or {PoorQuality=1,CommonQuality=2,UncommonQuality=3,RareQuality=4,EpicQuality=5}
+ A.SendBrowseQuery=function(q) sent=q end
+ A.GetItemKeyInfo=function(k) return ({[1040]={itemName='Lupine Vest of Agility',quality=2},[1041]={itemName='Lupine Vest of Agility',quality=3},
+  [1042]={itemName='Lupine Vest of the Monkey',quality=2}})[k.itemID] end
+ A.GetBrowseResults=function() return {
+  {itemKey={itemID=1040,itemSuffix=0,itemLevel=0},minPrice=900,totalQuantity=1},
+  {itemKey={itemID=1041,itemSuffix=0,itemLevel=0},minPrice=900,totalQuantity=1},
+  {itemKey={itemID=1042,itemSuffix=0,itemLevel=0},minPrice=900,totalQuantity=1}} end
+ local ok,err=pcall(function()
+  M:SetList('Flips');M:AddShopTerm('Flips','green: "Lupine Vest of Agility"')
+  M:OpenShoppingList('Flips');M.queue.nextSend=0;M:PumpQueue();emit('AUCTION_HOUSE_BROWSE_RESULTS_UPDATED')
+  assert(sent.searchString=='Lupine Vest of Agility' and sent.filters[1]==Enum.AuctionHouseFilter.UncommonQuality,'greens-only query')
+  local rows=M:ShoppingResultRows();assert(#rows==1 and rows[1].itemID==1040,'only the green exact match: '..#rows)
+ end)
+ A.GetBrowseResults,A.SendBrowseQuery,A.GetItemKeyInfo,Enum.AuctionHouseFilter=o[1],o[2],o[3],o[4]
+ M.queue.waiting={};M.queue.dedupe={};M.queue.active=nil
+ M:DeleteShoppingList('Flips');assert(ok,err)
+end)
+
+check('1.18 An unconfirmed item buy no longer blocks buying; in-flight buys and commodity buys still do',function()
+ for k in pairs(M.db.pending) do M.db.pending[k]=nil end
+ local function add(status,commodity) local e=M:AddLedger('purchase',{name='X',quantity=1,cost=1,status=status,commodity=commodity});M.db.pending[e.id]=e;return e end
+ local u=add('unknown',false);assert(M:HasUnknownPurchase() and not M:HasUnresolvedPurchase(),'item unknown: reminder only')
+ local c=add('unknown',true);assert(M:HasUnresolvedPurchase(),'commodity unknown still blocks')
+ M.db.pending[c.id]=nil
+ local f=add('pending',false);assert(M:HasUnresolvedPurchase(),'in flight blocks')
+ for k in pairs(M.db.pending) do M.db.pending[k]=nil end
+ assert(M:LedgerTotals().reserved==0)
 end)
 
 check('1.14 Vs Avg compares against the exact suffix history and sorts deals first',function()

@@ -1,6 +1,15 @@
 local _,M=...
 M.execution={state='idle',message='Select an opportunity and revalidate'}
+-- A buy still in flight (sent, no result yet, at most ~15s) blocks the next
+-- one. An item buy whose result never came ("unknown") no longer blocks
+-- buying (Auctionator never blocks); its gold stays reserved until settled.
 function M:HasUnresolvedPurchase()
+  -- Commodity buys stay blocking: a repeat could buy a whole stack twice. An item
+  -- buy is one unique auction, so an unknown one can't be bought twice.
+  for _,p in pairs(self.db.pending) do if p.character==self.characterID and (p.status~='unknown' or p.commodity) then return true end end
+  return false
+end
+function M:HasUnknownPurchase()
   for _,p in pairs(self.db.pending) do if p.character==self.characterID then return true end end
   return false
 end

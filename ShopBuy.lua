@@ -118,10 +118,11 @@ function M:ShopBuyCheck(b)
  if not self.ahOpen then lines[#lines+1]='Open the Auction House.';return false,lines end
  if b.searching then lines[#lines+1]=gold('Searching the Auction House...');return false,lines end
  if b.status then lines[#lines+1]=b.status;return false,lines end
- if self:HasUnresolvedPurchase() then
+ if self:HasUnresolvedPurchase() then lines[#lines+1]=gold('Buying...');return false,lines end
+ -- Unconfirmed earlier buy: a reminder only; buying goes on (its gold stays reserved).
+ if self:HasUnknownPurchase() then
   local p=self:OldestUnresolvedPurchase()
-  lines[#lines+1]=red('Did your last purchase'..(p and p.name and (' ('..p.name..')') or '')..' go through? Check chat or your mailbox, then click below.')
-  return false,lines
+  lines[#lines+1]=gold('Did '..(p and p.name or 'your last purchase')..' go through? Click below to settle it (you can keep buying).')
  end
  local unit,total,minU,maxU,q=self:ShopBuyPrices(b)
  if not total then
@@ -322,7 +323,7 @@ function M:RenderShopBuy()
  v.buyNow:SetEnabled(ok and true or false)
  v.refresh:SetEnabled(self.ahOpen and not b.searching and true or false)
  v.status:SetText(table.concat(lines,'\n\n'))
- local unresolved=self:HasUnresolvedPurchase() and not (self.execution and self.execution.state=='pending')
+ local unresolved=self:HasUnknownPurchase() and not self:HasUnresolvedPurchase()
  v.gotIt:SetShown(unresolved and true or false);v.didnt:SetShown(unresolved and true or false)
  local money=GetMoney and GetMoney()
  v.money:SetText(self:Finite(money,0,1e14) and ('Your gold: '..self:Coins(money)) or '')

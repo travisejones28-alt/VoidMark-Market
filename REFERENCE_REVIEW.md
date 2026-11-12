@@ -4,6 +4,10 @@ Read the user-supplied Auctionator 345 (Source_ModernAH, which Forever uses). Fi
 - Price keys on Forever (`DBKeyFromBrowseResult` / `DBKeyFromLink`): item ID only, plus item level for gear at item level 168+. The random suffix is **not** part of the key, so Auctionator's database price mixes all suffixes of an item. Market keeps per-suffix prices and falls back to an all-suffix price marked "~".
 - Price history: lowest and highest price per day from every scan and search (`SetPrice`), 30-day mean of daily lows. Market now records daily lows from live searches.
 - Browse paging: keeps calling `RequestMoreBrowseResults` until `HasFullBrowseResults`, reads `AUCTION_HOUSE_BROWSE_RESULTS_ADDED`, handles `AUCTION_HOUSE_BROWSE_FAILURE`. Market matches this (40-page cap).
+- Shopping list export: one list per line, `Name^term^term`; extended terms `text;category;minItemLevel;maxItemLevel;minLevel;maxLevel;minCrafted;maxCrafted;minPrice;maxPrice;quality;tier;expansion;quantity` (prices in gold; quoted text = exact). Market converts these on import (1.18.0).
+- Item buying: `PlaceBid` with no result tracking or blocking; commodity buys wait for `COMMODITY_PURCHASE_SUCCEEDED/FAILED`. Market now blocks only in-flight buys and unconfirmed commodity buys (1.18.0).
+- Selling gear: searches all variants of the item, then matches results on item level + suffix by default; with no competitor it can use vendor price x a multiplier (off by default). Items post in whole silver on Forever (copper hidden for non-commodities).
+- Undercut check: own listings found in search results via `owners[1]=="player"`; undercut when items ahead exceed a setting.
 - Extended search: level range goes to the server as `minLevel`/`maxLevel`; categories as `itemClassFilters` from Blizzard's `AuctionCategories` (`classID`/`subClassID`/`inventoryType`); price limits are filtered client-side. Same as Market.
 
 # Auctionator reference — Market 1.8.0
