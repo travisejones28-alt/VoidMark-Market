@@ -1,3 +1,9 @@
+## 1.22.21
+- **Last Bought shows on gear you just bought.** Forever's purchase link only says "Greenweave Gloves", so the buy was saved without its suffix and never matched the tooltip ("Greenweave Gloves of the Sorcerer").
+  - New buys are saved with the AH's full name.
+  - Buys already saved with only the base name are matched by asking the AH what that exact item is called, so a different suffix of the same gloves still doesn't match.
+- 269 regressions.
+
 ## 1.22.20
 - **Listings: "See listings / buy".** Select one of your auctions (or double-click it) to open that exact item's buy page right on Listings: every other seller's listing with price and count, ready to buy out an undercut. Back returns to your auctions.
 - **Undercut checks no longer reset to "Not checked".** Your auctions reload often (after posting, opening the AH, Refresh), and each reload wiped the results. They're now kept for 15 minutes per auction, and a check that finishes during a reload still lands.

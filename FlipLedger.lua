@@ -70,12 +70,38 @@ local function openFlips(self,name,key)
 end
 
 -- Recording ------------------------------------------------------------------
+-- Forever's purchase link says "Greenweave Gloves"; the AH knows it's
+-- "Greenweave Gloves of the Sorcerer". Keep the name with the suffix.
+local function extends(full,base)
+ return type(full)=='string' and type(base)=='string' and #full>#base and full:lower():sub(1,#base+4)==base:lower()..' of '
+end
+function M:FlipBuyName(p)
+ local link=nameOf(p.itemLink)
+ local base=link or p.name
+ local ah=p.marketKey~=nil and self:KeyFullName(p.marketKey)
+ if extends(ah,base) then return ah end
+ if extends(p.name,base) then return p.name end
+ return base
+end
+-- The AH's own name for an exact item key (with suffix), cached.
+function M:KeyFullName(key)
+ if key==nil then return nil end
+ local names=self.db.keyNames;if type(names)~='table' then names={};self.db.keyNames=names end
+ if names[key] then return names[key] end
+ local A=C_AuctionHouse;if not (A and A.GetItemKeyInfo) then return nil end
+ local _,id,s,l,pet=self:ParseKey(key);if not id then return nil end
+ local ik=self:ItemKey({itemID=id,itemSuffix=s,itemLevel=l,battlePetSpeciesID=pet})
+ local ok,info=pcall(A.GetItemKeyInfo,ik)
+ local n=ok and type(info)=='table' and info.itemName
+ if type(n)=='string' and n~='' then names[key]=n;return n end
+ return nil
+end
 function M:RecordFlipBuy(p)
  if self.persistenceBlocked or type(p)~='table' or not self:Finite(p.cost,0,1e14) then return end
  local qty=tonumber(p.quantity) or 1;if qty<1 then return end
  local book=self:FlipBook()
  self.db.flipSequence=(tonumber(self.db.flipSequence) or 0)+1
- local f={id=self.db.flipSequence,name=nameOf(p.itemLink,p.name) or ('Item '..tostring(p.itemID)),key=p.marketKey,
+ local f={id=self.db.flipSequence,name=self:FlipBuyName(p) or ('Item '..tostring(p.itemID)),key=p.marketKey,
   itemID=p.itemID,qty=qty,cost=math.floor(p.cost),at=tonumber(p.at) or time(),char=self.characterID,sold=0,gross=0,fee=0,
   source=p.source or 'Market'}
  book[#book+1]=f
@@ -365,6 +391,11 @@ function M:FlipMatcher(link,fullName)
  if full==lname then full=nil end
  return function(nm,k)
   if full and type(nm)=='string' and nm:lower()==full then return true end
+  -- A buy saved with only the base name: ask the AH what its key is called.
+  if full and k~=nil and type(nm)=='string' and not nm:find(' of ',1,true) then
+   local kn=self:KeyFullName(k)
+   if kn and kn:find(' of ',1,true) then return kn:lower()==full end
+  end
   if kid and k~=nil then local _,id,s=self:ParseKey(k);if id then return id==kid and (s or 0)==(ks or 0) end end
   if not lname or type(nm)~='string' then return false end
   local n=nm:lower()

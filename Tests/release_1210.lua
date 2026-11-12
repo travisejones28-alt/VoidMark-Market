@@ -519,4 +519,27 @@ check('1.22.20 Listings keep undercut checks across reloads; See listings / buy 
  M:ListingsOpenBuy();M:SetView('selling');assert(M.shopBuy==nil,'leaving Listings closes it')
  M.ahOpen,M.Search=oldOpen,oldSearch;M.ownedRows=nil;M.selectedRow=nil;M.view=nil
 end)
+
+check('1.22.21 A buy keeps its suffix name; tooltip finds base-name buys through the AH key name',function()
+ M.db.flips={};M.db.keyNames=nil
+ local A=C_AuctionHouse;local oldInfo=A.GetItemKeyInfo
+ local key=M:Key(2970,1033)
+ A.GetItemKeyInfo=function(k) if k.itemID==2970 and k.itemSuffix==1033 then return {itemName='Greenweave Gloves of the Sorcerer'} end end
+ local ok,err=pcall(function()
+  -- New buy: the purchase link only has the base name.
+  local f=M:RecordFlipBuy({name='Greenweave Gloves',itemLink='|cff1eff00|Hitem:2970::::::::20|h[Greenweave Gloves]|h|r',marketKey=key,quantity=1,cost=700})
+  assert(f.name=='Greenweave Gloves of the Sorcerer',f.name)
+  -- An older buy saved with only the base name still shows on the tooltip.
+  M.db.flips={};table.insert(M:FlipBook(),{id=1,name='Greenweave Gloves',key=key,qty=1,cost=700,at=time(),sold=0,gross=0,fee=0})
+  _G.TT3TextLeft1={GetText=function() return 'Greenweave Gloves of the Sorcerer' end}
+  local lines={};local tip={GetName=function() return 'TT3' end,AddLine=function(_,t) lines[#lines+1]=t end,AddDoubleLine=function(_,l,r) lines[#lines+1]=l..'='..r end}
+  M:AppendBoughtTooltip(tip,'|cff1eff00|Hitem:2970::::::::20|h[Greenweave Gloves]|h|r')
+  assert(lines[1]=='Last Bought='..M:Coins(700),table.concat(lines,' / '))
+  -- ...but not on a different suffix of the same gloves.
+  _G.TT3TextLeft1={GetText=function() return 'Greenweave Gloves of Healing' end};lines={}
+  M:AppendBoughtTooltip(tip,'|cff1eff00|Hitem:2970::::::::20|h[Greenweave Gloves]|h|r')
+  assert(#lines==0,table.concat(lines,' / '))
+ end)
+ A.GetItemKeyInfo=oldInfo;_G.TT3TextLeft1=nil;M.db.flips={};M.db.keyNames=nil;assert(ok,err)
+end)
 end
