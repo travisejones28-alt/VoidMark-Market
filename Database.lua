@@ -82,6 +82,7 @@ function M:RebuildIndexes()
         m.history=m.history or {}; self.marketIndex[#self.marketIndex+1]=k
         self.itemIndex[m.itemID]=self.itemIndex[m.itemID] or {}; table.insert(self.itemIndex[m.itemID],k)
         if m.name then if self.nameIndex[m.name]==nil then self.nameIndex[m.name]=k else self.nameIndex[m.name]=false end end
+        if type(m.suffixFloors)=="table" then for n in pairs(m.suffixFloors) do if n~=m.name and self.nameIndex[n]==nil then self.nameIndex[n]=k end end end
       end
       if debugprofilestop()-start>=self.budget then return false end
     end

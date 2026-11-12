@@ -200,6 +200,15 @@ function M:StartSnapshotProcessing(total,source,diagnostic)
     summary.auctionsProcessed=summary.auctionsProcessed+1; summary.totalQuantity=summary.totalQuantity+count
     if suffix~=0 then summary.variantRows=summary.variantRows+1 end
     g.name=g.name or name; g.listings=g.listings+1; g.quantity=g.quantity+count
+    -- Forever links drop the suffix, so every suffix of an item lands in this
+    -- group. Keep each name's own lowest price so they never mix.
+    if type(name)=='string' and name~='' then
+      local byName=g.byName; if not byName then byName={}; g.byName=byName; g.nameCount=0 end
+      local e=byName[name]
+      if e then e.floor=math.min(e.floor,unit); e.quantity=e.quantity+count
+      elseif g.nameCount<40 then byName[name]={floor=unit,quantity=count}; g.nameCount=g.nameCount+1
+      else g.tooManyNames=true end
+    end
     g.floorUnitPrice=math.min(g.floorUnitPrice,unit); g.ceilingUnitPrice=math.max(g.ceilingUnitPrice,unit)
     if g.priceLevels[unit] then g.priceLevels[unit]=g.priceLevels[unit]+count
     elseif g.tierCount<512 then g.priceLevels[unit]=count; g.tierCount=g.tierCount+1

@@ -33,11 +33,18 @@ function M:RefreshInventory()
             -- never offer a price that belongs to a different suffix.
             local full=self.BagItemFullName and self:BagItemFullName(currentBag,currentSlot)
             if full then
-              if m and type(m.name)=='string' and m.name:lower()~=full:lower() and m.name:find(' of ',1,true) then
-                plan.variantMismatch=m.name;plan.price=nil;plan.reason='Last scan price was for '..m.name
+              local state,sf=self:VariantPrice(key,full,self:LinkName(info.hyperlink))
+              if state=='suffix' then
+                plan.price=sf.floor;plan.suffixPrice=sf.floor;plan.reason='Last scan price for this suffix'
+              elseif state=='none' then
+                plan.variantMismatch=m and m.name or true;plan.price=nil;plan.reason='No scan price for this suffix yet'
               end
               plan.name=full
             end
+            -- The AH's own key for this exact item (with its suffix): used for
+            -- your settings, post history and what you paid, so suffixes never share.
+            local ahKey=self:BagAHKey(currentBag,currentSlot,info.itemID)
+            if ahKey~=nil and ahKey~=key then plan.linkKey=key;plan.marketKey=ahKey end
             plan.quantity=qty;plan.bag=currentBag;plan.slot=currentSlot
             plan.itemLink=info.hyperlink
             plan.icon=info.iconFileID
@@ -80,7 +87,7 @@ function M:CaptureOwnedAuctions()
         local key=self:Key(info.itemKey.itemID,info.itemKey.itemSuffix,info.itemKey.itemLevel,info.itemKey.battlePetSpeciesID)
         local m=self.db.market[key]; local qty=tonumber(info.quantity) or 1
         local unit=tonumber(info.unitPrice) or (tonumber(info.buyoutAmount) or 0)/math.max(1,qty)
-        rows[#rows+1]={auctionID=info.auctionID,itemKey=info.itemKey,itemID=info.itemKey.itemID,marketKey=key,name=m and m.name or self:ItemName(info.itemKey.itemID) or ('Item '..info.itemKey.itemID),quantity=qty,
+        rows[#rows+1]={auctionID=info.auctionID,itemKey=info.itemKey,itemID=info.itemKey.itemID,marketKey=key,name=self:OwnedAuctionName(key,m,info),quantity=qty,
           unit=unit,timeLeft=info.timeLeftSeconds or info.timeLeft,status=info.status,action='INSPECT',deposit=info.depositAmount,
           floor=m and m.latest and m.latest.meaningfulFloor,reason='Snapshot comparison only; refresh item before deciding'}
       end
@@ -138,3 +145,24 @@ end)
 M:RegisterHandler('AUCTION_HOUSE_AUCTION_CREATED',function(self,_,id)
   self:AddLedger('posted',{auctionID=id,status='observed',evidence='Observed creation; price/deposit captured only if supplied by client'})
 end)
+
+-- Name for one of your auctions: the AH's own name for its exact key (with the
+-- suffix). A scanned name is only used when it isn't another suffix's.
+function M:OwnedAuctionName(key,m,info)
+ local id=info and info.itemKey and info.itemKey.itemID
+ local full=self.KeyFullName and self:KeyFullName(key)
+ if full then return full end
+ local base=self:ItemName(id) or (GetItemInfo and GetItemInfo(id))
+ local scanned=m and m.name
+ if scanned and not m.mixedVariants and (not base or self:NameScore(scanned,base)>0) then return scanned end
+ return base or scanned or ('Item '..tostring(id))
+end
+
+-- AH item key of a bag item, only when it carries a suffix the link lacks.
+function M:BagAHKey(bag,slot,itemID)
+ local A=C_AuctionHouse
+ if not (A and A.GetItemKeyFromItem and ItemLocation and ItemLocation.CreateFromBagAndSlot) then return nil end
+ local ok,k=pcall(function() return A.GetItemKeyFromItem(ItemLocation:CreateFromBagAndSlot(bag,slot)) end)
+ if not ok or type(k)~='table' or k.itemID~=itemID or (tonumber(k.itemSuffix) or 0)==0 then return nil end
+ return self:Key(k.itemID,k.itemSuffix,k.itemLevel or 0,k.battlePetSpeciesID or 0)
+end

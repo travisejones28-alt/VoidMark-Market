@@ -1,3 +1,14 @@
+## 1.22.22 — suffix sweep
+Forever's item links leave out the suffix ("[Pagan Belt]"), while the AH sells each suffix as its own item. Everything that matches items now goes through one set of rules (exact AH key > full name > base name), instead of each screen guessing.
+- **Scans keep a price per suffix.** Every suffix of an item used to land under one price. A scan now records each suffix's own lowest price; the shared entry is named after the base item and marked as mixed.
+- **Tooltips** show the hovered suffix's own price, or "No price for this suffix yet". They never show a mixed price, or a synced price that can't be told apart.
+- **Selling** uses the AH's own key for the exact item. Never-below, favourites, post history and what you paid are per suffix, and the price is the last scan price for that suffix.
+- **Listings** show full names ("Pagan Belt of the Sorcerer"), taken from the AH.
+- **Flip Ledger**: buys saved with only the base name get their full name once the AH is opened. What you paid, Last Bought / Last Sold and sale matching never take another suffix's buy. When an exact match exists, a buy saved without its suffix isn't used.
+- **No more loose name matches.** "Silk" no longer matches "Silk Cloth", and "Heavy Leather" no longer matches "Heavy Leather Ball". Names match exactly, or as base name + " of ...".
+- Post history is also saved under the auction's AH key, so sale banners find your post price for gear.
+- 272 regressions.
+
 ## 1.22.21
 - **Last Bought shows on gear you just bought.** Forever's purchase link only says "Greenweave Gloves", so the buy was saved without its suffix and never matched the tooltip ("Greenweave Gloves of the Sorcerer").
   - New buys are saved with the AH's full name.

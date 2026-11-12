@@ -223,6 +223,8 @@ function M:SellListRows()
   end
  elseif mode=='history' then
   local m=r.marketKey~=nil and self.db.market[r.marketKey]
+  -- Suffix gear: the link key's history mixes every suffix; don't show it as this one's.
+  if not m and r.linkKey~=nil then local lm=self.db.market[r.linkKey];if lm and not lm.mixedVariants and self:VariantPrice(r.linkKey,r.name)=='key' then m=lm end end
   local hist=m and m.history or {}
   for i=#hist,math.max(1,#hist-60),-1 do local e=hist[i];if type(e)=='table' then out[#out+1]={at=e.at,unit=e.median or e.floor,quantity=e.quantity} end end
  else

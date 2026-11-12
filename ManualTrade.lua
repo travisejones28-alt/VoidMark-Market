@@ -68,7 +68,7 @@ function M:FindBagItem(r)
    local b=get(bag,slot)
    if type(b)=='table' and b.itemID==r.itemID and not b.isBound then
     if b.hyperlink==r.itemLink and not b.isLocked then return bag,slot end
-    if not loose and not b.isLocked and r.marketKey~=nil and self:LinkIdentity(b.hyperlink,b.itemID)==r.marketKey then
+    if not loose and not b.isLocked and r.marketKey~=nil and self:LinkIdentity(b.hyperlink,b.itemID)==(r.linkKey or r.marketKey) then
      -- Same key can be another suffix on Forever: the names must match too.
      local full=r.name and self.BagItemFullName and self:BagItemFullName(bag,slot)
      if not full or full==r.name then loose={bag,slot,b.hyperlink} end
@@ -182,6 +182,8 @@ function M:ReviewPost(row,n,unit,duration)
   if not now or self.postQuote~=q or now.deposit~=b.deposit then self:Print(reason or 'Quote changed; review again');return end
   self.postQuote=nil;self.tradePending='post';self.postingRow=row
   row.postedUnit=unit;row.postedQuantity=n;row.postedDuration=duration;row.postHistoryRecorded=nil
+  -- The AH key of what's being posted: your auction (and its sale) will carry it.
+  local k=now.k;row.postKey=type(k)=='table' and self:Key(k.itemID,k.itemSuffix or 0,k.itemLevel or 0,k.battlePetSpeciesID or 0) or nil
   local A=C_AuctionHouse;local ok,pending
   if now.commodity then ok,pending=pcall(A.PostCommodity,now.loc,duration,n,unit)
   else ok,pending=pcall(A.PostItem,now.loc,duration,n,nil,unit) end

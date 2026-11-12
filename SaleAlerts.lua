@@ -7,11 +7,6 @@ local _,M=...
 
 local function trim(s) return (tostring(s or ''):match('^%s*(.-)%s*$')) end
 local function lower(s) return tostring(s or ''):lower() end
-local function sameItem(a,b)
- a,b=lower(a),lower(b)
- if a=='' or b=='' then return false end
- return a==b or a:sub(1,#b)==b or b:sub(1,#a)==a
-end
 
 function M:SoldAuctionName(msg)
  if type(msg)~='string' then return nil end
@@ -42,7 +37,7 @@ local function claimListing(self,name,auctionID)
   for _,o in ipairs(rows) do
    local id=o.auctionID or o
    if not self.saleClaimed[id] and not (self.OwnedSold and self:OwnedSold(o)) and self:Finite(o.unit,1,1e12)
-    and (pass==1 and lower(o.name)==lower(name) or pass==2 and sameItem(o.name,name)) then
+    and (pass==1 and lower(o.name)==lower(name) or pass==2 and self:NameScore(o.name,name)==1) then
     self.saleClaimed[id]=true;return o
    end
   end
@@ -53,7 +48,7 @@ function M:BuildSaleAlert(name,auctionID,link)
  local cut=tonumber(self.db.settings.ahCut) or 0.05;if not self:Finite(cut,0,0.3) then cut=0.05 end
  local a={name=name,qty=1}
  local o=claimListing(self,name,auctionID)
- local flip=self.HeldFlip and self:HeldFlip(name)
+ local flip=self.HeldFlip and self:HeldFlip(name,link,o and o.marketKey)
  if o then a.qty=math.max(1,math.floor(tonumber(o.quantity) or 1));a.gross=math.floor(o.unit*a.qty+0.5)
  elseif flip and flip.listPrice then a.qty=1;a.gross=flip.listPrice
  else

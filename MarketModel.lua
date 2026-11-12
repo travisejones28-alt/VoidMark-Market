@@ -284,6 +284,33 @@ function TTB:BuildMarketObservation(group, scanID, completedAt)
   }
 end
 
+local function applySuffixes(market, group, completedAt)
+  -- Several suffixes under one key (Forever links have no suffix): the key's
+ -- own price is a mix, so keep one price per full name and name the key
+ -- after the base item. Tooltips and Selling use the per-name price.
+ if (group.nameCount or 0) > 1 or group.tooManyNames then
+   local floors = {}
+   for n, e in pairs(group.byName or {}) do
+     if type(n)=="string" and type(e)=="table" then floors[n] = {floor=math.floor(e.floor+0.5), quantity=e.quantity, at=completedAt} end
+   end
+   local old = market.suffixFloors
+   if type(old)=="table" then
+     for n, e in pairs(old) do
+       if floors[n]==nil and type(e)=="table" and (tonumber(e.at) or 0) >= completedAt-7*86400 then floors[n]=e end
+     end
+   end
+   market.suffixFloors = floors
+   market.mixedVariants = true
+   local base = group.itemLink and group.itemLink:match("%[(.-)%]")
+   if base and base~="" then market.name = base end
+ else
+   market.mixedVariants = nil
+   if type(market.suffixFloors)=="table" and group.name then
+     market.suffixFloors[group.name] = {floor=math.floor((group.floorUnitPrice or 0)+0.5), quantity=group.quantity, at=completedAt}
+   end
+ end
+end
+
 function TTB:UpdateMarketFromGroup(group, scanID, completedAt)
   self.db.market = self.db.market or {}
   local itemID = tonumber(group.itemID)
@@ -300,6 +327,8 @@ function TTB:UpdateMarketFromGroup(group, scanID, completedAt)
   end
   market.history = market.history or {}
 
+  -- Before the 15-minute history guard: every scan refreshes per-suffix prices.
+  applySuffixes(market, group, completedAt)
   local previous = market.history[#market.history]
   if previous and completedAt-(tonumber(previous.at) or 0)<900 then return market end
   local obs = self:BuildMarketObservation(group, scanID, completedAt)
@@ -309,7 +338,7 @@ function TTB:UpdateMarketFromGroup(group, scanID, completedAt)
   market.battlePetSpeciesID = group.battlePetSpeciesID or 0
   market.itemSuffix = itemSuffix
   market.marketKey = key
-  market.name = group.name or market.name or ("Item " .. tostring(itemID))
+  if not market.mixedVariants then market.name = group.name or market.name or ("Item " .. tostring(itemID)) end
   market.quality = group.quality or market.quality
   market.level = group.level or market.level
   market.texture = group.texture or market.texture

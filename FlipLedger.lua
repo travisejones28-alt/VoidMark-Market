@@ -45,28 +45,19 @@ local function nameOf(link,name)
  if type(link)=='string' then local n=link:match('%[(.-)%]');if n and n~='' then return n end end
  return type(name)=='string' and name or nil
 end
-local function sameItem(a,b)
- a,b=tostring(a or ''):lower(),tostring(b or ''):lower()
- if a=='' or b=='' then return false end
- return a==b or a:sub(1,#b)==b or b:sub(1,#a)==a
-end
--- Open (not fully sold) buys of an item, oldest first; exact name, then partial.
-local function openFlips(self,name,key)
- local out,seen={},{}
- local _,kid,ks=self:ParseKey(key)
- for pass=1,2 do
-  for _,f in ipairs(self:FlipBook()) do
-   if not seen[f] and f.cost and (f.sold or 0)<(f.qty or 1) then
-    local hit
-    if pass==1 then
-     hit=type(name)=='string' and tostring(f.name):lower()==name:lower()
-     if not hit and kid and f.key~=nil then local _,id,s=self:ParseKey(f.key);hit=id==kid and (s or 0)==(ks or 0) end
-    else hit=sameItem(f.name,name) end
-    if hit then seen[f]=true;out[#out+1]=f end
-   end
+-- Open (not fully sold) buys of an item, oldest first: certain matches, then
+-- buys saved without their suffix (see ItemMatcher in Tooltips.lua).
+local function openFlips(self,name,key,link)
+ local match=self:ItemMatcher({name=name,key=key,link=link})
+ local strong,weak={},{}
+ for _,f in ipairs(self:FlipBook()) do
+  if f.cost and (f.sold or 0)<(f.qty or 1) then
+   local s=match(f.name,f.key)
+   if s==2 then strong[#strong+1]=f elseif s==1 then weak[#weak+1]=f end
   end
  end
- return out
+ for _,f in ipairs(weak) do strong[#strong+1]=f end
+ return strong
 end
 
 -- Recording ------------------------------------------------------------------
@@ -108,12 +99,12 @@ function M:RecordFlipBuy(p)
  if self.shareRun then self.shareRun.buyCheckAt=0 end
  trimBook(self);self:RefreshUI();return f
 end
-function M:RecordFlipSale(name,qty,gross,fee)
+function M:RecordFlipSale(name,qty,gross,fee,key)
  if self.persistenceBlocked or type(name)~='string' or name=='' or not self:Finite(gross,0,1e14) then return end
  qty=tonumber(qty) or 1;if qty<1 then qty=1 end
  fee=self:Finite(fee,0,gross) and fee or 0
  local left=qty
- for _,f in ipairs(openFlips(self,name)) do
+ for _,f in ipairs(openFlips(self,name,key)) do
   if left<=0 then break end
   local take=math.min((f.qty or 1)-(f.sold or 0),left)
   f.sold=(f.sold or 0)+take;f.gross=(f.gross or 0)+gross*take/qty;f.fee=(f.fee or 0)+fee*take/qty
@@ -205,7 +196,7 @@ function M:BackfillFlips()
  for _,e in ipairs(self.db.ledger) do
   if type(e)=='table' and type(e.name)=='string' and e.name~='' then
    if e.kind=='purchase' and e.status=='confirmed' and self:Finite(e.cost,1,1e14) then
-    buys[#buys+1]={name=nameOf(e.itemLink,e.name),cost=math.floor(e.cost),qty=tonumber(e.quantity) or 1,at=e.resolvedAt or e.at,key=e.marketKey,itemID=e.itemID,char=e.character,source='Market',market=true}
+    buys[#buys+1]={name=self:FlipBuyName(e),cost=math.floor(e.cost),qty=tonumber(e.quantity) or 1,at=e.resolvedAt or e.at,key=e.marketKey,itemID=e.itemID,char=e.character,source='Market',market=true}
    elseif e.kind=='mail won' and self:Finite(e.gross,1,1e14) then
     buys[#buys+1]={name=e.name,cost=math.floor(e.gross),qty=tonumber(e.quantity) or 1,at=e.at,key=e.marketKey,char=e.character,source='AH (from mail)'}
    elseif e.kind=='mail sale' and self:Finite(e.gross,1,1e14) then
@@ -383,37 +374,33 @@ end
 -- fullName: the tooltip's title line, which on Forever has the suffix even when
 -- the link doesn't. A name match then wins, since the AH and bag links can
 -- number the same suffix differently.
-function M:FlipMatcher(link,fullName)
- local name=nameOf(link);local key=self.LinkIdentity and self:LinkIdentity(link)
- local _,kid,ks=self:ParseKey(key)
- local lname=name and name:lower()
- local full=type(fullName)=='string' and fullName~='' and fullName:lower() or nil
- if full==lname then full=nil end
- return function(nm,k)
-  if full and type(nm)=='string' and nm:lower()==full then return true end
-  -- A buy saved with only the base name: ask the AH what its key is called.
-  if full and k~=nil and type(nm)=='string' and not nm:find(' of ',1,true) then
-   local kn=self:KeyFullName(k)
-   if kn and kn:find(' of ',1,true) then return kn:lower()==full end
-  end
-  if kid and k~=nil then local _,id,s=self:ParseKey(k);if id then return id==kid and (s or 0)==(ks or 0) end end
-  if not lname or type(nm)~='string' then return false end
-  local n=nm:lower()
-  return n==lname or n:sub(1,#lname+4)==lname..' of '
- end
+-- Tooltip matching: when any record matches for certain, possible matches
+-- (saved without a suffix) are left out.
+function M:FlipMatcher(link,fullName,key)
+ local m=self:ItemMatcher({link=link,name=fullName,key=key})
+ return function(nm,k) return m(nm,k)>0 end,m
 end
-function M:BoughtHistory(link,fullName)
- local same=self:FlipMatcher(link,fullName)
+local function tiered(rows)
+ local best=0;for _,r in ipairs(rows) do if r.score>best then best=r.score end end
+ local out={};for _,r in ipairs(rows) do if r.score==best then out[#out+1]=r end end
+ return out
+end
+function M:BoughtHistory(link,fullName,key)
+ local _,score=self:FlipMatcher(link,fullName,key)
  local out={}
  for _,f in ipairs(self:FlipBook()) do
-  if f.cost and same(f.name,f.key) then out[#out+1]={cost=f.cost,qty=f.qty or 1,at=f.at,sold=f.sold or 0,net=self:FlipNumbers(f).net,soldAt=f.soldAt,char=f.char} end
+  local s=f.cost and score(f.name,f.key) or 0
+  if s>0 then out[#out+1]={score=s,cost=f.cost,qty=f.qty or 1,at=f.at,sold=f.sold or 0,net=self:FlipNumbers(f).net,soldAt=f.soldAt,char=f.char} end
  end
  for _,b in pairs(self.db.partnerBuys or {}) do
-  if type(b)=='table' and b.cost and same(b.name,b.key) then out[#out+1]={cost=b.cost,qty=b.qty or 1,at=b.at,sold=0,char=b.char,partner=true} end
+  local s=type(b)=='table' and b.cost and score(b.name,b.key) or 0
+  if s>0 then out[#out+1]={score=s,cost=b.cost,qty=b.qty or 1,at=b.at,sold=0,char=b.char,partner=true} end
  end
+ out=tiered(out)
+ local same=function(n,k) return score(n,k)>0 end
  if #out==0 then -- buys from before the Flip Ledger
   for _,e in ipairs(self.db.ledger or {}) do
-   if e.kind=='purchase' and e.status=='confirmed' and self:Finite(e.cost,0,1e14) and same(nameOf(e.itemLink,e.name),e.marketKey) then
+   if e.kind=='purchase' and e.status=='confirmed' and self:Finite(e.cost,0,1e14) and same(self:NameScore(e.name,nameOf(e.itemLink))==1 and #tostring(e.name)>#tostring(nameOf(e.itemLink)) and e.name or nameOf(e.itemLink,e.name),e.marketKey) then
     out[#out+1]={cost=e.cost,qty=e.quantity or 1,at=e.resolvedAt or e.at,sold=0}
    end
   end
@@ -422,13 +409,15 @@ function M:BoughtHistory(link,fullName)
  return out
 end
 -- Sales of the hovered item, newest first (per-unit price the buyer paid).
-function M:SoldHistory(link,fullName)
- local same=self:FlipMatcher(link,fullName);local out={}
+function M:SoldHistory(link,fullName,key)
+ local _,score=self:FlipMatcher(link,fullName,key);local out={}
  for _,f in ipairs(self:FlipBook()) do
-  if (f.sold or 0)>0 and same(f.name,f.key) then
-   out[#out+1]={unit=math.floor((f.gross or 0)/f.sold+0.5),net=self:FlipNumbers(f).net,qty=f.sold,at=f.soldAt or f.at}
+  local s=(f.sold or 0)>0 and score(f.name,f.key) or 0
+  if s>0 then
+   out[#out+1]={score=s,unit=math.floor((f.gross or 0)/f.sold+0.5),net=self:FlipNumbers(f).net,qty=f.sold,at=f.soldAt or f.at}
   end
  end
+ out=tiered(out)
  table.sort(out,function(a,b) return (a.at or 0)>(b.at or 0) end)
  return out
 end
@@ -464,7 +453,11 @@ function M:AppendBoughtTooltip(tip,link)
 end
 -- Oldest buy of this item you haven't sold yet (nil if none).
 function M:HeldFlip(name,link,key)
- return openFlips(self,nameOf(link,name),key)[1]
+ -- name is the full name when known (tooltip / AH); the link only has the base.
+ local ln=nameOf(link)
+ local best=name
+ if not best or (ln and self:NameScore(ln,name)==0) then best=ln or name end
+ return openFlips(self,best,key,link)[1]
 end
 -- What you paid for one of your listed auctions (oldest unsold buy, else the
 -- latest buy of that item), per unit; nil if no buy is on record.
@@ -480,15 +473,16 @@ function M:PaidForListing(o)
   end
   f=best
  end
- if not f then f=self:PartnerBuyFor(o.itemLink or (o.name and ('['..o.name..']')),o.marketKey) end
+ if not f then f=self:PartnerBuyFor(o.itemLink,o.marketKey,o.name) end
  return f and f.cost and math.floor(f.cost/math.max(1,f.qty or 1)+0.5) or nil
 end
 -- Newest buy your synced partner made of this item (they buy, you list).
-function M:PartnerBuyFor(link,key)
- if not link then return nil end
- local same=self:FlipMatcher(link);local best
+function M:PartnerBuyFor(link,key,name)
+ if not link and not name then return nil end
+ local score=self:ItemMatcher({link=link,name=name,key=key});local best,bestS=nil,0
  for _,b in pairs(self.db.partnerBuys or {}) do
-  if type(b)=='table' and b.cost and same(b.name,key or b.key) and (not best or (b.at or 0)>(best.at or 0)) then best=b end
+  local s=type(b)=='table' and b.cost and score(b.name,b.key) or 0
+  if s>0 and (s>bestS or s==bestS and (b.at or 0)>(best.at or 0)) then best,bestS=b,s end
  end
  return best
 end
@@ -496,7 +490,7 @@ end
 function M:PaidFloor(row)
  if type(row)~='table' or self.db.settings.sellNeverBelowPaid==false then return nil end
  local f=self:HeldFlip(row.name,row.itemLink,row.marketKey)
- if not f then f=self:PartnerBuyFor(row.itemLink or (row.name and ('['..row.name..']')),nil) end
+ if not f then f=self:PartnerBuyFor(row.itemLink,row.marketKey,row.name) end
  if not f or not f.cost then return nil end
  local cut=tonumber(self.db.settings.ahCut) or 0.05;if not self:Finite(cut,0,0.3) then cut=0.05 end
  local unit=f.cost/math.max(1,f.qty or 1)
@@ -517,6 +511,10 @@ function M:SellPaidText(row)
  if row.variantMismatch then
   local t=self:SellPaidTextInner(row)
   return '|cffff8040No scan price for this suffix yet.|r'..(t~='' and ('  '..t) or '')
+ end
+ if row.suffixPrice then
+  local t=self:SellPaidTextInner(row)
+  return '|cffc8a0ffLast scan for this suffix: '..self:Coins(row.suffixPrice)..'|r'..(t~='' and ('  '..t) or '')
  end
  return self:SellPaidTextInner(row)
 end
@@ -818,3 +816,30 @@ function M:BagItemFullName(bag,slot)
  if tip.Hide then tip:Hide() end
  return type(v)=='string' and v~='' and v or nil
 end
+
+-- Buys saved before 1.22.21 carry only the base name ("Greenweave Gloves").
+-- Once the AH can name their exact key, store the full name so the Flip
+-- Ledger, tooltips and sale matching all see the suffix.
+function M:RepairFlipNames()
+ if self.persistenceBlocked or not self.KeyFullName then return 0 end
+ local fixed=0
+ for _,f in ipairs(self:FlipBook()) do
+  if f.key~=nil and type(f.name)=='string' then
+   local _,_,s=self:ParseKey(f.key)
+   if (s or 0)~=0 then
+    local full=self:KeyFullName(f.key)
+    if full and full~=f.name and self:NameExtends(full,f.name) then f.name=full;fixed=fixed+1 end
+   end
+  end
+ end
+ for _,b in pairs(self.db.partnerBuys or {}) do
+  if type(b)=='table' and b.key~=nil and type(b.name)=='string' then
+   local full=self:KeyFullName(b.key)
+   if full and full~=b.name and self:NameExtends(full,b.name) then b.name=full;fixed=fixed+1 end
+  end
+ end
+ return fixed
+end
+M:RegisterHandler('AUCTION_HOUSE_SHOW',function(self)
+ if C_Timer and C_Timer.After then C_Timer.After(3,function() pcall(self.RepairFlipNames,self) end) else pcall(self.RepairFlipNames,self) end
+end)

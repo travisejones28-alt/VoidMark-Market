@@ -542,4 +542,84 @@ check('1.22.21 A buy keeps its suffix name; tooltip finds base-name buys through
  end)
  A.GetItemKeyInfo=oldInfo;_G.TT3TextLeft1=nil;M.db.flips={};M.db.keyNames=nil;assert(ok,err)
 end)
+
+check('1.22.22 Sweep: one matcher for item identity (names and keys)',function()
+ -- Names: exact, base vs suffix, never loose prefixes.
+ assert(M:NameScore('Silk Cloth','silk cloth')==2)
+ assert(M:NameScore('Pagan Belt','Pagan Belt of Intellect')==1)
+ assert(M:NameScore('Pagan Belt of Intellect','Pagan Belt of the Sorcerer')==0)
+ assert(M:NameScore('Silk','Silk Cloth')==0 and M:NameScore('Heavy Leather','Heavy Leather Ball')==0,'no loose prefix matches')
+ local link='|cff1eff00|Hitem:7406::::::::16|h[Pagan Belt]|h|r'
+ local m=M:ItemMatcher({link=link,name='Pagan Belt of Intellect'})
+ assert(m('Pagan Belt of Intellect')==2 and m('Pagan Belt of the Sorcerer')==0 and m('Pagan Belt')==1)
+ -- AH keys decide between two suffixes.
+ local a,b=M:Key(7406,800),M:Key(7406,900)
+ m=M:ItemMatcher({key=a,name='Pagan Belt'})
+ assert(m('Pagan Belt',a)==2 and m('Pagan Belt',b)==0)
+ -- Base-only commodity names still work.
+ m=M:ItemMatcher({name='Silk Cloth'});assert(m('Silk Cloth')==2 and m('Silk')==0)
+end)
+
+check('1.22.22 Sweep: a scan keeps one price per suffix; tooltip and Selling use the right one',function()
+ local key=M:LinkIdentity('|Hitem:15929:0:0:0:0:0:0|h[Fortified Cloak]|h',15929)
+ M.db.market[key]=nil
+ local g={itemID=15929,marketKey=key,itemLink='|Hitem:15929:0:0:0:0:0:0|h[Fortified Cloak]|h',name='Fortified Cloak of Frost Protection',
+  listings=3,quantity=3,floorUnitPrice=500,ceilingUnitPrice=1500,priceLevels={[500]=1,[900]=1,[1500]=1},tierCount=3,acquisitionLots={},
+  byName={['Fortified Cloak of Frost Protection']={floor=1500,quantity=1},['Fortified Cloak of Healing']={floor=900,quantity=1},['Fortified Cloak of the Monkey']={floor=500,quantity=1}},nameCount=3}
+ M:UpdateMarketFromGroup(g,1,time())
+ local mk=M.db.market[key];assert(mk and mk.mixedVariants and mk.name=='Fortified Cloak','mixed key named after the base item: '..tostring(mk and mk.name))
+ assert(mk.suffixFloors['Fortified Cloak of Healing'].floor==900)
+ local state,sf=M:VariantPrice(key,'Fortified Cloak of Healing','Fortified Cloak');assert(state=='suffix' and sf.floor==900)
+ assert(M:VariantPrice(key,'Fortified Cloak of the Eagle','Fortified Cloak')=='none','a suffix not in that scan has no price')
+ -- Tooltip.
+ _G.TT5TextLeft1={GetText=function() return 'Fortified Cloak of Healing' end}
+ local lines={};local tip={GetName=function() return 'TT5' end,AddLine=function(_,t) lines[#lines+1]=t end,AddDoubleLine=function(_,l,r) lines[#lines+1]=l..'='..r end}
+ M:AppendMarketTooltip(tip,'|Hitem:15929:0:0:0:0:0:0|h[Fortified Cloak]|h')
+ assert(lines[1] and lines[1]:find(M:Coins(900),1,true),table.concat(lines,' / '))
+ _G.TT5TextLeft1=nil
+ -- Selling: price for this suffix, AH key for its settings.
+ local old,oldT,oldA,oldIL=C_Container,C_TooltipInfo,C_AuctionHouse.GetItemKeyFromItem,ItemLocation
+ C_Container={GetContainerNumSlots=function(bag) return bag==0 and 1 or 0 end,
+  GetContainerItemInfo=function() return {itemID=15929,stackCount=1,hyperlink='|Hitem:15929:0:0:0:0:0:0|h[Fortified Cloak]|h'} end}
+ C_TooltipInfo={GetBagItem=function() return {lines={{leftText='Fortified Cloak of Healing'}}} end}
+ ItemLocation={CreateFromBagAndSlot=function() return {} end}
+ C_AuctionHouse.GetItemKeyFromItem=function() return {itemID=15929,itemSuffix=1033,itemLevel=0,battlePetSpeciesID=0} end
+ local ok,err=pcall(function()
+  M:RefreshInventory();jobs()
+  local r=M.sellingRows[1]
+  assert(r.price==900 and r.suffixPrice==900,'suffix price: '..tostring(r.price))
+  assert(r.marketKey==M:Key(15929,1033) and r.linkKey==key,'AH key for this suffix')
+  assert(M:SellPaidText(r):find('Last scan for this suffix',1,true))
+ end)
+ C_Container,C_TooltipInfo,C_AuctionHouse.GetItemKeyFromItem,ItemLocation=old,oldT,oldA,oldIL
+ M.db.market[key]=nil;assert(ok,err)
+end)
+
+check('1.22.22 Sweep: what you paid, post history, Listings names and old buys all follow the exact suffix',function()
+ M.db.flips={};M.db.keyNames=nil;M.db.postHistory={}
+ local A=C_AuctionHouse;local oldInfo=A.GetItemKeyInfo
+ local int,sor=M:Key(7406,800),M:Key(7406,900)
+ A.GetItemKeyInfo=function(k) if k.itemSuffix==800 then return {itemName='Pagan Belt of Intellect'} elseif k.itemSuffix==900 then return {itemName='Pagan Belt of the Sorcerer'} end end
+ local ok,err=pcall(function()
+  local f1=M:RecordFlipBuy({name='Pagan Belt',itemLink='|Hitem:7406::::::::16|h[Pagan Belt]|h',marketKey=int,quantity=1,cost=430})
+  assert(f1.name=='Pagan Belt of Intellect')
+  -- Sell row for the Sorcerer belt: the Intellect buy is not what you paid.
+  local row={name='Pagan Belt of the Sorcerer',itemLink='|Hitem:7406::::::::16|h[Pagan Belt]|h',marketKey=sor}
+  assert(M:HeldFlip(row.name,row.itemLink,row.marketKey)==nil,'other suffix buy not used')
+  row.marketKey=int;row.name='Pagan Belt of Intellect';assert(M:HeldFlip(row.name,row.itemLink,row.marketKey)==f1)
+  -- Old buy saved with only the base name gets its full name back.
+  local f2={id=99,name='Pagan Belt',key=sor,qty=1,cost=500,at=time(),sold=0,gross=0,fee=0};table.insert(M:FlipBook(),f2)
+  assert(M:RepairFlipNames()>=1 and f2.name=='Pagan Belt of the Sorcerer')
+  -- Listings: your auction's name comes from the AH key.
+  assert(M:OwnedAuctionName(sor,nil,{itemKey={itemID=7406}})=='Pagan Belt of the Sorcerer')
+  -- Post history goes under the AH key too (sale banners look it up there).
+  local posted={marketKey=M:Key(7406,0,16),postKey=sor,postedUnit=2500,postedQuantity=1,postedDuration=2}
+  M:RecordPostHistory(posted);assert(M.db.postHistory[sor][1].unit==2500 and M.db.postHistory[M:Key(7406,0,16)][1].unit==2500)
+  -- Sale name matching: different suffix never claims your listing.
+  M.ownedRows={{auctionID=5,name='Pagan Belt of Intellect',unit=4300,quantity=1,status=0,marketKey=int}};M.saleClaimed={}
+  local a=M:BuildSaleAlert('Pagan Belt of the Sorcerer');assert(a.gross==nil or a.gross~=4300,'other suffix listing not claimed')
+  M.saleClaimed={};a=M:BuildSaleAlert('Pagan Belt of Intellect');assert(a.gross==4300)
+ end)
+ A.GetItemKeyInfo=oldInfo;M.db.flips={};M.db.keyNames=nil;M.db.postHistory={};M.ownedRows=nil;M.saleClaimed={};assert(ok,err)
+end)
 end

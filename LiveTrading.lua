@@ -192,9 +192,17 @@ function M:RecordPostHistory(posted)
  if type(posted)~='table' or posted.postHistoryRecorded or posted.marketKey==nil or self.persistenceBlocked or not posted.postedUnit then return end
  posted.postHistoryRecorded=true
  self.db.postHistory=type(self.db.postHistory)=='table' and self.db.postHistory or {}
- local h=self.db.postHistory[posted.marketKey] or {};self.db.postHistory[posted.marketKey]=h
- table.insert(h,1,{at=time(),unit=posted.postedUnit,quantity=posted.postedQuantity,duration=posted.postedDuration})
- while #h>20 do table.remove(h) end
+ -- Under the sell row's key (Your history) and the AH key of the auction
+ -- (sale banners look it up by your listing), once each.
+ local done={}
+ for _,k in ipairs({posted.marketKey,posted.postKey}) do
+  if k~=nil and not done[k] then
+   done[k]=true
+   local h=self.db.postHistory[k] or {};self.db.postHistory[k]=h
+   table.insert(h,1,{at=time(),unit=posted.postedUnit,quantity=posted.postedQuantity,duration=posted.postedDuration})
+   while #h>20 do table.remove(h) end
+  end
+ end
 end
 M:RegisterHandler('AUCTION_HOUSE_AUCTION_CREATED',function(self)
  local posted=self.postingRow;self.postingRow=nil

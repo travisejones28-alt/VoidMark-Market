@@ -93,14 +93,11 @@ function M:AppendMarketTooltip(tip,link,count)
  -- Forever links drop the suffix: if the price on file is another suffix's
  -- (tooltip title says "of Intellect", the scan said "of the Sorcerer"), use
  -- the entry with this exact name, or show no price.
- local title=self:TooltipTitle(tip);local m=self.db.market[key]
- if title and m and type(m.name)=='string' and m.name:find(' of ',1,true) and m.name:lower()~=title:lower() then
-  local k=self.nameIndex and self.nameIndex[title]
-  if k then key=k else
-   tip:AddDoubleLine('Auction','|cff999999No price for this suffix yet|r',1,.82,0,.6,.6,.6);return
-  end
- end
- local p=self:PriceObservation(key)
+ local title=self:TooltipTitle(tip)
+ local state,sf=self:VariantPrice(key,title,self:LinkName(link))
+ if state=='none' then tip:AddDoubleLine('Auction','|cff999999No price for this suffix yet|r',1,.82,0,.6,.6,.6);return end
+ local p
+ if state=='suffix' then p={floor=sf.floor,at=sf.at} else p=self:PriceObservation(key) end
  if not p then
   if self.db.settings.tooltipNoData~=false and not bindBlocksAuction(link) then
    tip:AddDoubleLine('Auction','|cff999999No price yet|r',1,.82,0,.6,.6,.6)
@@ -194,4 +191,96 @@ function M:TooltipTitle(tip)
  local ok,v=pcall(fs.GetText,fs)
  if not ok or type(v)~='string' or v=='' then return nil end
  return (v:gsub('|c%x%x%x%x%x%x%x%x',''):gsub('|r',''))
+end
+
+-- Item identity on WoW Forever --------------------------------------------------
+-- Forever's item links leave out the random suffix: a bag link says "[Pagan
+-- Belt]" while the AH sells "Pagan Belt of Intellect" and "Pagan Belt of the
+-- Sorcerer" as different items (different AH item keys). So:
+--  * link keys (LinkIdentity) for suffix gear are suffix 0 and shared by every suffix;
+--  * AH keys (from searches, your auctions, purchases) carry the real suffix;
+--  * names are the reliable bridge: tooltip title / AH name = full name.
+-- Everything that matches items goes through NameScore / ItemMatcher.
+local function lo(s) return type(s)=='string' and s~='' and s:lower() or nil end
+local function extends(full,base) full,base=lo(full),lo(base);return full~=nil and base~=nil and #full>#base+4 and full:sub(1,#base+4)==base..' of ' end
+M.NameExtends=function(_,full,base) return extends(full,base) end
+function M:LinkName(link) local n=type(link)=='string' and link:match('%[(.-)%]');return n~='' and n or nil end
+-- 2 = same name, 1 = one is the base name of the other (suffix unknown), 0 = different.
+function M:NameScore(a,b)
+ a,b=lo(a),lo(b);if not a or not b then return 0 end
+ if a==b then return 2 end
+ if extends(a,b) or extends(b,a) then return 1 end
+ return 0
+end
+-- Matcher for one item (o.link, o.name = full name if known, o.key = AH key if
+-- known). Returns f(name,key) -> 2 certain, 1 possible (a record saved
+-- without its suffix), 0 no.
+function M:ItemMatcher(o)
+ o=o or {}
+ local base=self:LinkName(o.link)
+ -- Only an AH key (o.key) is trusted to tell suffixes apart by number; a
+ -- link's own suffix field can't be compared with AH numbers.
+ local K,fromAH=o.key,o.key~=nil;if K==nil and o.link then K=self:LinkIdentity(o.link) end
+ local _,kid,ks=self:ParseKey(K)
+ local full=o.name
+ if not base then base=full end
+ local T
+ if extends(full,base) then T=lo(full)
+ elseif K~=nil and (ks or 0)~=0 and self.KeyFullName then
+  local kn=self:KeyFullName(K);if kn and (extends(kn,base) or lo(kn)~=lo(base)) then T=lo(kn);if lo(base)==lo(kn) then T=nil end end
+ end
+ local B=lo(base)
+ if T and B and not extends(T,B) then B=T:match('^(.-) of ') or B end
+ return function(nm,k)
+  local _,id,s=self:ParseKey(k)
+  if kid and id and id~=kid then return 0 end
+  -- Two AH keys with suffixes decide it.
+  if kid and id and (ks or 0)~=0 and (s or 0)~=0 then
+   if s==ks then return 2 end
+   -- Different numbers: certain for AH keys; for a link's number, the full
+   -- name (when known) decides instead.
+   if fromAH or not T then return 0 end
+  end
+  local C=lo(nm)
+  if C and B and C==B and id and (s or 0)~=0 and self.KeyFullName then local kn=self:KeyFullName(k);if kn then C=lo(kn) end end
+  if not C then return 0 end
+  if T then
+   if C==T then return 2 end
+   if C==B then return 1 end
+   return 0
+  end
+  if B then
+   if C==B then return 2 end
+   if extends(C,B) then return 1 end
+  end
+  return 0
+ end
+end
+
+-- Which scan price fits an item whose full name is known (tooltip/AH name)?
+-- 'key' = the key's own price is this item's; 'suffix', e = this suffix's own
+-- price from a scan that saw several suffixes; 'none' = only other suffixes'
+-- prices are on file.
+function M:VariantPrice(key,fullName,base)
+ local m=key~=nil and self.db.market[key]
+ if type(fullName)~='string' or fullName=='' then return 'key' end
+ if not m then
+  -- Only a synced price (no names) for a suffix item under a link key that
+  -- every suffix shares: it may be another suffix's.
+  local _,_,s=self:ParseKey(key)
+  if base and (s or 0)==0 and self:NameScore(fullName,base)==1 then return 'none' end
+  return 'key'
+ end
+ local sf=type(m.suffixFloors)=='table' and m.suffixFloors[fullName]
+ if type(sf)=='table' and self:Finite(sf.floor,1,1e12) then return 'suffix',sf end
+ local name=type(m.name)=='string' and m.name or nil
+ if m.mixedVariants then
+  -- Mixed key and this name wasn't listed in that scan.
+  if name and name:lower()==fullName:lower() then return 'key' end
+  return 'none'
+ end
+ if name and name:lower()~=fullName:lower() and (name:find(' of ',1,true) or (base and self:NameScore(fullName,base)==1)) then
+  if self:NameScore(name,fullName)==0 or name:find(' of ',1,true) then return 'none' end
+ end
+ return 'key'
 end
