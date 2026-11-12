@@ -619,6 +619,31 @@ check('1.20 Flip Ledger is its own AH tab; the Shopping button opens that tab',f
  assert(found and found.root=='flip ledger' and found.label=='Flip Ledger')
 end)
 
+check('1.20.1 History is never dropped: old sold rows fold into per-item totals; held items always kept',function()
+ M.db.flips={};M.db.flipArchive={}
+ local book=M:FlipBook()
+ for i=1,5003 do book[i]={id=i,name=i<=3 and 'Old Sold Thing' or 'Bulk',qty=1,cost=100,at=time(),sold=1,gross=300,fee=15,soldAt=time()} end
+ book[1].name='Old Sold Thing';book[5003].sold=0;book[5003].gross=0;book[5003].fee=0 -- one still held
+ M:RecordFlipBuy({name='New Buy',quantity=1,cost=50}) -- triggers the trim
+ assert(#M:FlipBook()==5000,'trimmed to 5000: '..#M:FlipBook())
+ local a=M.db.flipArchive['Old Sold Thing'];assert(a and a.bought==3 and a.sold==3 and a.profit==3*185,'folded into totals')
+ local g;for _,x in ipairs(M:FlipGroups('item')) do if x.name=='Old Sold Thing' then g=x end end
+ assert(g and g.sold==3 and g.profit==555,'still in By item')
+ local t=M:FlipTotals('all');assert(t.profit>=555*1,'all-time totals include it')
+ -- Every row held: nothing is dropped.
+ M.db.flips={};book=M:FlipBook();for i=1,5001 do book[i]={id=i,name='Held',qty=1,cost=1,at=time(),sold=0} end
+ M:RecordFlipBuy({name='Held',quantity=1,cost=1});assert(#M:FlipBook()==5002,'held rows never dropped')
+ M.db.flips={};M.db.flipArchive={}
+end)
+
+check('1.20.1 A failed scan says why, and that older prices are still used',function()
+ local old=M.scanState.phase;local oldD=M.scanState.fullScanDiagnostic
+ M.scanState.phase='error';M.scanState.fullScanDiagnostic={error='Full scan: no replicate response after 180s; listening for late response'}
+ local t=M:SimpleScanStatus()
+ assert(t:find('no replicate response after 180s',1,true) and not t:find('Full scan:',1,true),t)
+ M.scanState.phase=old;M.scanState.fullScanDiagnostic=oldD
+end)
+
 check('1.14 Vs Avg compares against the exact suffix history and sorts deals first',function()
  fresh();M:SetView('browse');M.ahOpen=false
  local monkey,bear=M:Key(600,-10),M:Key(600,-12)

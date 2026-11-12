@@ -8,7 +8,9 @@ local _,M=...
 --  * Expired: "Auction expired" mail; the listing deposit counts as a loss.
 --  * Sold: "Auction successful" invoices at the mailbox, matched to the
 --    oldest unsold buy of the same item. Sales with no buy are kept too.
-local MAX_ROWS=1500
+-- Rows kept in detail. Past this, the oldest fully sold rows are folded into
+-- per-item totals (db.flipArchive) so summaries and all-time totals keep them.
+local MAX_ROWS=5000
 local ROWS,ROW_H=17,22
 local DAY=86400
 
@@ -16,12 +18,27 @@ function M:FlipBook()
  if type(self.db.flips)~='table' then self.db.flips={} end
  return self.db.flips
 end
+function M:FlipArchive()
+ if type(self.db.flipArchive)~='table' then self.db.flipArchive={} end
+ return self.db.flipArchive
+end
+local function archive(self,f)
+ local a=self:FlipArchive();local name=tostring(f.name)
+ local s=a[name];if type(s)~='table' then s={bought=0,sold=0,paid=0,soldPaid=0,net=0,profit=0,expired=0,lost=0};a[name]=s end
+ local n=self:FlipNumbers(f)
+ if f.cost then s.bought=s.bought+(f.qty or 1);s.paid=s.paid+f.cost end
+ s.sold=s.sold+(f.sold or 0);s.net=s.net+n.net;s.expired=s.expired+(f.expired or 0);s.lost=s.lost+n.lost
+ if n.profit then s.profit=s.profit+n.profit;s.soldPaid=s.soldPaid+f.cost*(f.sold or 0)/(f.qty or 1) end
+ s.last=math.max(s.last or 0,f.soldAt or f.at or 0)
+end
 local function trimBook(self)
  local book=self:FlipBook()
  while #book>MAX_ROWS do
   local drop
   for i,f in ipairs(book) do if f.cost==nil or (f.sold or 0)>=(f.qty or 1) then drop=i;break end end
-  table.remove(book,drop or 1)
+  -- Never drop an item you still hold; if every row is held, keep them all.
+  if not drop then break end
+  archive(self,book[drop]);table.remove(book,drop)
  end
 end
 local function nameOf(link,name)
@@ -175,6 +192,11 @@ function M:FlipTotals(period)
    end
   end
  end
+ if period==nil or period=='all' then
+  for _,s in pairs(self:FlipArchive()) do
+   if type(s)=='table' then t.spent=t.spent+(s.paid or 0);t.net=t.net+(s.net or 0);t.profit=t.profit+(s.profit or 0);t.lost=t.lost+(s.lost or 0);t.sold=t.sold+(s.sold or 0) end
+  end
+ end
  t.holdingCost=math.floor(t.holdingCost+0.5)
  return t
 end
@@ -206,6 +228,18 @@ function M:FlipGroups(by,period)
    if (f.sold or 0)>0 then
     s.sold=s.sold+f.sold;s.soldPaid=s.soldPaid+f.cost*f.sold/qty;s.net=s.net+n.net;s.profit=s.profit+(n.profit or 0)
     if n.days then s.days=s.days+n.days;s.daysN=s.daysN+1 end
+   end
+  end
+ end
+ -- Archived (folded) rows, all-time only.
+ if by~='suffix' and (period==nil or period=='all') or by=='suffix' and (period==nil or period=='all') then
+  for name,a in pairs(self:FlipArchive()) do
+   if type(a)=='table' then
+    local g=by=='suffix' and self:FlipSuffix(name) or name
+    local s=groups[g]
+    if not s then s={name=g,bought=0,sold=0,paid=0,soldPaid=0,net=0,profit=0,days=0,daysN=0,holding=0,expired=0};groups[g]=s;order[#order+1]=s end
+    s.bought=s.bought+(a.bought or 0);s.sold=s.sold+(a.sold or 0);s.paid=s.paid+(a.paid or 0);s.soldPaid=s.soldPaid+(a.soldPaid or 0)
+    s.net=s.net+(a.net or 0);s.profit=s.profit+(a.profit or 0);s.expired=s.expired+(a.expired or 0)
    end
   end
  end

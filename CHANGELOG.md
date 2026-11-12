@@ -1,3 +1,9 @@
+## 1.20.1
+- **Flip history is never thrown away.** The Flip Ledger keeps 5000 rows in detail (was 1500). Past that, the oldest fully sold rows are folded into per-item totals that still count in By item, By suffix and all-time totals. Items you still hold are never removed.
+- **Failed scans say why** on the status line (for example "no replicate response after 180s"), and that your last good prices are still in use.
+- Updates never touch your saved data: it lives in WTF\Account\...\SavedVariables\VoidMarkMarket.lua (not the addon folder), and the Warpath updater refuses to write there.
+- 245 regressions.
+
 ## 1.20.0
 - **Flip Ledger is its own AH tab** (between Listings and VoidMark). The Flip Ledger button on Shopping and `/vmm flips` open that tab while the AH is open; away from the AH, `/vmm flips` still opens it as a window.
 - 243 regressions.

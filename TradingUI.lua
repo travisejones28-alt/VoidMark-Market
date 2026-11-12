@@ -17,7 +17,13 @@ function M:SimpleScanStatus()
   if s.phase=='hydrating' then return 'Loading item details | Keep the AH open' end
   return 'Waiting for the Auction House to send prices | Keep the AH open'
  end
- if s.phase=='error' then return '|cffff9999Scan failed: no completed scan. See Tools > Diagnostics.|r'..retry end
+ if s.phase=='error' then
+  local d=self.scanState.fullScanDiagnostic or self.db.fullScanDiagnostic
+  local why=d and d.error and tostring(d.error):gsub('^Full scan: ','') or 'no completed scan'
+  if #why>90 then why=why:sub(1,87)..'...' end
+  local last=self.db.latestScan and (' Prices from '..self:PriceAge(self.db.latestScan.completedAt)..' still used.') or ''
+  return '|cffff9999Scan failed: '..why..'.|r'..last..retry
+ end
  if s.phase=='aborted' then return 'Scan stopped when the Auction House closed'..retry end
  local scan=self.db.latestScan
  if scan then return 'Last scan: '..self:PriceAge(scan.completedAt)..' | '..tostring(scan.auctionsProcessed or 0)..' auctions'..retry end
