@@ -19,6 +19,14 @@ local SLOT={head={'INVTYPE_HEAD'},shoulder={'INVTYPE_SHOULDER'},shoulders={'INVT
  hands={'INVTYPE_HAND'},gloves={'INVTYPE_HAND'},back={'INVTYPE_CLOAK'},cloak={'INVTYPE_CLOAK'}}
 local INVTYPE_ENUM={INVTYPE_HEAD=1,INVTYPE_SHOULDER=3,INVTYPE_CHEST=5,INVTYPE_WAIST=6,INVTYPE_LEGS=7,
  INVTYPE_FEET=8,INVTYPE_WRIST=9,INVTYPE_HAND=10,INVTYPE_CLOAK=16,INVTYPE_ROBE=20}
+-- Blizzard's own enum when present (what the AH categories use), else the fixed IDs.
+local ENUM_NAME={INVTYPE_HEAD='IndexHeadType',INVTYPE_SHOULDER='IndexShoulderType',INVTYPE_CHEST='IndexChestType',
+ INVTYPE_WAIST='IndexWaistType',INVTYPE_LEGS='IndexLegsType',INVTYPE_FEET='IndexFeetType',INVTYPE_WRIST='IndexWristType',
+ INVTYPE_HAND='IndexHandType',INVTYPE_CLOAK='IndexCloakType',INVTYPE_ROBE='IndexRobeType'}
+function M:InventoryTypeFilter(equip)
+ local e=Enum and Enum.InventoryType and Enum.InventoryType[ENUM_NAME[equip] or '']
+ return tonumber(e) or INVTYPE_ENUM[equip]
+end
 -- Azmork's list (one list for everything).
 M.FLIP_STARTER={'cloth: magic','leather: agility max 50s','leather: monkey','mail: bear','cloth: sorcerer',
  'cloth: intellect lvl 15+','leather: tiger','leather head: max 75s','mail: strength','mail head: max 75s',
@@ -260,7 +268,7 @@ function M:SearchShopTerms(list,onlyTerm)
   local classFilters={}
   if text=='' and armor then
    -- Category search: Armor > subclass (> slot when it is one inventory type).
-   local inv=spec.slot and #spec.slot==1 and INVTYPE_ENUM[spec.slot[1]]
+   local inv=spec.slot and #spec.slot==1 and self:InventoryTypeFilter(spec.slot[1])
    classFilters[1]={classID=4,subClassID=armor,inventoryType=inv or nil}
   end
   local id='browse-term:'..term:lower();local pages=0
@@ -331,24 +339,70 @@ function M:DealPercent()
 end
 -- Reference price for one exact market: 30-day median of full scans, else the
 -- model's fair value once it is trusted. Nil when there is no real history.
+-- Daily lows (like Auctionator's price history): the lowest price seen each
+-- day from any live search, kept 30 days per exact variant and per base item
+-- (all suffixes together, Auctionator's own key on Forever).
+local DAY=86400
+local function lowBook(self,name)
+ if type(self.db[name])~='table' then self.db[name]={} end
+ return self.db[name]
+end
+local function putLow(book,k,day,floor)
+ local t=book[k];if type(t)~='table' then t={};book[k]=t end
+ if not t[day] or floor<t[day] then t[day]=floor end
+ for d in pairs(t) do if type(d)~='number' or d<day-30 then t[d]=nil end end
+end
+function M:RecordDailyLow(key,floor)
+ if self.persistenceBlocked or key==nil or not self:Finite(floor,1,1e12) then return end
+ local _,id=self:ParseKey(key);local day=math.floor(time()/DAY);floor=math.floor(floor)
+ putLow(lowBook(self,'dailyLows'),tostring(key),day,floor)
+ if id then putLow(lowBook(self,'dailyLowsBase'),id,day,floor) end
+end
+local function median(v)
+ if #v==0 then return nil end
+ table.sort(v);local n=#v
+ return math.floor((n%2==1 and v[(n+1)/2] or (v[n/2]+v[n/2+1])/2)+0.5)
+end
+local function lowsInto(out,t)
+ local cutoff=math.floor(time()/DAY)-30
+ if type(t)=='table' then for d,v in pairs(t) do if type(d)=='number' and d>=cutoff and tonumber(v) then out[#out+1]=v end end end
+end
+-- Reference price: this exact variant's 30-day history (full-scan samples plus
+-- daily lows); when that is too thin, the same item across all suffixes,
+-- marked approximate. Returns price, samples, approximate.
 function M:DealReference(key)
+ if key==nil then return nil end
  local m=self:MarketForKey(key)
- if type(m)~='table' then return nil end
- local month=self:MarketWindow(m,30)
- if month and month.samples>=MIN_SAMPLES then return month.median,month.samples end
- if self:Finite(m.fairValue,1,1e12) and self:CanEstimateResale(m) then return math.floor(m.fairValue),month and month.samples or 0 end
+ local month=m and self:MarketWindow(m,30)
+ if month and month.samples>=MIN_SAMPLES then return month.median,month.samples,false end
+ local values={}
+ lowsInto(values,self.db.dailyLows and self.db.dailyLows[tostring(key)])
+ if month then values[#values+1]=month.median end
+ if #values>=MIN_SAMPLES then return median(values),#values,false end
+ if m and self:Finite(m.fairValue,1,1e12) and self:CanEstimateResale(m) then return math.floor(m.fairValue),month and month.samples or 0,false end
+ -- Same item, any suffix.
+ local _,id=self:ParseKey(key);if not id then return nil end
+ local base={}
+ lowsInto(base,self.db.dailyLowsBase and self.db.dailyLowsBase[id])
+ for _,k in ipairs(self.itemIndex and self.itemIndex[id] or {}) do
+  local w=self.db.market[k] and self:MarketWindow(self.db.market[k],30)
+  if w then base[#base+1]=w.median end
+ end
+ if #base>=MIN_SAMPLES then return median(base),#base,true end
 end
 -- Percent of the reference price the lowest listing costs (45 = 55% under).
 function M:DealRatio(row)
  if type(row)~='table' or not self:Finite(row.floor,1,1e12) then return nil end
- local ref=self:DealReference(row.marketKey)
+ local ref,_,approx=self:DealReference(row.marketKey)
  if not ref then return nil end
- return math.floor(row.floor/ref*100+0.5),ref
+ return math.floor(row.floor/ref*100+0.5),ref,approx
 end
 function M:DealText(row)
- local pct=self:DealRatio(row)
+ local pct,_,approx=self:DealRatio(row)
  if not pct then return '|cff8f8f8f--|r' end
- if pct<=self:DealPercent() then return '|cff40ff40'..pct..'%|r' end
- if pct<100 then return '|cffffffff'..pct..'%|r' end
- return '|cffff8060'..pct..'%|r'
+ -- "~" = compared with the item across all suffixes (no history for this one yet).
+ local t=(approx and '~' or '')..pct..'%'
+ if pct<=self:DealPercent() then return '|cff40ff40'..t..'|r' end
+ if pct<100 then return '|cffffffff'..t..'|r' end
+ return '|cffff8060'..t..'|r'
 end

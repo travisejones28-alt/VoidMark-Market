@@ -1,3 +1,11 @@
+## 1.17.0
+Checked against Auctionator 345 (reference only; no Auctionator code used).
+- **Vs Avg fills in much sooner.** Like Auctionator's price history, every live search (search terms, typed searches, list searches) now records the day's lowest price, kept 30 days. Vs Avg uses those days plus full-scan history for the exact variant.
+- **When a suffix has no history yet, Vs Avg compares with the same item across all suffixes and shows "~"** (e.g. ~45%). That is how Auctionator prices gear on Forever (it ignores the suffix), so treat "~" as a rough guide.
+- A failed AH search now ends right away instead of waiting for a timeout; searches read up to 40 pages.
+- Armor-slot search terms use the game's own slot IDs when available.
+- 237 regressions.
+
 ## 1.16.0
 - **Flip Ledger, built out for learning what flips:**
   - **Every buy:** item, what you paid, when, what you have it listed at, what it sold for (after the AH cut), when, how many days it took, profit, and status (Holding / Listed / Sold / expired xN).

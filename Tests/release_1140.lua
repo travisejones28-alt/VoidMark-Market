@@ -479,6 +479,37 @@ check('1.16 Selling shows what you paid for the selected item',function()
  M.selectedRow=nil;M:SetView('browse');M.db.flips={};assert(ok,err)
 end)
 
+check('1.17 Vs Avg uses daily lows from live searches, then the item across all suffixes (marked ~)',function()
+ M.db.dailyLows={};M.db.dailyLowsBase={}
+ local key=M:Key(1030,-10);local other=M:Key(1030,-12)
+ local today=math.floor(time()/86400)
+ -- Two days of live-search lows for this exact variant.
+ M.db.dailyLows[tostring(key)]={[today-2]=3000,[today-1]=5000}
+ local pct,ref,approx=M:DealRatio({marketKey=key,floor=2000})
+ assert(pct==50 and ref==4000 and not approx,'exact variant from daily lows: '..tostring(pct))
+ -- A suffix with no history of its own falls back to the base item, marked ~.
+ M.db.dailyLowsBase[1030]={[today-3]=2000,[today-1]=2400}
+ pct,ref,approx=M:DealRatio({marketKey=other,floor=1100})
+ assert(pct==50 and approx,'base fallback')
+ assert(M:DealText({marketKey=other,floor=1100}):find('~50%',1,true),'shown with ~')
+ -- Recording: the lowest per day wins and old days drop off.
+ M.db.dailyLows={};M.db.dailyLowsBase={}
+ M:RecordDailyLow(key,900);M:RecordDailyLow(key,700);M:RecordDailyLow(key,800)
+ assert(M.db.dailyLows[tostring(key)][today]==700 and M.db.dailyLowsBase[1030][today]==700)
+ M.db.dailyLows[tostring(key)][today-40]=1;M:RecordDailyLow(key,750);assert(M.db.dailyLows[tostring(key)][today-40]==nil,'30-day window')
+ -- Live searches feed it.
+ M:RecordLiveFloor(M:Key(1031,-10),555,1);assert(M.db.dailyLows[tostring(M:Key(1031,-10))][today]==555)
+ M.db.dailyLows={};M.db.dailyLowsBase={}
+end)
+
+check('1.17 A failed AH search ends that request instead of waiting for a timeout',function()
+ local q=M.queue;local failed
+ q.active={id='x',kind='browse',sent=0};q.dedupe.x=q.active;q.active.fail=function(e) failed=e end
+ emit('AUCTION_HOUSE_BROWSE_FAILURE')
+ assert(failed=='Auction House search failed' and q.active==nil)
+ q.dedupe={}
+end)
+
 check('1.14 Vs Avg compares against the exact suffix history and sorts deals first',function()
  fresh();M:SetView('browse');M.ahOpen=false
  local monkey,bear=M:Key(600,-10),M:Key(600,-12)

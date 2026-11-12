@@ -180,13 +180,16 @@ end)
 M:RegisterHandler('AUCTION_HOUSE_BROWSE_RESULTS_UPDATED',function(self)
   local r=self.queue.active; if r and (r.kind=='browse' or r.kind=='browsemore') then self:FinishRequest(r,true,true) end
 end)
+M:RegisterHandler('AUCTION_HOUSE_BROWSE_FAILURE',function(self)
+  local r=self.queue.active; if r and (r.kind=='browse' or r.kind=='browsemore') then self:FinishRequest(r,false,'Auction House search failed') end
+end)
 M:RegisterHandler('AUCTION_HOUSE_BROWSE_RESULTS_ADDED',function(self)
   local r=self.queue.active; if r and r.kind=='browsemore' then self:FinishRequest(r,true,true) end
 end)
 -- The AH sends browse results a page at a time. After a browse finishes, ask
 -- for the next page (ahead of other searches, so the browse is not replaced)
 -- until it is complete or maxPages is reached. Returns true when a page was queued.
-M.BROWSE_MAX_PAGES=20
+M.BROWSE_MAX_PAGES=40
 function M:BrowseNeedsMore(pages)
   local A=C_AuctionHouse
   if not (A and A.HasFullBrowseResults and A.RequestMoreBrowseResults) then return false end

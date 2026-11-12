@@ -1,3 +1,11 @@
+# Auctionator 345 reference — Market 1.17.0
+
+Read the user-supplied Auctionator 345 (Source_ModernAH, which Forever uses). Findings, applied in Market's own code (no Auctionator code, art or SavedVariables):
+- Price keys on Forever (`DBKeyFromBrowseResult` / `DBKeyFromLink`): item ID only, plus item level for gear at item level 168+. The random suffix is **not** part of the key, so Auctionator's database price mixes all suffixes of an item. Market keeps per-suffix prices and falls back to an all-suffix price marked "~".
+- Price history: lowest and highest price per day from every scan and search (`SetPrice`), 30-day mean of daily lows. Market now records daily lows from live searches.
+- Browse paging: keeps calling `RequestMoreBrowseResults` until `HasFullBrowseResults`, reads `AUCTION_HOUSE_BROWSE_RESULTS_ADDED`, handles `AUCTION_HOUSE_BROWSE_FAILURE`. Market matches this (40-page cap).
+- Extended search: level range goes to the server as `minLevel`/`maxLevel`; categories as `itemClassFilters` from Blizzard's `AuctionCategories` (`classID`/`subClassID`/`inventoryType`); price limits are filtered client-side. Same as Market.
+
 # Auctionator reference — Market 1.8.0
 
 Re-checked against the user-supplied Auctionator **342** (Interface 16001 among others). On Forever (build 1.x, `WOW_PROJECT_CAMELOT`) Auctionator treats the client as modern AH (`Source_ModernAH`), the same `C_AuctionHouse` path Market uses. Its Forever-specific branches confirm: copper prices post without silver rounding, the minimum price is 1 copper, durations are 2/8/24 hours, and the retail expansion/tier search filters are hidden.
