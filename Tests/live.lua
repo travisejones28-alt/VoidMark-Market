@@ -264,7 +264,8 @@ check('Auction House tabs work with Auctionator disabled and restore the standal
  PanelTemplates_TabResize=function()end
  CreateFrame=function(...)
   local f=oldCreate(...);f:SetSize(0,0) -- unresolved page size at first OnShow
-  f.GetFrameLevel=function()return native:GetFrameLevel()+1 end
+  f.GetFrameLevel=function(x)return x.testFrameLevel or native:GetFrameLevel()+1 end
+  f.SetFrameLevel=function(x,n)x.testFrameLevel=n end
   f.Show=function(x)if not x.shown then x.shown=true;if x.scripts.OnShow then x.scripts.OnShow(x) end end end
   f.Hide=function(x)if x.shown then x.shown=false;if x.scripts.OnHide then x.scripts.OnHide(x) end end end
   return f
@@ -292,6 +293,7 @@ check('Auction House tabs work with Auctionator disabled and restore the standal
   tab.button.scripts.OnClick();M:RenderUI();assert(rawget(native,"displayMode")==nil)
   assert(M.view==views[i] and M.auctionDock.page==tab.page and parentFrame==tab.page)
   assert(M.window:IsShown() and M.window:GetScale()>0 and M.window.testLevel>native:GetFrameLevel())
+  assert(tab.page:GetFrameLevel()>=native:GetFrameLevel()+200,'page sits above the native Auctions/Bids tabs')
   for j,other in ipairs(tabs) do assert(other.page:IsShown()==(j==i)) end
   if i<=4 then
    -- A trading tab stands alone: no section buttons, BACK only on sub-screens.

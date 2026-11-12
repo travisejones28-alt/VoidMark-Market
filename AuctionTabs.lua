@@ -246,7 +246,10 @@ function M:InstallAuctionTabs()
     page:SetPoint('TOPLEFT', ah, 'TOPLEFT', 8, -36)
     page:SetPoint('BOTTOMRIGHT', ah, 'BOTTOMRIGHT', -8, 8)
     -- Sit above the native Buy/Sell/Auctions content and hide it visually.
-    page:SetFrameLevel(ah:GetFrameLevel()+30)
+    -- 1.22.5: +200 (was +30). The native Auctions view's own "Auctions/Bids"
+    -- tabs sit higher than +30 and showed through over the Market title. We
+    -- only raise our page; Blizzard's frames are never hidden or changed (taint).
+    page:SetFrameLevel(ah:GetFrameLevel()+200)
     local shade = page:CreateTexture(nil, 'BACKGROUND')
     shade:SetAllPoints(page)
     shade:SetColorTexture(.035, .02, .055, 1)

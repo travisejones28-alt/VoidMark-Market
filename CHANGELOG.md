@@ -1,3 +1,7 @@
+## 1.22.5
+- **Fixed: the AH's own "Auctions" tab showing over the VOIDMARK MARKET title** when a Market tab is open. Market's page now sits well above the native Auctions view (frame level +200, was +30). Blizzard's frames are not hidden or changed, so bag items keep working while the AH is open.
+- 253 regressions.
+
 ## 1.22.4
 - **Fixed: the sending character being disconnected from the server.** 1.21's fast sync gave each of its 4 lanes its own send budget, so the bank sent up to 4x the addon messages per second, and the server disconnects a character that floods addon messages. All lanes now share the old single budget (1200 bytes/second, 8 pages in flight), the same rate that ran fine before 1.21. Packed messages are kept, so sync is still faster than 1.20 without sending more. A refused (throttled) send now pauses all sending briefly.
 - 253 regressions.
