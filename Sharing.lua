@@ -427,13 +427,16 @@ local function dataReady(r,j,now)
  if r.sentHi and r.sentHi>r.cursor and now>=(r.retry or 0) then return true end -- timed out: resend
  return math.max(r.cursor,r.sentHi or r.cursor)<j.seq and inFlight(r)<(r.window or WINDOW)
 end
--- Fast mode (partner on 1.21+): packed pages spread over the lanes, each lane
--- with its own byte budget and throttle backoff, 8 pages in flight per lane.
+-- Fast mode (partner on 1.21+): packed pages, so more prices per message.
+-- 1.22.4: ONE shared byte budget and the old 8-page window across all lanes.
+-- 1.21 gave every lane its own budget (4x the traffic) and the server
+-- disconnected the sending character for addon-message flooding. Lanes now
+-- only route around a throttled prefix; they never add throughput.
 local function fastPages(self,r,j,ch,now)
  local lanes=self.shareLanes or {PREFIX}
  local n=math.max(1,math.min(#lanes,tonumber(r.peerLanes) or 1))
- r.window=8*n;r.lb=r.lb or {};r.lbAt=r.lbAt or {};r.lu=r.lu or {}
- for i=1,n do local last=r.lbAt[i] or now;r.lbAt[i]=now;r.lb[i]=math.min(BURST,(r.lb[i] or BURST)+(now-last)*RATE) end
+ r.window=WINDOW;r.lu=r.lu or {}
+ refill(r,now)
  local header='#'..econHash(self.economyID)
  local base=math.floor(time())-8000000;local base62=b62(base)
  for _=1,r.window do
@@ -456,17 +459,19 @@ local function fastPages(self,r,j,ch,now)
   if hi<=lo then return end
   local body=table.concat({'E',j.epoch,lo,hi,base62,table.concat(rows,';')},'\t')
   local cost=#body+#header+1
+  if (r.bucket or 0)<cost then return end
   local lane
-  for k=1,n do local i=((r.laneNext or 0)+k-1)%n+1;if now>=(r.lu[i] or 0) and r.lb[i]>=cost then lane=i;break end end
+  for k=1,n do local i=((r.laneNext or 0)+k-1)%n+1;if now>=(r.lu[i] or 0) then lane=i;break end end
   if not lane then return end
   r.laneNext=lane
   if send(self,ch,body,lanes[lane],true) then
-   r.lb[lane]=r.lb[lane]-cost
+   r.bucket=r.bucket-cost
    if not r.sentHi or r.sentHi<=r.cursor then r.retry=now+4 end
    r.sentHi=hi;r.pages=r.pages or {};r.pages[#r.pages+1]=hi
-   r.status='Sending changes '..hi..' / '..j.seq..' (fast, '..n..' lanes)'
+   r.status='Sending changes '..hi..' / '..j.seq..' (packed)'
   else
-   r.lu[lane]=now+1.5 -- that lane is throttled: the others carry on
+   -- The client refused (throttled): back off everything briefly, not just this lane.
+   r.lu[lane]=now+3;r.throttleUntil=now+1.5;return
   end
  end
 end
@@ -709,7 +714,7 @@ function M:SyncReport()
   'Last fully acknowledged send: '..self:SyncTime(self.db.syncLastSentAt),
   'Received prices: '..tostring(r.priceCount or 'Counting')..' | outbound revisions: '..tostring(r.cursor or 0)..' / '..j.seq,
   'Inbound revisions: '..tostring(rx.seq or 0)..' / '..tostring(rx.total or 'Awaiting peer metadata'),
-  'Sync mode: '..(r.peerV3 and ('fast, '..math.min(#(self.shareLanes or {1}),tonumber(r.peerLanes) or 1)..' lanes') or 'standard (partner not on 1.21 yet)'),
+  'Sync mode: '..(r.peerV3 and 'packed (more prices per message, same safe send rate)' or 'standard (partner not on 1.21 yet)'),
   'Scan: '..tostring(self.scanState.status)..' | progress: '..tostring(self.scanState.progress or 0),
   'Diagnostics: '..tostring(r.lastSendError or diag.error or 'No recorded error'),
   '', 'Bank scans automatically while its Auction House is open and cooldown permits.',

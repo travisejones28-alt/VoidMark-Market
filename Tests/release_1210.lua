@@ -19,7 +19,7 @@ check('1.21 packed rows round-trip exactly, including literal "!" fields and lea
  assert(P.unb62(P.b62(1794497000))==1794497000 and P.unb62('!')==nil)
 end)
 
-check('1.21 fast mode: only after the partner says so; pages spread over lanes and carry more rows',function()
+check('1.21 packed mode: only after the partner says so; pages spread over lanes and carry more rows, same total budget',function()
  local old=C_ChatInfo;local sent={}
  C_ChatInfo={RegisterAddonMessagePrefix=function() return 0 end,SendAddonMessage=function(prefix,msg) sent[#sent+1]={prefix,msg};assert(#msg<=240);return 0 end}
  local ok,err=pcall(function()
@@ -42,14 +42,19 @@ check('1.21 fast mode: only after the partner says so; pages spread over lanes a
   assert(n==4,'all four lanes used: '..n)
   fastRows=select(2,sent[1][2]:gsub(';',''))+1
   assert(fastRows>=legacyRows*1.5,'more rows per message: '..fastRows..' vs '..legacyRows)
-  assert(#sent>8,'more pages in flight than the old window: '..#sent)
-  -- A throttled lane backs off; the others carry on.
-  sent={};local throttled='VMMkt2b'
-  C_ChatInfo.SendAddonMessage=function(prefix,msg) if prefix==throttled then return 3 end;sent[#sent+1]={prefix,msg};return 0 end
+  -- 1.22.4: never more traffic than the old single-lane budget (the server
+  -- disconnects a character that floods addon messages).
+  local bytes=0;for _,m in ipairs(sent) do bytes=bytes+#m[2]+1 end
+  assert(#sent<=8 and bytes<=3000,'same budget as before: '..#sent..' msgs, '..bytes..' bytes')
+  r.next=0;M:PumpSharing();assert(#sent<=8,'window full: no more until acknowledged')
+  -- A throttled send pauses everything briefly; that lane waits longer.
+  sent={};local throttled
+  C_ChatInfo.SendAddonMessage=function(prefix,msg) if not throttled then throttled=prefix;return 3 end;sent[#sent+1]={prefix,msg};return 0 end
   M:ReceiveSharing('VMMkt2',M.economyID..'\tQ\t'..j.epoch..'\t'..r.sentHi,'WHISPER','Bank-TestRealm')
   advance(3);r.next=0;M:PumpSharing()
-  for _,m in ipairs(sent) do assert(m[1]~=throttled) end
-  assert(#sent>0,'other lanes still sending')
+  assert(throttled and #sent==0 and r.throttleUntil>GetTime(),'backs off after a refusal')
+  advance(2);r.next=0;M:PumpSharing()
+  assert(#sent>0,'resumes');for _,m in ipairs(sent) do assert(m[1]~=throttled,'refused lane rests longer') end
  end)
  C_ChatInfo=old;M.shareLanes=nil;if not ok then error(err,0) end
 end)

@@ -1,3 +1,7 @@
+## 1.22.4
+- **Fixed: the sending character being disconnected from the server.** 1.21's fast sync gave each of its 4 lanes its own send budget, so the bank sent up to 4x the addon messages per second, and the server disconnects a character that floods addon messages. All lanes now share the old single budget (1200 bytes/second, 8 pages in flight), the same rate that ran fine before 1.21. Packed messages are kept, so sync is still faster than 1.20 without sending more. A refused (throttled) send now pauses all sending briefly.
+- 253 regressions.
+
 ## 1.22.3
 - **Sync reconnects within 30 seconds.** When the partner isn't online yet, each character now knocks at most every 30 seconds (was up to 60), and a "player not found" pause is 30 seconds (was 60). Once connected, the 20-second heartbeat keeps the link up, and the link is dropped and re-probed after 65 seconds of silence. Either character can be the one that's always on; the other finds it within half a minute of logging in.
 - 253 regressions.
