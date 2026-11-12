@@ -279,8 +279,8 @@ function M:InitializeUI()
   -- Flipping switches (1.22.1): sale alerts and the paid floor.
   self.flipToggles={}
   local toggles={
-    {'saleAlerts','Sale alerts',"Message on screen and in chat when an auction sells."},
-    {'saleAlertSound','Coin sound','Play a coin sound with each sale alert.'},
+    {'saleAlerts','Sale message','Purple banner on screen and a chat line when an auction sells.'},
+    {'saleAlertSound','Sale sound','Play the sale chime when an auction sells.'},
     {'saleAlertsShare','Send to partner','Show this character\'s sales on your synced character too.'},
     {'sellNeverBelowPaid','Never sell below what I paid','Suggested post prices never go under what you paid + the AH cut.'}}
   for i,t in ipairs(toggles) do

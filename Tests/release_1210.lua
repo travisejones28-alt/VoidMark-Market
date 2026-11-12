@@ -240,4 +240,28 @@ check('1.22.8 Sale price without Listings open: saved listing snapshot, then you
  -- Loading Listings saves the snapshot.
  assert(M.db.ownedSnapshot==nil)
 end)
+
+check('1.22.9 Sale chime plays from Media; message and sound switch independently',function()
+ local files,coins,toasts={},0,0
+ local oldFile,oldSound,oldToast=PlaySoundFile,PlaySound,M.SaleToast
+ PlaySoundFile=function(path) files[#files+1]=path;return true end
+ PlaySound=function() coins=coins+1 end
+ M.SaleToast=function() toasts=toasts+1 end
+ local ok,err=pcall(function()
+  M.db.settings.saleAlerts=nil;M.db.settings.saleAlertSound=nil
+  M:ShowSaleAlert({name='X',qty=1})
+  assert(files[1]=='Interface\\AddOns\\VoidMarkMarket\\Media\\LockChime.ogg' and coins==0 and toasts==1,'chime + banner')
+  -- Sound only.
+  M.db.settings.saleAlerts=false;M:ShowSaleAlert({name='X',qty=1});assert(#files==2 and toasts==1)
+  -- Message only.
+  M.db.settings.saleAlerts=true;M.db.settings.saleAlertSound=false;M:ShowSaleAlert({name='X',qty=1});assert(#files==2 and toasts==2)
+  -- Both off: nothing.
+  M.db.settings.saleAlerts=false;M:ShowSaleAlert({name='X',qty=1});assert(#files==2 and toasts==2)
+  -- File can't play (e.g. a new file before a full restart): the coin sound instead.
+  M.db.settings.saleAlerts=true;M.db.settings.saleAlertSound=true
+  PlaySoundFile=function() return false end;M:ShowSaleAlert({name='X',qty=1});assert(coins==1)
+ end)
+ PlaySoundFile,PlaySound,M.SaleToast=oldFile,oldSound,oldToast;M.db.settings.saleAlerts=nil;M.db.settings.saleAlertSound=nil
+ if not ok then error(err,0) end
+end)
 end

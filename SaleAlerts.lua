@@ -90,13 +90,28 @@ function M:SaleAlertText(a,from)
  return text
 end
 
-function M:ShowSaleAlert(a,from)
- if self.db.settings.saleAlerts==false then return end
- local text=self:SaleAlertText(a,from)
- if self.db.settings.saleAlertSound~=false and PlaySound then
+M.SALE_CHIME='Interface\\AddOns\\VoidMarkMarket\\Media\\LockChime.ogg'
+-- The chime (Media\LockChime.ogg); the game's coin sound if the file can't play.
+function M:PlaySaleSound()
+ local played=false
+ if PlaySoundFile then
+  local ok,willPlay=pcall(PlaySoundFile,self.SALE_CHIME,'Master')
+  played=ok and willPlay~=false
+ end
+ if not played and PlaySound then
   local coin=SOUNDKIT and (SOUNDKIT.LOOT_WINDOW_COIN_SOUND or SOUNDKIT.IG_BACKPACK_COIN_OK) or 120
   pcall(PlaySound,coin,'Master')
  end
+ return played
+end
+-- Message (banner + chat) and sound switch on and off separately in Settings.
+function M:ShowSaleAlert(a,from)
+ local message=self.db.settings.saleAlerts~=false
+ local sound=self.db.settings.saleAlertSound~=false
+ if not message and not sound then return end
+ local text=self:SaleAlertText(a,from)
+ if sound then self:PlaySaleSound() end
+ if not message then self.lastSaleAlert={text=text,at=time()};return end
  pcall(self.SaleToast,self,a,from,text)
  self:Print(text)
  self.lastSaleAlert={text=text,at=time()}

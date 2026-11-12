@@ -1,3 +1,9 @@
+## 1.22.9
+- **Sale chime:** sales now play your LockChime sound (Media\LockChime.ogg) instead of the coin sound. If the file can't play, the coin sound is used.
+- **Settings:** "Sale message" (purple banner + chat line) and "Sale sound" (the chime) now switch on and off separately; turning the message off no longer silences the sound.
+- New file: restart the game fully once (not just /reload) so WoW can find the sound.
+- 257 regressions.
+
 ## 1.22.8
 - **Sale banners show a price more often** (the Silk Cloth alert had none):
   - Your auctions now load a few seconds after the AH opens, so Listings doesn't have to be opened first.
