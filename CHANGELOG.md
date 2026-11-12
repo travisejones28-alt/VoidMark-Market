@@ -1,3 +1,7 @@
+## 1.20.3
+- **Flip Ledger now includes what happened before it existed.** On first load it rebuilds buys and sales from Market's older log: confirmed Market buys, "You won" invoices (buys from anywhere) and "Auction successful" invoices (sales), matched oldest buy first. Rows already in the Flip Ledger are never added twice. Chat says how many were added. `/vmm flipsrebuild` runs it again.
+- 247 regressions.
+
 ## 1.20.2
 - **Faster buy pages:** while you're on an item's buy page, the background search-term pages wait, so the item's listing search goes out next instead of queuing behind them. They carry on when you go back.
 - **Faster list searches:** `/vmm flipstarter` now adds the terms as greens only (`green cloth: magic`, ...). The AH sends far fewer result pages. Run `/vmm flipstarter` again to switch; your own terms are kept.

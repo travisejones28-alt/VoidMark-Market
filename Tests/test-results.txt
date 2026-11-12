@@ -176,7 +176,7 @@ PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
 PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
 PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
-BENCH scan: 138 frames (2.3s at 60fps, 4.6s at 30fps), worst frame 12.3ms, cpu 1.35s | after:prune=5 after:share-scan=26 done=1 model=89 processing=17
+BENCH scan: 108 frames (1.8s at 60fps, 3.6s at 30fps), worst frame 12.6ms, cpu 1.04s | after:prune=5 after:share-scan=20 done=1 model=66 processing=16
 PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.13 history stores only the fields it needs; latest keeps the full snapshot
 PASS 1.9.13 history saved by older versions is shrunk once at login without losing prices
@@ -246,5 +246,6 @@ PASS 1.20 Flip Ledger is its own AH tab; the Shopping button opens that tab
 PASS 1.20.1 History is never dropped: old sold rows fold into per-item totals; held items always kept
 PASS 1.20.1 A failed scan says why, and that older prices are still used
 PASS 1.20.2 On a buy page, search-term pages wait so the item search goes first; starter list is greens only
+PASS 1.20.3 Backfill: earlier buys and sales from the raw ledger fill the Flip Ledger, once
 PASS 1.14 Vs Avg compares against the exact suffix history and sorts deals first
-ALL 246 TESTS PASSED
+ALL 247 TESTS PASSED

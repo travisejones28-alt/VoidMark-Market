@@ -664,6 +664,37 @@ check('1.20.2 On a buy page, search-term pages wait so the item search goes firs
  M.db.shopTerms=nil
 end)
 
+check('1.20.3 Backfill: earlier buys and sales from the raw ledger fill the Flip Ledger, once',function()
+ M.db.flips={};M.db.flipArchive={};local oldLedger=M.db.ledger;M.db.ledger={}
+ local t0=time()-86400
+ local function e(kind,data) data.kind=kind;data.at=data.at or t0;M.db.ledger[#M.db.ledger+1]=data end
+ -- Market buy (and its "You won" mail, which must not count twice).
+ e('purchase',{name='Lupine Vest of Agility',cost=1500,quantity=1,status='confirmed',resolvedAt=t0,at=t0})
+ e('mail won',{name='Lupine Vest of Agility',gross=1500,quantity=1,at=t0+30})
+ -- Bought on the normal AH (only the mail knows).
+ e('mail won',{name='Superior Belt of Agility',gross=900,quantity=1,at=t0+60})
+ -- Sales the next hours.
+ e('mail sale',{name='Lupine Vest of Agility',gross=4500,fee=225,quantity=1,at=t0+3600})
+ e('mail sale',{name='Mystery Cloak',gross=2000,fee=100,quantity=1,at=t0+4000})
+ -- A failed buy is ignored.
+ e('purchase',{name='Failed Thing',cost=50,quantity=1,status='failed',at=t0})
+ local buys,sales=M:BackfillFlips()
+ assert(buys==2 and sales==2,'counts '..buys..' '..sales)
+ local by={};for _,f in ipairs(M:FlipBook()) do by[f.name]=f end
+ local n=M:FlipNumbers(by['Lupine Vest of Agility'])
+ assert(n.status=='Sold' and n.profit==4275-1500,'vest sold, profit '..tostring(n.profit))
+ assert(M:FlipNumbers(by['Superior Belt of Agility']).status=='Holding')
+ assert(by['Mystery Cloak'].cost==nil,'sale with no buy kept')
+ -- Running again adds nothing.
+ local b2,s2=M:BackfillFlips();assert(b2==0 and s2==0 and #M:FlipBook()==3,'idempotent')
+ -- Rows recorded live since 1.15 are not duplicated.
+ M.db.flips={};M:RecordFlipBuy({name='Superior Belt of Agility',quantity=1,cost=900});M:FlipBook()[1].at=t0+60
+ local b3=M:BackfillFlips();local belts=0;for _,f in ipairs(M:FlipBook()) do if f.name=='Superior Belt of Agility' then belts=belts+1 end end
+ assert(belts==1,'live row not doubled')
+ SlashCmdList.VOIDMARKMARKET('flipsrebuild')
+ M.db.ledger=oldLedger;M.db.flips={}
+end)
+
 check('1.14 Vs Avg compares against the exact suffix history and sorts deals first',function()
  fresh();M:SetView('browse');M.ahOpen=false
  local monkey,bear=M:Key(600,-10),M:Key(600,-12)

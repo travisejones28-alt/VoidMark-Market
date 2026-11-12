@@ -1,6 +1,6 @@
 local addonName, M = ...
 _G.VoidMarkMarket = M
-M.name, M.version = addonName or 'VoidMarkMarket', '1.20.2'
+M.name, M.version = addonName or 'VoidMarkMarket', '1.20.3'
 M.eventHandlers, M.runtimeLog, M.jobs = {}, {}, {}
 M.ahOpen = false
 M.scanState = {running=false, phase='idle', status='No scan yet', progress=0}
@@ -252,6 +252,8 @@ SlashCmdList.VOIDMARKMARKET=function(msg)
     local max=M:FlipMaxBuy()
     M:Print(max and ('Search terms only show items at '..M:Coins(max)..' or less. /vmm flipmax 0 turns it off.') or 'No max price on search terms. Set one in silver: /vmm flipmax 15')
   elseif msg=='flips' or msg=='ledger' then M:ShowFlipLedger()
+  elseif msg=='flipsrebuild' then
+    local b,s=M:BackfillFlips();M:Print(('Flip Ledger: added %d buys and %d sales from your history (nothing already there was added twice).'):format(b,s))
   elseif msg=='check' or msg:match('^check%s') then M:CheckItem(raw:match('^%S+%s+(.+)$'))
   elseif msg=='paidfloor' or msg:match('^paidfloor%s') then
     local v=msg:match('^paidfloor%s+(%a+)')

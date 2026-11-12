@@ -46,6 +46,11 @@ function M:InitializeDatabase()
     root.legacyImported={at=time(),economy=self.economyID,schema=legacy.schemaVersion}
   end
   if self.PruneLiveSeen then self:PruneLiveSeen() end
+  -- 1.20.3: fill the Flip Ledger from buys and sales recorded before it existed.
+  if not self.persistenceBlocked and self.BackfillFlips and (tonumber(db.flipBackfill) or 0)<1 then
+    local ok,buys,sales=pcall(self.BackfillFlips,self)
+    if ok then db.flipBackfill=1;if (buys or 0)+(sales or 0)>0 then self:Print(('Flip Ledger: added %d earlier buys and %d earlier sales from your history.'):format(buys,sales)) end end
+  end
   self:InitializeSharing()
   db.currentBuild=self:GetBuildSnapshot()
   root.schemaVersion=1; db.schemaVersion=1

@@ -152,6 +152,87 @@ function M:HookOutsideBids()
 end
 M:RegisterHandler('AUCTION_HOUSE_SHOW',function(self) self:HookOutsideBids() end)
 
+-- Backfill from the raw ledger --------------------------------------------------
+-- The Flip Ledger started in 1.15. Everything before that is still in the raw
+-- ledger (db.ledger): confirmed Market buys, "You won" invoices (buys made
+-- anywhere) and "Auction successful" invoices (sales). Rebuild flip rows from
+-- them; anything already in the Flip Ledger is matched and skipped, so running
+-- it again never doubles anything.
+function M:BackfillFlips()
+ if self.persistenceBlocked or type(self.db.ledger)~='table' then return 0,0 end
+ local book=self:FlipBook()
+ local function lower(n) return tostring(n or ''):lower() end
+ -- Existing rows, so they are not added twice.
+ local usedBuy,usedSale={},{}
+ local function existingBuy(name,cost,at)
+  for _,f in ipairs(book) do
+   if not usedBuy[f] and f.cost==cost and lower(f.name)==lower(name) and math.abs((f.at or 0)-(at or 0))<=86400 then usedBuy[f]=true;return true end
+  end
+ end
+ local function existingSale(name,at)
+  for _,f in ipairs(book) do
+   if (f.sold or 0)>0 and not usedSale[f] and lower(f.name)==lower(name) and math.abs((f.soldAt or 0)-(at or 0))<=10 then usedSale[f]=true;return true end
+  end
+ end
+ local buys,sales={},{}
+ for _,e in ipairs(self.db.ledger) do
+  if type(e)=='table' and type(e.name)=='string' and e.name~='' then
+   if e.kind=='purchase' and e.status=='confirmed' and self:Finite(e.cost,1,1e14) then
+    buys[#buys+1]={name=nameOf(e.itemLink,e.name),cost=math.floor(e.cost),qty=tonumber(e.quantity) or 1,at=e.resolvedAt or e.at,key=e.marketKey,itemID=e.itemID,char=e.character,source='Market',market=true}
+   elseif e.kind=='mail won' and self:Finite(e.gross,1,1e14) then
+    buys[#buys+1]={name=e.name,cost=math.floor(e.gross),qty=tonumber(e.quantity) or 1,at=e.at,key=e.marketKey,char=e.character,source='AH (from mail)'}
+   elseif e.kind=='mail sale' and self:Finite(e.gross,1,1e14) then
+    sales[#sales+1]={name=e.name,gross=e.gross,fee=tonumber(e.fee) or 0,qty=tonumber(e.quantity) or 1,at=e.at}
+   end
+  end
+ end
+ -- A Market buy also produces a "You won" mail later: count it once.
+ table.sort(buys,function(a,b) return (a.at or 0)<(b.at or 0) end)
+ local wonUsed={}
+ for _,b in ipairs(buys) do
+  if b.market then
+   for _,w in ipairs(buys) do
+    if not w.market and not wonUsed[w] and lower(w.name)==lower(b.name) and w.cost==b.cost and (w.at or 0)>=(b.at or 0)-60 then wonUsed[w]=true;break end
+   end
+  end
+ end
+ local added,addedSales=0,0
+ local newRows={}
+ for _,b in ipairs(buys) do
+  if not wonUsed[b] and not existingBuy(b.name,b.cost,b.at) then
+   self.db.flipSequence=(tonumber(self.db.flipSequence) or 0)+1
+   local f={id=self.db.flipSequence,name=b.name,key=b.key,itemID=b.itemID,qty=b.qty,cost=b.cost,at=b.at,char=b.char,sold=0,gross=0,fee=0,source=b.source,backfilled=true}
+   newRows[#newRows+1]=f;added=added+1
+  end
+ end
+ for _,f in ipairs(newRows) do book[#book+1]=f end
+ table.sort(book,function(a,b) return (a.at or 0)<(b.at or 0) end)
+ -- Sales: oldest unsold buy of the same item that was bought before the sale.
+ table.sort(sales,function(a,b) return (a.at or 0)<(b.at or 0) end)
+ for _,s in ipairs(sales) do
+  if not existingSale(s.name,s.at) then
+   local left=s.qty
+   for _,f in ipairs(book) do
+    if left<=0 then break end
+    if f.cost and (f.sold or 0)<(f.qty or 1) and lower(f.name)==lower(s.name) and (f.at or 0)<=s.at then
+     local take=math.min((f.qty or 1)-(f.sold or 0),left)
+     f.sold=(f.sold or 0)+take;f.gross=(f.gross or 0)+s.gross*take/s.qty;f.fee=(f.fee or 0)+s.fee*take/s.qty
+     f.soldAt=s.at;left=left-take;usedSale[f]=true
+    end
+   end
+   if left>0 then
+    self.db.flipSequence=(tonumber(self.db.flipSequence) or 0)+1
+    book[#book+1]={id=self.db.flipSequence,name=s.name,qty=left,cost=nil,at=s.at,soldAt=s.at,sold=left,
+     gross=s.gross*left/s.qty,fee=s.fee*left/s.qty,source='Sale only',backfilled=true}
+   end
+   addedSales=addedSales+1
+  end
+ end
+ table.sort(book,function(a,b) return (a.at or 0)<(b.at or 0) end)
+ trimBook(self);self:RefreshUI()
+ return added,addedSales
+end
+
 -- Numbers ---------------------------------------------------------------------
 function M:FlipNumbers(f)
  local qty=f.qty or 1;local sold=f.sold or 0
