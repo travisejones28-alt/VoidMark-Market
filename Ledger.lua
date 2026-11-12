@@ -10,7 +10,7 @@ end
 function M:ReservePurchase(x)
   local entry=self:AddLedger('purchase',{marketKey=x.market.marketKey,itemID=x.market.itemID,name=x.market.name,
     quantity=x.live.quantity,cost=x.live.cost,status='pending',evidence='request issued',commodity=x.commodity,
-    auctionID=x.live.auctionID,transaction=x.token})
+    auctionID=x.live.auctionID,itemLink=x.live.itemLink,transaction=x.token})
   self.db.pending[entry.id]=entry; self.exposureDirty=true; x.order=entry; return entry
 end
 function M:ResolvePurchase(p,status,evidence)
@@ -23,6 +23,7 @@ function M:ResolvePurchase(p,status,evidence)
     lot.quantity=lot.quantity+p.quantity; lot.cost=lot.cost+p.cost
     lot.purchasedQty=lot.purchasedQty+p.quantity; lot.purchasedCost=lot.purchasedCost+p.cost
     self.db.totals.purchaseCost=(self.db.totals.purchaseCost or 0)+p.cost
+    if self.RecordFlipBuy then self:RecordFlipBuy(p) end
   end
   self.db.pending[p.id]=nil; self.exposureDirty=true; self:RebuildOpportunities(); self:RefreshUI()
 end
@@ -109,6 +110,7 @@ function M:ObserveMail()
           if kind=='seller' and e.gross and e.money and math.abs(e.gross-e.fee+e.depositRefund-e.money)>1 then
             e.invoiceVerified=false; e.evidence='Observed invoice; payout disagrees with invoice amounts, financial booking blocked'
           end
+          if kind=='seller' and self.RecordFlipSale then self:RecordFlipSale(name,tonumber(qty),e.gross,tonumber(fee) or 0) end
           self:RememberMail(fingerprint,rank)
         end
       else

@@ -1,3 +1,10 @@
+## 1.15.0
+- **Flip Ledger** (Shopping > **Flip Ledger**, or `/vmm flips`): every item you buy, what you paid, what it sold for (after the AH cut), profit, and whether you're still holding it.
+  - Buys are recorded when confirmed. Sales are read from "Auction successful" mail when you open your mailbox, matched to the oldest unsold buy of the same item. Sales with no buy record are listed too.
+  - Totals: spent, sold for, profit on sold items, and what you're holding (count and cost). Filter All / Holding / Sold. Right-click a row to remove a mistake.
+  - Starts empty: only buys from now on are tracked.
+- 228 regressions.
+
 ## 1.14.6
 - **Fixed: buying stuck on "A purchase result is still unknown".** If the AH closed (or the result never arrived) after Buy Now, Market blocked every later purchase until you settled it in the Ledger.
   - The "You won an auction for ..." chat message now confirms it automatically.

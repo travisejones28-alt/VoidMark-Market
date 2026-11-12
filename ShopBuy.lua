@@ -185,7 +185,7 @@ function M:ShopBuyStart()
  local ok=self:ShopBuyCheck(b);if not ok then return end
  local unit,total,_,_,q=self:ShopBuyPrices(b)
  local live={quantity=q,cost=total,received=GetTime(),at=time()}
- if not b.commodity then live.auctionID=b.rows[b.pick or 1].auctionID end
+ if not b.commodity then live.auctionID=b.rows[b.pick or 1].auctionID;live.itemLink=b.rows[b.pick or 1].itemLink end
  live.economics=self:Economics(b.market,total,q,'shopping')
  self.executionToken=(self.executionToken or 0)+1
  b.done=nil

@@ -313,6 +313,46 @@ check('1.14.6 Auction-won chat settles a purchase whose result never came; buy v
  M.shopBuy=nil;M.execution={state='idle'};M.ahOpen=false
 end)
 
+check('1.15 Flip Ledger: confirmed buys record what you paid; mailbox sale invoices fill in what it sold for',function()
+ M.db.flips={};for k in pairs(M.db.pending) do M.db.pending[k]=nil end
+ local function buy(name,cost,qty)
+  local e=M:AddLedger('purchase',{marketKey=990,itemID=990,name=name,quantity=qty or 1,cost=cost,status='pending',commodity=false,
+   itemLink='|cff1eff00|Hitem:990::::::-10|h['..name..']|h|r'})
+  M.db.pending[e.id]=e;M:ResolvePurchase(e,'confirmed','test');return e
+ end
+ buy('Buccaneer\'s Gloves of Healing',800);buy('Buccaneer\'s Gloves of Healing',900)
+ local fails=M:AddLedger('purchase',{marketKey=991,itemID=991,name='Failed Thing',quantity=1,cost=500,status='pending'})
+ M.db.pending[fails.id]=fails;M:ResolvePurchase(fails,'failed','test')
+ assert(#M:FlipBook()==2,'only confirmed buys are recorded')
+ -- A sale invoice from the mailbox matches the oldest unsold one.
+ local oG,oH,oN=GetInboxInvoiceInfo,GetInboxHeaderInfo,GetInboxNumItems
+ function GetInboxNumItems() return 1 end
+ function GetInboxHeaderInfo() return nil,nil,'Auction House','Auction successful: Buccaneer\'s Gloves of Healing',3500 end
+ function GetInboxInvoiceInfo() return 'seller','Buccaneer\'s Gloves of Healing','FlipBuyer',0,3500,100,175,0,0,0,1 end
+ local ok,err=pcall(function()
+  M.mailOpen=true;M:ObserveMail();jobs()
+  local first,second=M:FlipBook()[1],M:FlipBook()[2]
+  local n=M:FlipNumbers(first)
+  assert(first.sold==1 and n.net==3325 and n.profit==2525 and n.status=='Sold','first sale: '..tostring(n.profit))
+  assert(M:FlipNumbers(second).status=='Holding')
+  M:ObserveMail();jobs();assert(M:FlipBook()[2].sold==0,'same invoice not counted twice')
+  local t=M:FlipTotals();assert(t.spent==1700 and t.profit==2525 and t.holding==1 and t.holdingCost==900)
+ end)
+ GetInboxInvoiceInfo,GetInboxHeaderInfo,GetInboxNumItems=oG,oH,oN;M.mailOpen=false;assert(ok,err)
+ -- A sale with no purchase record is still listed, cost unknown.
+ M:RecordFlipSale('Mystery Cloak',1,5000,250)
+ local last=M:FlipBook()[#M:FlipBook()];assert(last.cost==nil and M:FlipNumbers(last).status=='Sold (no buy record)' and M:FlipNumbers(last).profit==nil)
+ -- Window renders, filters, and removes on right-click confirm.
+ M:ShowFlipLedger();local f=M.flipLedger
+ assert(f.rows[1]:IsShown() and f.totals:GetText():find('Holding 1',1,true),'window')
+ f.filters[2].scripts.OnClick(f.filters[2]);assert(M.flipFilter=='holding' and #M:FlipRows('holding')==1)
+ local oldAsk=M.AskShopConfirm;M.AskShopConfirm=function(_,_,fn) fn() end
+ local r=f.rows[1];r.scripts.OnClick(r,'RightButton');M.AskShopConfirm=oldAsk
+ assert(#M:FlipRows('holding')==0,'removed')
+ assert(M.shopScreen.flipLedger,'Shopping has a Flip Ledger button')
+ f:Hide();M.flipFilter=nil;M.db.flips={}
+end)
+
 check('1.14 Vs Avg compares against the exact suffix history and sorts deals first',function()
  fresh();M:SetView('browse');M.ahOpen=false
  local monkey,bear=M:Key(600,-10),M:Key(600,-12)

@@ -290,7 +290,7 @@ function M:ShowReport()
   self.reportEdit:SetText(self:BuildTextReport()); self.reportWindow:Show(); self.reportEdit:SetFocus(); self.reportEdit:HighlightText()
 end
 function M:RenderUI()
-  self.uiDirty=false; if not self.window or not self.window:IsShown() then return end
+  self.uiDirty=false; if self.RenderFlipLedger then self:RenderFlipLedger() end; if not self.window or not self.window:IsShown() then return end
   if self.craftAction then self.craftAction:Hide() end
   local view=self.view or 'market'; local s=self.db.settings
   self.modeLabel:SetText(self.persistenceBlocked and '|cffff9966Read-only: newer database|r' or 'Search. Compare. Buy and sell.')
