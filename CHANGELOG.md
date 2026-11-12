@@ -1,3 +1,7 @@
+## 1.22.1
+- **Settings has the flipping switches:** Sale alerts, Coin sound, Send to partner, Never sell below what I paid (hover each for what it does). They match the `/vmm salealerts`, `/vmm salesound` and `/vmm paidfloor` commands.
+- 252 regressions.
+
 ## 1.22.0
 - **Sale alerts.** The moment an auction sells (AH open or not): a coin sound, a message in the middle of the screen and in chat:
   "Sold Lupine Vest of Agility for 49s - you get 46s 55c | flipped for +32s 55c (paid 14s)".

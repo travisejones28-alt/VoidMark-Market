@@ -276,6 +276,26 @@ function M:InitializeUI()
     self:SetMinimapIconVisible(c:GetChecked() and true or false)
   end)
   label(self.settingsFrame,'Paired characters sync while both are online.\nTransfer also works offline by copying text.',385,-424,590)
+  -- Flipping switches (1.22.1): sale alerts and the paid floor.
+  self.flipToggles={}
+  local toggles={
+    {'saleAlerts','Sale alerts',"Message on screen and in chat when an auction sells."},
+    {'saleAlertSound','Coin sound','Play a coin sound with each sale alert.'},
+    {'saleAlertsShare','Send to partner','Show this character\'s sales on your synced character too.'},
+    {'sellNeverBelowPaid','Never sell below what I paid','Suggested post prices never go under what you paid + the AH cut.'}}
+  for i,t in ipairs(toggles) do
+    local x=(i-1)*248
+    local c=CreateFrame('CheckButton',nil,self.settingsFrame,'UICheckButtonTemplate')
+    c:SetPoint('TOPLEFT',x,-452);c:SetSize(28,28);c.key=t[1]
+    label(self.settingsFrame,t[2],x+32,-460,212)
+    c:SetScript('OnClick',function(b)
+      if self.persistenceBlocked then return end
+      self.db.settings[b.key]=b:GetChecked() and true or false
+    end)
+    c:SetScript('OnEnter',function(b) GameTooltip:SetOwner(b,'ANCHOR_RIGHT');GameTooltip:SetText(t[2]);GameTooltip:AddLine(t[3],1,1,1,true);GameTooltip:Show() end)
+    c:SetScript('OnLeave',function() GameTooltip:Hide() end)
+    self.flipToggles[#self.flipToggles+1]=c
+  end
   self.view='browse';self:BuildBrowseRows(self.db.settings.filter or ''); self.page=1; self:RefreshUI(); f:Hide() -- Keep Market closed on login/reload until opened by the user.
 end
 function M:ShowReport()
@@ -325,7 +345,11 @@ function M:RenderUI()
    self.autoScanButton:SetText('AUTO BANK SCAN: '..(s.autoBankScan==false and 'OFF' or 'ON'));return
   end
   if view=='tools' then return end
-  if view=='settings' then self.settingsFrame:Show(); self.syncState:SetText(self:SharingStatus()); self.minimapToggle:SetChecked(not (s.minimap and s.minimap.hide)); return end
+  if view=='settings' then
+    self.settingsFrame:Show(); self.syncState:SetText(self:SharingStatus()); self.minimapToggle:SetChecked(not (s.minimap and s.minimap.hide))
+    for _,c in ipairs(self.flipToggles or {}) do c:SetChecked(self.db.settings[c.key]~=false) end
+    return
+  end
   if view=='market' or view=='banker' then
     local data=self:GetBankerSummary();local p=data.portfolio
     local values={data.gold,data.available,p.cost,p.estimatedNet,data.realized,data.pending}

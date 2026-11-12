@@ -113,4 +113,17 @@ check('1.22 Sale alert: coin sound, on-screen message with price and flip profit
  C_ChatInfo=old;PlaySound,RaidNotice_AddMessage,RaidWarningFrame=oldSound,oldRaid,oldFrame;M.db.flips={};M.ownedRows=nil
  if not ok then error(err,0) end
 end)
+
+check('1.22.1 Settings has checkboxes for sale alerts, coin sound, sending to partner and the paid floor',function()
+ M:InitializeUI();M:SetView('settings');M:RenderUI()
+ local byKey={};for _,c in ipairs(M.flipToggles) do byKey[c.key]=c end
+ for _,k in ipairs({'saleAlerts','saleAlertSound','saleAlertsShare','sellNeverBelowPaid'}) do assert(byKey[k] and byKey[k]:GetChecked(),k..' on by default') end
+ byKey.saleAlertSound:SetChecked(false);byKey.saleAlertSound.scripts.OnClick(byKey.saleAlertSound)
+ assert(M.db.settings.saleAlertSound==false)
+ byKey.sellNeverBelowPaid:SetChecked(false);byKey.sellNeverBelowPaid.scripts.OnClick(byKey.sellNeverBelowPaid)
+ assert(M.db.settings.sellNeverBelowPaid==false)
+ M:RenderUI();assert(not byKey.saleAlertSound:GetChecked(),'reflects saved setting')
+ SlashCmdList.VOIDMARKMARKET('salesound on');M:RenderUI();assert(byKey.saleAlertSound:GetChecked(),'slash and checkbox agree')
+ M.db.settings.sellNeverBelowPaid=true;M:SetView('browse')
+end)
 end
