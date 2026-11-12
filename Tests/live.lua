@@ -180,8 +180,8 @@ check('Offline peer suppresses only matching system errors and quietly resumes a
  M:PairPeer('Voidmark Bank');M:PumpSharing();assert(calls==1 and sentTo[1]=='Voidmark Bank')
  assert(not M:HandlePeerOfflineNotice("No player named 'Somebody' is currently playing."))
  assert(M:HandlePeerOfflineNotice("No player named 'Voidmark Bank' is currently playing."))
- -- 1.9.6: the quiet offline cooldown is one minute (was five).
- for i=1,5 do advance(10);M:PumpSharing() end
+ -- 1.22.3: the quiet offline cooldown is 30 seconds (was one minute).
+ for i=1,2 do advance(10);M:PumpSharing() end
  assert(calls==1 and M.db.syncPeer)
  assert(M.db.sharedPrices and M.db.market and M.db.ledger)
  advance(11);M:PumpSharing();assert(calls==2 and sentTo[2]=='Voidmark-Bank','unanswered probes alternate name forms')

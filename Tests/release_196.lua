@@ -20,10 +20,10 @@ end)
 check('1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m',function()
  reset();M:PairPeer('Bank');M.shareRegistered=true
  for _=1,8 do M.shareRun.hello=nil;M.shareRun.next=0;M:PumpSharing() end
- assert(M.shareRun.probeDelay<=60)
+ assert(M.shareRun.probeDelay<=30)
  local template=ERR_CHAT_PLAYER_NOT_FOUND or "No player named '%s' is currently playing."
  assert(M:HandlePeerOfflineNotice(string.format(template,'Bank')))
- assert(M.shareRun.offlineUntil-GetTime()<=60)
+ assert(M.shareRun.offlineUntil-GetTime()<=30)
  emit('PLAYER_ENTERING_WORLD')
  assert(M.shareRun.offlineUntil==nil and M.shareRun.hello==nil)
 end)

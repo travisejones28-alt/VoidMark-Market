@@ -1,3 +1,7 @@
+## 1.22.3
+- **Sync reconnects within 30 seconds.** When the partner isn't online yet, each character now knocks at most every 30 seconds (was up to 60), and a "player not found" pause is 30 seconds (was 60). Once connected, the 20-second heartbeat keeps the link up, and the link is dropped and re-probed after 65 seconds of silence. Either character can be the one that's always on; the other finds it within half a minute of logging in.
+- 253 regressions.
+
 ## 1.22.2
 - **Clearer tooltip age.** When a full scan (yours or the synced character's) ran after an item's price was last seen, the item isn't on the AH right now. The Auction line now says "(none listed now, last seen 14h ago)" instead of just "(14h old)", so an old price no longer looks like a stale scan.
 - 253 regressions.

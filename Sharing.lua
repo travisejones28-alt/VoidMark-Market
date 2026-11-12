@@ -315,7 +315,7 @@ function M:HandlePeerOfflineNotice(message)
  if not match then return false end
  local r=self.shareRun or {}
  self.shareRun=r
- r.offlineUntil=GetTime()+60
+ r.offlineUntil=GetTime()+30 -- try again in 30s (VoidLink-style: the bank keeps knocking)
  r.cursor=nil;r.reply=nil;r.lastContact=nil
  r.hello=nil;r.retry=nil;r.skipped=nil;r.sentHi=nil;r.pages=nil
  r.status='Partner offline; quietly checking again in 1m'
@@ -518,9 +518,9 @@ function M:PumpSharing()
   if sent then r.infoPending=true end
   local unconfirmed=ch=='WHISPER' and not r.lastContact
   if unconfirmed then r.hyphenTarget=not r.hyphenTarget end
-  -- Unanswered probes back off to at most 60 s, so a partner who logs in
-  -- later is found within a minute even if its own hello was lost.
-  r.probeDelay=unconfirmed and math.min(60,(r.probeDelay or 10)*2) or 20
+  -- Unanswered probes back off to at most 30 s, so a partner who logs in
+  -- later is found within half a minute. Once connected, a 20 s heartbeat.
+  r.probeDelay=unconfirmed and math.min(30,(r.probeDelay or 10)*2) or 20
   r.hello=now+r.probeDelay
   if unconfirmed and sent then r.status='Whisper queued; waiting for partner reply (delivery unconfirmed)'
   elseif not sent then r.status='Message rejected on '..ch..' (result '..tostring(r.lastSendError)..'); retrying' end
