@@ -42,6 +42,7 @@ function M:InitializeCancelScreen(f)
   r.c={}
   for j,c in ipairs(COLS) do r.c[j]=label(r,'',c[2]-6,-7,c[3],'GameFontHighlight') end
   r:SetScript('OnClick',function(b) if b.data then self.selectedRow=b.data;self:AnalyzeOwnedLive(b.data) end end)
+  r:SetScript('OnDoubleClick',function(b) if b.data then self.selectedRow=b.data;self:ListingsOpenBuy() end end)
   r:SetScript('OnEnter',function(b) self:ShowRowTooltip(b) end)
   r:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
   s.rows[i]=r
@@ -55,7 +56,9 @@ function M:InitializeCancelScreen(f)
  s.check=button(s,'Check undercuts',158,-510,190,function() self:CheckAllUndercuts() end,30)
  s.cancel=button(s,'Cancel selected...',356,-510,190,function() self:ReviewCancel(self.selectedRow) end,30)
  s.next=button(s,'Cancel next undercut...',554,-510,230,function() self:CancelNextUndercut() end,30)
- s.page=label(s,'',790,-518,214,'GameFontHighlightSmall');s.page:SetJustifyH('RIGHT')
+ -- See every listing of the selected item (count and price) and buy out undercuts.
+ s.buy=button(s,'See listings / buy',792,-510,212,function() self:ListingsOpenBuy() end,30)
+ s.page=label(list,'',690,-452,300,'GameFontHighlightSmall');s.page:SetJustifyH('RIGHT')
 end
 
 function M:RenderCancelScreen()
@@ -104,4 +107,15 @@ function M:RenderCancelScreen()
  s.refresh:SetEnabled(live);s.check:SetEnabled(live and #rows>0)
  s.cancel:SetEnabled(live and sel~=nil and not self:OwnedSold(sel))
  s.next:SetEnabled(live and u>0)
+ s.buy:SetEnabled(live and sel~=nil and sel.marketKey~=nil and not self:OwnedSold(sel))
+end
+-- Opens the buy page for the selected auction's exact item right here on
+-- Listings; Back returns to your auctions.
+function M:ListingsOpenBuy()
+ local sel=self.selectedRow
+ if not sel or sel.marketKey==nil or self:OwnedSold(sel) then self:Print('Select one of your listed auctions first');return end
+ if not self.ahOpen then self:Print('Open the Auction House first');return end
+ self:ShopBuyOpen({marketKey=sel.marketKey,name=sel.name})
+ if self.shopBuy then self.shopBuy.fromListings=sel end
+ self:RefreshUI()
 end

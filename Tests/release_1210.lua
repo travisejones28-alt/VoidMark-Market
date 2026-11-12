@@ -498,4 +498,25 @@ check('1.22.18 Tooltip never shows another suffix price',function()
  assert(lines[1] and lines[1]:find(M:Coins(440),1,true),table.concat(lines,' / '))
  _G.TT2TextLeft1=nil;M.db.market[key]=nil
 end)
+
+check('1.22.20 Listings keep undercut checks across reloads; See listings / buy opens the item buy page on Listings',function()
+ local key=M:Key(7406,0,25)
+ local old={{auctionID=11,unit=3000,marketKey=key,name='Durable Belt',itemKey={itemID=7406}}}
+ M.ownedRows=old;M:ApplyOwnedCompetition(old[1],2700);old[1].action='INSPECT';old[1].reason='Undercut by 3s'
+ M.selectedRow=old[1]
+ local new={{auctionID=11,unit=3000,marketKey=key,name='Durable Belt',itemKey={itemID=7406}},{auctionID=12,unit=500,marketKey=key,name='X'}}
+ M:CarryOwnedVerdicts(old,new)
+ assert(new[1].undercut==true and new[1].competition==2700 and new[1].reason=='Undercut by 3s','verdict kept')
+ assert(not new[2].liveAt and M.selectedRow==new[1],'selection follows the reloaded row')
+ -- A check that finishes after the reload marks the new row too.
+ M.ownedRows=new;local stale={auctionID=12,unit=500};stale.liveAt=time();stale.competition=nil;stale.undercut=false
+ M:SyncOwnedVerdict(stale);assert(new[2].liveAt and new[2].undercut==false)
+ -- The buy button.
+ local oldOpen,oldSearch=M.ahOpen,M.Search;M.ahOpen=true;M.Search=function() return true end
+ M.view='my auctions';M:ListingsOpenBuy()
+ assert(M.shopBuy and M.shopBuy.key==key and M.shopBuy.fromListings==new[1],'buy page for that item')
+ M:ShopBuyClose();assert(M.shopBuy==nil and M.selectedRow==new[1],'Back returns to the listing')
+ M:ListingsOpenBuy();M:SetView('selling');assert(M.shopBuy==nil,'leaving Listings closes it')
+ M.ahOpen,M.Search=oldOpen,oldSearch;M.ownedRows=nil;M.selectedRow=nil;M.view=nil
+end)
 end

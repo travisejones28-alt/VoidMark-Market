@@ -240,6 +240,30 @@ function M:OwnedState(o)
  if o.action=='CHECKING' then return 'CHECKING' end
  return 'Not checked'
 end
+-- Your auctions reload often (after posting, opening the AH, Refresh). Keep each
+-- auction's undercut check across reloads instead of going back to "Not checked".
+local VERDICT={'liveAt','competition','undercut','action','reason','cancelCost','proposedUnit','repriceDifference'}
+function M:CopyOwnedVerdict(to,from)
+ if to==from or not (to and from) then return end
+ for _,k in ipairs(VERDICT) do to[k]=from[k] end
+end
+-- A live check that finishes after a reload also marks the reloaded row.
+function M:SyncOwnedVerdict(row)
+ if not (row and row.auctionID) then return end
+ for _,o in ipairs(self.ownedRows or {}) do
+  if o~=row and o.auctionID==row.auctionID and o.unit==row.unit then self:CopyOwnedVerdict(o,row) end
+ end
+end
+function M:CarryOwnedVerdicts(old,new)
+ local by={}
+ for _,o in ipairs(old or {}) do if o.auctionID then by[o.auctionID]=o end end
+ for _,r in ipairs(new or {}) do
+  local o=r.auctionID and by[r.auctionID]
+  if o and o.unit==r.unit and (o.liveAt and time()-o.liveAt<900 or o.action=='CHECKING') then self:CopyOwnedVerdict(r,o) end
+  if o and self.selectedRow==o then self.selectedRow=r end
+  if o and self.shopBuy and self.shopBuy.fromListings==o then self.shopBuy.fromListings=r end
+ end
+end
 function M:ApplyOwnedCompetition(row,competitor)
  row.liveAt=time();row.competition=competitor
  row.undercut=competitor~=nil and row.unit~=nil and competitor<row.unit or false
@@ -261,10 +285,10 @@ function M:CheckAllUndercuts()
   local queued=self:Search(market,25,function(result)
    if self.undercutRun~=run then return end
    local competitor=result.rows[1] and result.rows[1].unit
-   for _,row in ipairs(rows) do self:ApplyOwnedCompetition(row,competitor);row.action='INSPECT' end
+   for _,row in ipairs(rows) do self:ApplyOwnedCompetition(row,competitor);row.action='INSPECT';self:SyncOwnedVerdict(row) end
    run.done=run.done+1;self:RefreshUI()
   end,function(e)
-   for _,row in ipairs(rows) do row.action='HOLD';row.reason='Live check failed: '..tostring(e) end
+   for _,row in ipairs(rows) do row.action='HOLD';row.reason='Live check failed: '..tostring(e);self:SyncOwnedVerdict(row) end
    if run.live then run.done=run.done+1 end;self:RefreshUI()
   end,function() return self.undercutRun==run end)
   if queued then run.total=run.total+1 else for _,row in ipairs(rows) do if row.action=='CHECKING' then row.action='INSPECT' end end end

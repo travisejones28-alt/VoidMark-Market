@@ -38,7 +38,9 @@ function M:ShopBuyClose()
  local b=self.shopBuy;if not b then return end
  local x=self.execution
  if x and x.shop==b and (x.state=='quoting' or x.state=='quoted') then self:InvalidateQuote('Buy view closed') end
- b.token=b.token+1;self.shopBuy=nil;self:RefreshUI()
+ b.token=b.token+1;self.shopBuy=nil
+ if b.fromListings then self.selectedRow=b.fromListings end
+ self:RefreshUI()
 end
 function M:ShopBuyRefresh()
  local b=self.shopBuy;if not b then return end

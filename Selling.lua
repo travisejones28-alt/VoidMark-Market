@@ -86,7 +86,8 @@ function M:CaptureOwnedAuctions()
       end
       if debugprofilestop()-start>=4 then return false end
     end
-  end,function() self.ownedRows=rows; if self.UpdateFlipListings then self:UpdateFlipListings(rows) end
+  end,function() if self.CarryOwnedVerdicts then self:CarryOwnedVerdicts(self.ownedRows,rows) end
+    self.ownedRows=rows; if self.UpdateFlipListings then self:UpdateFlipListings(rows) end
     if not self.persistenceBlocked then
       -- Kept across reloads/logins so sale alerts know your listing prices.
       local snap={}
@@ -115,9 +116,11 @@ function M:AnalyzeOwnedLive(row)
     local outcome=self:AssessOwnedRepost(row,competitor,cost)
     row.action=outcome.action;row.reason=outcome.reason
     row.proposedUnit=outcome.proposedUnit;row.repriceDifference=outcome.revenueDecrease
+    self:SyncOwnedVerdict(row)
     self:RefreshUI()
   end,function(e)
     row.action='HOLD';row.reason='Live competitor search failed: '..tostring(e)
+    self:SyncOwnedVerdict(row)
     self:RefreshUI()
   end)
 end

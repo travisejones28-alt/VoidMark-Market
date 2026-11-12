@@ -176,7 +176,7 @@ PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
 PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
 PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
-BENCH scan: 124 frames (2.1s at 60fps, 4.1s at 30fps), worst frame 12.4ms, cpu 1.26s | after:prune=3 after:share-scan=20 done=1 model=78 processing=22
+BENCH scan: 104 frames (1.7s at 60fps, 3.5s at 30fps), worst frame 12.2ms, cpu 1.05s | after:prune=4 after:share-scan=17 done=1 model=63 processing=19
 PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.13 history stores only the fields it needs; latest keeps the full snapshot
 PASS 1.9.13 history saved by older versions is shrunk once at login without losing prices
@@ -268,4 +268,5 @@ PASS 1.22.17 Tooltip title name finds the buy even when AH and bag suffix number
 PASS 1.22.18 Sell list uses the bag item real name and never another suffix scan price
 PASS 1.22.18 Two suffixes of one item get separate sell tiles and counts
 PASS 1.22.18 Tooltip never shows another suffix price
-ALL 267 TESTS PASSED
+PASS 1.22.20 Listings keep undercut checks across reloads; See listings / buy opens the item buy page on Listings
+ALL 268 TESTS PASSED

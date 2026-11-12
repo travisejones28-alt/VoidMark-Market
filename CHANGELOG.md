@@ -1,3 +1,8 @@
+## 1.22.20
+- **Listings: "See listings / buy".** Select one of your auctions (or double-click it) to open that exact item's buy page right on Listings: every other seller's listing with price and count, ready to buy out an undercut. Back returns to your auctions.
+- **Undercut checks no longer reset to "Not checked".** Your auctions reload often (after posting, opening the AH, Refresh), and each reload wiped the results. They're now kept for 15 minutes per auction, and a check that finishes during a reload still lands.
+- 268 regressions.
+
 ## 1.22.19
 - Selecting an item on Selling fills the quantity with how many of *that suffix* you have. It counted both Pagan Belts (Intellect and Sorcerer) as 2, and the post failed with "Invalid price, duration, quantity or item variant".
 - 267 regressions.
