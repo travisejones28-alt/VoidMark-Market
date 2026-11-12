@@ -1,3 +1,10 @@
+## 1.22.16
+- **Your bank toon now knows what your main paid (and the other way round).** Each account keeps its own ledger, so an item bought on one character and mailed to the other showed no "Last Bought". Buys now go to your synced partner in the background, using the same send budget as price syncing.
+  - Used for the tooltip's Last Bought, "You paid" on the sell screen, the Paid column in Listings, and the never-sell-below-paid floor.
+  - Partner buys never count in this account's Flip Ledger profit totals.
+  - Your whole buy history goes over the first time the two connect. `/vmm flipsync` sends it again.
+- 263 regressions.
+
 ## 1.22.15
 - **Buy pages load faster.** Clicking an item no longer waits behind a background request that's already running (a search-term page, your auctions, a price check). That request is put back in line and the item's search goes out right away.
 - **Chain buying no longer fails with "A search for this item is already running."** A second search for the same item now joins the one already running and gets the same results.

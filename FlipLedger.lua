@@ -79,6 +79,7 @@ function M:RecordFlipBuy(p)
   itemID=p.itemID,qty=qty,cost=math.floor(p.cost),at=tonumber(p.at) or time(),char=self.characterID,sold=0,gross=0,fee=0,
   source=p.source or 'Market'}
  book[#book+1]=f
+ if self.shareRun then self.shareRun.buyCheckAt=0 end
  trimBook(self);self:RefreshUI();return f
 end
 function M:RecordFlipSale(name,qty,gross,fee)
@@ -370,6 +371,9 @@ function M:BoughtHistory(link)
  for _,f in ipairs(self:FlipBook()) do
   if f.cost and same(f.name,f.key) then out[#out+1]={cost=f.cost,qty=f.qty or 1,at=f.at,sold=f.sold or 0,net=self:FlipNumbers(f).net,soldAt=f.soldAt,char=f.char} end
  end
+ for _,b in pairs(self.db.partnerBuys or {}) do
+  if type(b)=='table' and b.cost and same(b.name,b.key) then out[#out+1]={cost=b.cost,qty=b.qty or 1,at=b.at,sold=0,char=b.char,partner=true} end
+ end
  if #out==0 then -- buys from before the Flip Ledger
   for _,e in ipairs(self.db.ledger or {}) do
    if e.kind=='purchase' and e.status=='confirmed' and self:Finite(e.cost,0,1e14) and same(nameOf(e.itemLink,e.name),e.marketKey) then
@@ -437,12 +441,24 @@ function M:PaidForListing(o)
   end
   f=best
  end
+ if not f then f=self:PartnerBuyFor(o.itemLink or (o.name and ('['..o.name..']')),o.marketKey) end
  return f and f.cost and math.floor(f.cost/math.max(1,f.qty or 1)+0.5) or nil
+end
+-- Newest buy your synced partner made of this item (they buy, you list).
+function M:PartnerBuyFor(link,key)
+ if not link then return nil end
+ local same=self:FlipMatcher(link);local best
+ for _,b in pairs(self.db.partnerBuys or {}) do
+  if type(b)=='table' and b.cost and same(b.name,key or b.key) and (not best or (b.at or 0)>(best.at or 0)) then best=b end
+ end
+ return best
 end
 -- Lowest post price that still gets back what you paid after the AH cut.
 function M:PaidFloor(row)
  if type(row)~='table' or self.db.settings.sellNeverBelowPaid==false then return nil end
- local f=self:HeldFlip(row.name,row.itemLink,row.marketKey);if not f or not f.cost then return nil end
+ local f=self:HeldFlip(row.name,row.itemLink,row.marketKey)
+ if not f then f=self:PartnerBuyFor(row.itemLink or (row.name and ('['..row.name..']')),nil) end
+ if not f or not f.cost then return nil end
  local cut=tonumber(self.db.settings.ahCut) or 0.05;if not self:Finite(cut,0,0.3) then cut=0.05 end
  local unit=f.cost/math.max(1,f.qty or 1)
  if unit<=0 then return nil end
@@ -654,4 +670,61 @@ function M:RenderFlipFrame(f)
   ..(t.lost>0 and ('   |   Deposits lost '..self:Coins(t.lost)) or ''))
  f.totals2:SetText(('Holding %d (paid %s)%s'):format(t.holding,self:Coins(t.holdingCost),
   t.listedValue>0 and ('   |   Listed for %s if they all sell'):format(self:Coins(math.floor(t.listedValue*(1-(self.db.settings.ahCut or 0.05))))) or ''))
+end
+
+-- Sharing buys with your synced partner ----------------------------------------
+-- Each account keeps its own SavedVariables, so a belt bought on your main and
+-- mailed to your bank had no "Last Bought" there. Buys go to the partner in
+-- small packed messages ("B"); the partner keeps them apart from its own
+-- ledger (they never count in its profit totals).
+local function benc(s) return (tostring(s or ''):gsub('[%%%c,;|/\t]',function(c) return ('%%%02X'):format(c:byte()) end)) end
+local function bdec(s) return (tostring(s or ''):gsub('%%(%x%x)',function(x) return string.char(tonumber(x,16)) end)) end
+M.MAX_PARTNER_BUYS=3000
+local function peerKey(self) local p=self.db.syncPeer;return type(p)=='string' and p:lower():gsub('%s','') or nil end
+-- Next "B" message for the partner and the highest flip id it covers.
+function M:NextFlipBuyMessage(epoch,limit)
+ local peer=peerKey(self);if not peer then return nil end
+ local s=self.db.flipSyncSent
+ if type(s)~='table' or s.peer~=peer then s={peer=peer,high=0};self.db.flipSyncSent=s end
+ local rows={};local list={}
+ for _,f in ipairs(self:FlipBook()) do if f.cost and (f.id or 0)>s.high then list[#list+1]=f end end
+ if #list==0 then return nil end
+ table.sort(list,function(a,b) return a.id<b.id end)
+ local hi=s.high;local size=#epoch+4
+ for _,f in ipairs(list) do
+  local line=table.concat({f.id,benc(f.name),benc(f.key),f.qty or 1,f.cost,f.at or 0},',')
+  if size+#line+1>(limit or 200) then if #rows==0 then hi=f.id end;break end -- an unsendable row is skipped
+  rows[#rows+1]=line;size=size+#line+1;hi=f.id
+ end
+ return table.concat({'B',epoch,table.concat(rows,';')},'\t'),hi
+end
+function M:MarkFlipBuysSent(hi)
+ local s=self.db.flipSyncSent;if type(s)=='table' and tonumber(hi) and hi>s.high then s.high=hi end
+end
+-- /vmm flipsync: send every buy to the partner again.
+function M:ResendFlipBuys() self.db.flipSyncSent=nil;if self.shareRun then self.shareRun.buyCheckAt=0 end end
+function M:ReceiveFlipBuys(f,sender)
+ if #f~=4 or type(f[4])~='string' then return end
+ local who=type(sender)=='string' and sender or 'Partner'
+ local book=self.db.partnerBuys;if type(book)~='table' then book={};self.db.partnerBuys=book end
+ local added=0
+ for line in (f[4]..';'):gmatch('([^;]*);') do
+  local p={};for v in (line..','):gmatch('([^,]*),') do p[#p+1]=v end
+  local id,qty,cost,at=tonumber(p[1]),tonumber(p[4]),tonumber(p[5]),tonumber(p[6])
+  local name=bdec(p[2]);local key=p[3]~='' and bdec(p[3]) or nil
+  if #p==6 and self:Finite(id,1,1e9) and name~='' and #name<=80 and self:Finite(qty,1,1e6) and self:Finite(cost,0,1e14) and self:Finite(at,0,time()+86400) then
+   local k=who..':'..id
+   if not book[k] then added=added+1 end
+   book[k]={name=name,key=key,qty=qty,cost=cost,at=at,char=who}
+  end
+ end
+ if added>0 then
+  local n=0;for _ in pairs(book) do n=n+1 end
+  if n>self.MAX_PARTNER_BUYS then
+   local all={};for k,b in pairs(book) do all[#all+1]={k=k,at=b.at or 0} end
+   table.sort(all,function(a,b) return a.at<b.at end)
+   for i=1,n-self.MAX_PARTNER_BUYS do book[all[i].k]=nil end
+  end
+ end
+ return true
 end

@@ -491,7 +491,7 @@ function M:PumpSharing()
  if now<(r.next or 0) then return end;r.next=now+0.15
  if (InCombatLockdown and InCombatLockdown()) or (C_ChatInfo.InChatMessagingLockdown and C_ChatInfo.InChatMessagingLockdown()) then r.status='Paused by client restrictions';return end
  local j=self.db.shareJournal
- if not r.reply and not (r.infoPending and r.lastContact) and not (r.alerts and r.alerts[1] and r.lastContact) and r.hello and now<r.hello and not dataReady(r,j,now) then return end
+ if not r.reply and not (r.infoPending and r.lastContact) and not (r.alerts and r.alerts[1] and r.lastContact) and not (r.lastContact and now>=(r.buyCheckAt or 0)) and r.hello and now<r.hello and not dataReady(r,j,now) then return end
  local ch=channel(self)
  if ch=='WHISPER' and r.offlineUntil and now<r.offlineUntil then return end
  if ch~='WHISPER' then r.offlineUntil=nil end
@@ -506,6 +506,17 @@ function M:PumpSharing()
   while r.alerts[1] and now-(r.alerts[1].at or now)>1800 do table.remove(r.alerts,1) end
   if r.alerts[1] and r.lastContact and self.EncodeSaleAlert then
    if send(self,ch,self:EncodeSaleAlert(j.epoch,r.alerts[1])) then table.remove(r.alerts,1) else r.next=now+2 end
+   return
+  end
+ end
+ -- Your buys (for the partner's "Last Bought" and paid floors), a few per
+ -- message, inside the same byte budget as price pages.
+ if r.lastContact and self.NextFlipBuyMessage and now>=(r.buyCheckAt or 0) and not r.infoPending and not r.capPending then
+  refill(r,now)
+  local msg,hi=self:NextFlipBuyMessage(j.epoch,235-#self.economyID-1)
+  if not msg then r.buyCheckAt=now+10
+  elseif (r.bucket or 0)>=#msg+#self.economyID+1 then
+   if send(self,ch,msg) then r.bucket=r.bucket-(#msg+#self.economyID+1);self:MarkFlipBuysSent(hi) else r.next=now+2 end
    return
   end
  end
@@ -605,6 +616,8 @@ function M:ReceiveSharing(prefix,msg,ch,sender)
   else r.sentHi=n;r.pages={};r.retry=0 end
   if n==j.seq and r.lastAck~=n then self.db.syncLastSentAt=time() end
   r.lastAck=n;r.status=n==j.seq and 'Up to date' or 'Sending changes'
+ elseif f[2]=='B' and #f==4 then
+  if self.ReceiveFlipBuys then self:ReceiveFlipBuys(f,sender) end
  elseif f[2]=='N' and #f==9 then
   if self.ReceiveSaleAlert then self:ReceiveSaleAlert(f,sender) end
  elseif f[2]=='C' and #f==5 then

@@ -395,4 +395,41 @@ check('1.22.15 Buy page search jumps a background request in flight; ignored ref
  A.HasSearchResults,A.RefreshItemSearchResults,A.SendSearchQuery=saved[1],saved[2],saved[3]
  M.ThrottleReady=oldReady;M.ahOpen=oldOpen;q.active=nil;q.dedupe={};q.waiting={}
 end)
+
+check('1.22.16 Buys reach the synced partner: bank tooltip shows what main paid; not in bank profit totals',function()
+ M.db.flips={};M.db.partnerBuys=nil;M.db.flipSyncSent=nil;local oldPeer=M.db.syncPeer;M.db.syncPeer='Voidmark-Soulreaver'
+ M:RecordFlipBuy({name='Pagan Belt of the Sorcerer',quantity=1,cost=250})
+ local silk=M:RecordFlipBuy({name='Silk Cloth',quantity=20,cost=2000})
+ M:RecordFlipSale('Silk Cloth',20,4000,200) -- a sale row (no cost) is not sent
+ local msg,hi=M:NextFlipBuyMessage('1-1',200)
+ assert(msg and msg:find('^B\t1%-1\t') and hi==silk.id,tostring(msg))
+ M:MarkFlipBuysSent(hi);assert(M:NextFlipBuyMessage('1-1',200)==nil,'nothing left to send')
+ -- Many buys are split across messages that fit.
+ for i=1,30 do M:RecordFlipBuy({name='Some Long Item Name of the Physician '..i,quantity=1,cost=i}) end
+ local parts=0;local m,h=M:NextFlipBuyMessage('1-1',200)
+ while m do parts=parts+1;assert(#m<=200,#m);M:MarkFlipBuysSent(h);m,h=M:NextFlipBuyMessage('1-1',200) end
+ assert(parts>=5,'split: '..parts)
+ -- The partner (bank) receives them.
+ local f={};for v in ('E\t'..msg..'\t'):gmatch('([^\t]*)\t') do f[#f+1]=v end
+ M.db.flips={};assert(M:ReceiveFlipBuys(f,'Voidmark-Soulreaver'))
+ M:ReceiveFlipBuys(f,'Voidmark-Soulreaver') -- duplicates are ignored
+ local n=0;for _ in pairs(M.db.partnerBuys) do n=n+1 end;assert(n==2,n)
+ local lines={};local tip={AddLine=function(_,t) lines[#lines+1]=t end,AddDoubleLine=function(_,l,r) lines[#lines+1]=l..'='..r end}
+ M:AppendBoughtTooltip(tip,'|cff1eff00|Hitem:1234::::::::16|h[Pagan Belt]|h|r')
+ assert(lines[1]=='Last Bought='..M:Coins(250),table.concat(lines,' / '))
+ assert(M:PaidFloor({name='Silk Cloth'})==math.ceil(100/0.95),'never-below-paid uses the partner buy')
+ assert(M:PaidForListing({name='Silk Cloth'})==100)
+ assert((M:FlipTotals('all').bought or 0)==0,'partner buys never count in this account totals')
+ -- The sync pump sends them when the partner is connected.
+ M.db.flips={};M.db.flipSyncSent=nil;M:RecordFlipBuy({name='Pagan Belt',quantity=1,cost=99})
+ local r=M.shareRun;local sent;local oldSend=C_ChatInfo.SendAddonMessage
+ C_ChatInfo.SendAddonMessage=function(_,m) if m:find('\tB\t',1,true) then sent=m end;return true end
+ local saved={r.lastContact,r.hello,r.next,r.infoPending,r.capPending,r.reply,r.buyCheckAt}
+ r.lastContact=GetTime();r.hello=GetTime()+100;r.next=0;r.infoPending=nil;r.capPending=nil;r.reply=nil;r.buyCheckAt=0
+ local ok,err=pcall(function() M:PumpSharing() end)
+ C_ChatInfo.SendAddonMessage=oldSend
+ r.lastContact,r.hello,r.next,r.infoPending,r.capPending,r.reply,r.buyCheckAt=saved[1],saved[2],saved[3],saved[4],saved[5],saved[6],saved[7]
+ assert(ok,err);assert(sent and sent:find('Pagan Belt',1,true),'buy sent: '..tostring(sent))
+ M.db.flips={};M.db.partnerBuys=nil;M.db.flipSyncSent=nil;M.db.syncPeer=oldPeer
+end)
 end
