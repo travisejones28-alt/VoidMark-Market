@@ -1,3 +1,8 @@
+## 1.15.2
+- **Fixed: text overlap on Listings.** The selected auction's undercut verdict ran into the Listed/Inbound gold line. It now shows in the header above the list, on its own.
+- Undercut verdicts are in plain words ("Nobody else is selling this. Keep it.", "Undercut 12% (cheapest now 30s). Small gap: keep it.").
+- 230 regressions.
+
 ## 1.15.1
 - **Fixed: Lvl column stuck on "--".** Items the game hadn't loaded yet never showed a level, because nothing asked for them or redrew when they arrived. Visible rows now ask the game to load the item (once) and the list redraws when it arrives.
 - 229 regressions.

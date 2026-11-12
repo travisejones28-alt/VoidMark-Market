@@ -176,7 +176,7 @@ PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
 PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
 PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
-BENCH scan: 141 frames (2.4s at 60fps, 4.7s at 30fps), worst frame 12.7ms, cpu 1.38s | after:prune=5 after:share-scan=28 done=1 model=86 processing=21
+BENCH scan: 170 frames (2.8s at 60fps, 5.7s at 30fps), worst frame 12.3ms, cpu 1.72s | after:prune=5 after:share-scan=31 done=1 model=101 processing=32
 PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.13 history stores only the fields it needs; latest keeps the full snapshot
 PASS 1.9.13 history saved by older versions is shrunk once at login without losing prices
@@ -229,5 +229,6 @@ PASS 1.14.5 Tooltips show the exact suffix (link, then item key) and sit below t
 PASS 1.14.6 Auction-won chat settles a purchase whose result never came; buy view can settle it too
 PASS 1.15 Flip Ledger: confirmed buys record what you paid; mailbox sale invoices fill in what it sold for
 PASS 1.15.1 Lvl fills in once the game loads an uncached item
+PASS 1.15.2 Listings: the selected auction verdict sits in the header, not on the gold totals line
 PASS 1.14 Vs Avg compares against the exact suffix history and sorts deals first
-ALL 229 TESTS PASSED
+ALL 230 TESTS PASSED

@@ -370,6 +370,16 @@ check('1.15.1 Lvl fills in once the game loads an uncached item',function()
  GetItemInfo,C_Item=oldInfo,oldC;assert(ok,err)
 end)
 
+check('1.15.2 Listings: the selected auction verdict sits in the header, not on the gold totals line',function()
+ M:SetView('my auctions');M:RenderUI();local s=M.cancelScreen
+ if not s then return end
+ M.selectedRow={name="Buccaneer's Gloves",reason='Nobody else is selling this. Keep it.'}
+ M:RenderUI()
+ assert(s.reason:GetText():find('Nobody else is selling',1,true),'verdict in header')
+ assert(not tostring(s.summary:GetText()):find('Nobody else',1,true),'not on the summary line')
+ M.selectedRow=nil;M:SetView('browse')
+end)
+
 check('1.14 Vs Avg compares against the exact suffix history and sorts deals first',function()
  fresh();M:SetView('browse');M.ahOpen=false
  local monkey,bear=M:Key(600,-10),M:Key(600,-12)

@@ -29,7 +29,9 @@ end
 function M:InitializeCancelScreen(f)
  local s=CreateFrame('Frame',nil,f);s:SetPoint('TOPLEFT',18,-108);s:SetSize(1004,554);s:Hide();self.cancelScreen=s
  local list=self.panel(s,0,0,1004,474);s.list=list
- s.title=label(list,'Your auctions',14,-10,500,'GameFontNormal')
+ s.title=label(list,'Your auctions',14,-10,300,'GameFontNormal')
+ -- Selected auction's undercut verdict: in the header so it never runs into the gold totals.
+ s.reason=label(list,'',320,-10,670,'GameFontHighlightSmall');s.reason:SetJustifyH('RIGHT');if s.reason.SetWordWrap then s.reason:SetWordWrap(false) end
  for _,c in ipairs(COLS) do label(list,c[1],c[2],-32,c[3]) end
  s.rows={}
  for i=1,ROWS do
@@ -47,8 +49,8 @@ function M:InitializeCancelScreen(f)
  list:EnableMouseWheel(true)
  list:SetScript('OnMouseWheel',function(_,d) self.cancelPage=math.max(1,(self.cancelPage or 1)-(d>0 and 1 or -1));self:RefreshUI() end)
  s.empty=label(list,'',14,-220,976,'GameFontHighlight');s.empty:SetJustifyH('CENTER')
- s.summary=label(s,'',0,-482,1004,'GameFontHighlight')
- s.inbound=label(s,'',360,-482,644,'GameFontHighlight');s.inbound:SetJustifyH('RIGHT')
+ s.summary=label(s,'',0,-482,350,'GameFontHighlight');if s.summary.SetWordWrap then s.summary:SetWordWrap(false) end
+ s.inbound=label(s,'',360,-482,644,'GameFontHighlight');s.inbound:SetJustifyH('RIGHT');if s.inbound.SetWordWrap then s.inbound:SetWordWrap(false) end
  s.refresh=button(s,'Refresh',0,-510,150,function() self:RequestOwnedAuctionsDiagnostic() end,30)
  s.check=button(s,'Check undercuts',158,-510,190,function() self:CheckAllUndercuts() end,30)
  s.cancel=button(s,'Cancel selected...',356,-510,190,function() self:ReviewCancel(self.selectedRow) end,30)
@@ -73,8 +75,8 @@ function M:RenderCancelScreen()
  end
  local u,l,n=self:UndercutSummary()
  local sel=self.selectedRow
- local selText=sel and sel.reason and (' | '..tostring(sel.name)..': '..sel.reason) or ''
- s.summary:SetText(#rows>0 and ('|cffff6655'..u..' undercut|r   |cff72e7aa'..l..' lowest|r   '..n..' not checked'..selText) or '')
+ s.reason:SetText(sel and sel.reason and ('|cffc8a0ff'..tostring(sel.name)..':|r '..sel.reason) or '')
+ s.summary:SetText(#rows>0 and ('|cffff6655'..u..' undercut|r   |cff72e7aa'..l..' lowest|r   '..n..' not checked') or '')
  local sold,soldN,listed,listedN,nextIn=self:InboundGold()
  local cut=math.floor((self.db.settings.ahCut or 0.05)*100+0.5)
  local inbound=''
