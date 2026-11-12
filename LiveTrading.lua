@@ -187,15 +187,19 @@ function M:SellTick()
   if row and row==self.selectedRow and self.ahOpen and self.view=='selling' then self:CheckPost(row);self:RefreshUI() end
  end
 end
+-- Once per post (the post click and the created event can both report it).
+function M:RecordPostHistory(posted)
+ if type(posted)~='table' or posted.postHistoryRecorded or posted.marketKey==nil or self.persistenceBlocked or not posted.postedUnit then return end
+ posted.postHistoryRecorded=true
+ self.db.postHistory=type(self.db.postHistory)=='table' and self.db.postHistory or {}
+ local h=self.db.postHistory[posted.marketKey] or {};self.db.postHistory[posted.marketKey]=h
+ table.insert(h,1,{at=time(),unit=posted.postedUnit,quantity=posted.postedQuantity,duration=posted.postedDuration})
+ while #h>20 do table.remove(h) end
+end
 M:RegisterHandler('AUCTION_HOUSE_AUCTION_CREATED',function(self)
  local posted=self.postingRow;self.postingRow=nil
  if not posted then return end
- if posted.marketKey~=nil and not self.persistenceBlocked and posted.postedUnit then
-  self.db.postHistory=type(self.db.postHistory)=='table' and self.db.postHistory or {}
-  local h=self.db.postHistory[posted.marketKey] or {};self.db.postHistory[posted.marketKey]=h
-  table.insert(h,1,{at=time(),unit=posted.postedUnit,quantity=posted.postedQuantity,duration=posted.postedDuration})
-  while #h>20 do table.remove(h) end
- end
+ self:RecordPostHistory(posted)
  if self.view~='selling' then return end
  local tiles=self.SellTiles and self:SellTiles(self.sellingRows or {}) or (self.sellingRows or {})
  for i,t in ipairs(tiles) do

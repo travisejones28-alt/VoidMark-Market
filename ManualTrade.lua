@@ -176,11 +176,18 @@ function M:ReviewPost(row,n,unit,duration)
   local now,reason=postTerms(self,row,n,unit,duration)
   if not now or self.postQuote~=q or now.deposit~=b.deposit then self:Print(reason or 'Quote changed; review again');return end
   self.postQuote=nil;self.tradePending='post';self.postingRow=row
-  row.postedUnit=unit;row.postedQuantity=n;row.postedDuration=duration
+  row.postedUnit=unit;row.postedQuantity=n;row.postedDuration=duration;row.postHistoryRecorded=nil
   local A=C_AuctionHouse;local ok,pending
   if now.commodity then ok,pending=pcall(A.PostCommodity,now.loc,duration,n,unit)
   else ok,pending=pcall(A.PostItem,now.loc,duration,n,nil,unit) end
   if not ok then self.tradePending=nil;self.postingRow=nil;self:Print('Posting failed: '..tostring(pending));return end
+  -- 1.22.14: remember the post price right away (commodity posts don't always
+  -- send AUCTION_HOUSE_AUCTION_CREATED) and reload your auctions shortly after,
+  -- so sale alerts know the price of what you just listed.
+  if self.RecordPostHistory then self:RecordPostHistory(row) end
+  if C_Timer and C_Timer.After and self.RequestOwnedAuctionsDiagnostic then
+   C_Timer.After(2.5,function() if self.ahOpen then pcall(self.RequestOwnedAuctionsDiagnostic,self) end end)
+  end
   if pending then
    local f=AuctionHouseFrame and (now.commodity and AuctionHouseFrame.CommoditiesSellFrame or AuctionHouseFrame.ItemSellFrame)
    if f and f.CachePendingPost then

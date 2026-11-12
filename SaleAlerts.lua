@@ -66,6 +66,10 @@ function M:BuildSaleAlert(name,auctionID,link)
   if h and self:Finite(h.unit,1,1e12) then
    if (tonumber(h.quantity) or 1)<=1 then a.qty=1;a.gross=math.floor(h.unit)
    else a.unit=math.floor(h.unit);a.qty=nil end
+  elseif key~=nil and self.StoredPriceObservation then
+   -- Last resort: the current market price, clearly marked as an estimate.
+   local p=self:StoredPriceObservation(key)
+   if p and self:Finite(p.floor,1,1e12) then a.unit=math.floor(p.floor);a.qty=nil;a.estimate=true end
   end
  end
  if a.gross then a.net=math.floor(a.gross*(1-cut)+0.5) end
@@ -80,6 +84,7 @@ end
 function M:SaleAlertText(a,from)
  local who=from and ('|cffc8a0ff'..from..':|r ') or ''
  local item=a.qty and a.qty>1 and (a.name..' x'..a.qty) or a.name
+ if not a.gross and a.unit and a.estimate then return who..'Sold '..a.name..' - about '..self:Coins(a.unit)..' each (market price)' end
  if not a.gross and a.unit then return who..'Sold '..a.name..' at '..self:Coins(a.unit)..' each (your last post)' end
  if not a.gross then return who..'Sold '..item..' (price shows when the mail arrives)' end
  local text=who..'Sold '..item..' for '..self:Coins(a.gross)..' - you get '..self:Coins(a.net)
@@ -218,6 +223,7 @@ function M:SaleToast(a,from)
  t.item:SetText((a.qty and a.qty>1) and (a.name..' x'..a.qty) or a.name)
  local detail
  if a.gross then detail='Sold '..self:Coins(a.gross)..'  ·  you get '..self:Coins(a.net or a.gross)..(a.paid and ('  ·  paid '..self:Coins(a.paid)) or '')
+ elseif a.unit and a.estimate then detail='About '..self:Coins(a.unit)..' each (market price)'
  elseif a.unit then detail='Sold at '..self:Coins(a.unit)..' each (your last post)'
  else detail='Price shows when the sale mail arrives' end
  t.detail:SetText(detail)
@@ -294,7 +300,7 @@ local function dec(s) return (tostring(s):gsub('%%(%x%x)',function(x) return str
 function M:EncodeSaleAlert(epoch,item)
  local a=item.a
  -- qty 0 = only the price each is known (a stack that may have sold in part).
- if not a.gross and a.unit then return table.concat({'N',epoch,item.id,enc(a.name),0,a.unit,0,-1},'\t') end
+ if not a.gross and a.unit then return table.concat({'N',epoch,item.id,enc(a.name),a.estimate and 0 or 0,a.unit,a.estimate and 1 or 0,-1},'\t') end
  return table.concat({'N',epoch,item.id,enc(a.name),a.qty or 1,a.gross or 0,a.net or 0,a.paid or -1},'\t')
 end
 function M:ReceiveSaleAlert(f,sender)
@@ -306,7 +312,7 @@ function M:ReceiveSaleAlert(f,sender)
  if self.seenSaleAlerts[id] then return true end
  self.seenSaleAlerts[id]=true
  local a={name=name,qty=qty}
- if qty==0 then a.qty=nil;if self:Finite(gross,1,1e12) then a.unit=gross end
+ if qty==0 then a.qty=nil;if self:Finite(gross,1,1e12) then a.unit=gross;a.estimate=net==1 end
  elseif self:Finite(gross,1,1e12) then a.gross=gross;a.net=self:Finite(net,0,1e12) and net or nil end
  if self:Finite(paid,0,1e12) then a.paid=paid;if a.net then a.profit=a.net-paid end end
  local who=type(sender)=='string' and sender:match('^([^%-]+)') or 'Partner'

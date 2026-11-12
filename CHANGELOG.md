@@ -1,3 +1,9 @@
+## 1.22.14
+- **Sale banners for herbs, leather and other stackables show a price.** Mageroyal and Thick Leather sold with "Price shows when the sale mail arrives":
+  - Posting with Market now saves the post price at the moment you post (stack posts don't always send the event it waited for) and reloads your auctions a few seconds later.
+  - If an item wasn't posted with Market, the banner shows the current market price, marked "About 1s 45c each (market price)".
+- 261 regressions.
+
 ## 1.22.13
 - **Fixed: "Last Bought"/"Last Sold" missing on tooltips.** Forever's item links carry only the base name ("Durable Belt") while the AH and sale mail use the full name ("Durable Belt of the Physician"), so buys recorded from mail never matched. Tooltips now match on item + suffix when both are known, otherwise on the base name + "of ...".
 - **Listings has a Paid column:** what you paid for each listed item (purple), red when your price after the 5% cut doesn't cover it, "--" when there's no buy on record.

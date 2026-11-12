@@ -334,4 +334,27 @@ check('1.22.13 Forever base-name links still find what you paid; Listings shows 
  assert(byName[3].c[7]:GetText():find('--',1,true),'no buy record')
  M.ownedRows=nil;M.db.flips={};M:SetView('browse')
 end)
+
+check('1.22.14 Commodity sale with no listing loaded: post price recorded at post time, else a marked market estimate',function()
+ M.db.flips={};M.ownedRows=nil;M.db.ownedSnapshot=nil;M.db.postHistory={}
+ local key=M:Key(785);M.nameIndex=M.nameIndex or {};M.nameIndex['Mageroyal']=key
+ -- Posting records the price right away (no AUCTION_HOUSE_AUCTION_CREATED needed), once.
+ local row={marketKey=key,name='Mageroyal',postedUnit=145,postedQuantity=10,postedDuration=1}
+ M:RecordPostHistory(row);M:RecordPostHistory(row)
+ assert(#M.db.postHistory[key]==1 and M.db.postHistory[key][1].unit==145)
+ local a=M:BuildSaleAlert('Mageroyal');assert(a.unit==145 and not a.estimate)
+ -- Nothing posted with Market: the market price, marked as an estimate.
+ M.db.postHistory={};local leather=M:Key(4304);M.nameIndex['Thick Leather']=leather
+ M.db.market[leather]={itemID=4304,marketKey=leather,lastSeen=time()-60,latest={floor=320}}
+ a=M:BuildSaleAlert('Thick Leather');assert(a.unit==320 and a.estimate)
+ assert(M:SaleAlertText(a):find('about '..M:Coins(320)..' each (market price)',1,true))
+ local t=M:SaleToast(a);assert(t.detail:GetText():find('market price',1,true))
+ -- The estimate flag survives the relay to the other character.
+ local msg=M:EncodeSaleAlert('1-1',{id='e1',a=a});local f={}
+ for v in ('E\t'..msg..'\t'):gmatch('([^\t]*)\t') do f[#f+1]=v end
+ local shown;local old=M.ShowSaleAlert;M.ShowSaleAlert=function(_,b) shown=b end
+ M:ReceiveSaleAlert(f,'Bank-TestRealm');M.ShowSaleAlert=old
+ assert(shown and shown.unit==320 and shown.estimate,'partner sees it as an estimate')
+ M.db.market[leather]=nil;M.nameIndex['Mageroyal']=nil;M.nameIndex['Thick Leather']=nil
+end)
 end
