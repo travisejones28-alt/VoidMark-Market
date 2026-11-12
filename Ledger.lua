@@ -120,6 +120,7 @@ function M:ObserveMail()
           local fingerprint=self.characterID..'|'..outcome..'|'..subject
           occurrence[fingerprint]=(occurrence[fingerprint] or 0)+1; local rank=occurrence[fingerprint]
           if rank>(self.db.mailSeen[fingerprint] or 0) then
+            if outcome=='expired' and self.RecordFlipExpired then self:RecordFlipExpired(itemName) end
             self:AddLedger('mail '..outcome,{name=itemName,marketKey=self:UniqueMarketByName(itemName),status='observed',
               evidence='Observed system AH mail subject; no unique auction ID, cost or deposit inferred',subject=subject,money=tonumber(money)})
             self:RememberMail(fingerprint,rank)

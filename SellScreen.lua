@@ -169,6 +169,8 @@ function M:InitializeSellScreen(f)
  end)
  label(h,'g',217,-115,10,'GameFontHighlightSmall')
  s.info=label(h,'',232,-116,450,'GameFontHighlightSmall')
+ -- What you paid for this item (Flip Ledger), to price it for a profit.
+ s.paid=label(h,'',350,-62,215,'GameFontHighlightSmall')
  -- Listings
  local l=panel(s,312,-156,692,358);s.list=l
  s.cols={label(l,'Unit price',14,-10,200),label(l,'Available',230,-10,120),label(l,'Total',370,-10,180),label(l,'Yours?',580,-10,90)}
@@ -292,6 +294,7 @@ function M:RenderSellScreen()
  elseif q then info=q.floor and ('Lowest other: '..money(self,q.floor)..(q.atMinimum and ' | held at your minimum' or (' | your price undercuts by '..money(self,self.db.settings.sellUndercut or 1)))) or 'No other listings - your price sets the market.'
  else info='Click Refresh to check the live price.' end
  s.info:SetText(info)
+ s.paid:SetText(self.SellPaidText and self:SellPaidText(r) or '')
  self:UpdateSellSummary()
  -- Listings
  local mode=self.sellMode or 'current'

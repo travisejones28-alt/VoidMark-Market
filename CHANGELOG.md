@@ -1,3 +1,15 @@
+## 1.16.0
+- **Flip Ledger, built out for learning what flips:**
+  - **Every buy:** item, what you paid, when, what you have it listed at, what it sold for (after the AH cut), when, how many days it took, profit, and status (Holding / Listed / Sold / expired xN).
+  - **By item** and **By suffix** summaries: bought, sold, average paid, average sold, total profit, ROI, average days to sell, still holding, times expired. Best profit first, so you can see which items and suffixes make money and which don't.
+  - **All time / 7 days / Today**, sortable columns (click a header), **Export CSV**.
+  - Totals: spent, sold for, profit, deposits lost, holding (what you paid), and what your listed items bring in if they all sell.
+- **Buys made outside Market are recorded too** (normal AH Browse, other addons): from the bid you placed and the "You won an auction" message.
+- **Listed at** is filled in from your auctions whenever Listings refreshes.
+- **Expired auctions** ("Auction expired" mail) are counted, and the lost deposit comes out of that item's profit.
+- **Selling shows "You paid ..."** for the item you select, so you can price it for a profit.
+- 235 regressions.
+
 ## 1.15.4
 - **Hold Ctrl over an item to see what you paid.** Item tooltips (bags, AH, mail, anywhere) show "Hold Ctrl: what you paid" for items you've bought; holding Ctrl shows the last price you paid, when, what it sold for if it sold, and your average if you bought it more than once. The tooltip updates as you press or release Ctrl.
 - 232 regressions.

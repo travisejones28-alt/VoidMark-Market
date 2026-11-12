@@ -344,7 +344,7 @@ check('1.15 Flip Ledger: confirmed buys record what you paid; mailbox sale invoi
  local last=M:FlipBook()[#M:FlipBook()];assert(last.cost==nil and M:FlipNumbers(last).status=='Sold (no buy record)' and M:FlipNumbers(last).profit==nil)
  -- Window renders, filters, and removes on right-click confirm.
  M:ShowFlipLedger();local f=M.flipLedger
- assert(f.rows[1]:IsShown() and f.totals:GetText():find('Holding 1',1,true),'window')
+ assert(f.rows[1]:IsShown() and f.totals2:GetText():find('Holding 1',1,true),'window')
  f.filters[2].scripts.OnClick(f.filters[2]);assert(M.flipFilter=='holding' and #M:FlipRows('holding')==1)
  local oldAsk=M.AskShopConfirm;M.AskShopConfirm=function(_,_,fn) fn() end
  local r=f.rows[1];r.scripts.OnClick(r,'RightButton');M.AskShopConfirm=oldAsk
@@ -412,6 +412,71 @@ check('1.15.4 Holding Ctrl over an item shows what you last paid and when',funct
  assert(lines[3] and lines[3]:find('Bought 2 times',1,true) and lines[3]:find(M:Coins(1050),1,true),'average')
  lines={};M:AppendBoughtTooltip(tip,'|cff1eff00|Hitem:1021|h[Other Item]|h|r');assert(#lines==0,'nothing for items never bought')
  IsControlKeyDown=oldCtrl;M.db.flips={}
+end)
+
+check('1.16 Flip Ledger: outside buys, listing price, expired deposits, days to sell and profit',function()
+ M.db.flips={};for k in pairs(M.db.pending) do M.db.pending[k]=nil end
+ M.execution={state='idle'}
+ -- Bought on the normal AH: the bid sent + the "won" message.
+ M:NoteOutsideBid(501,1200)
+ emit('CHAT_MSG_SYSTEM','You won an auction for Lupine Vest of Agility')
+ local f=M:FlipBook()[1]
+ assert(f and f.cost==1200 and f.name=='Lupine Vest of Agility' and f.source=='AH','outside buy recorded')
+ -- Market's own bid is never double counted.
+ M.execution={state='pending',live={auctionID=777}};M:NoteOutsideBid(777,999);M.execution={state='idle'}
+ assert(#(M.outsideBids or {})==0,'own purchase bid ignored')
+ emit('CHAT_MSG_SYSTEM','You won an auction for Unrelated Thing');assert(#M:FlipBook()==1,'no bid, nothing recorded')
+ -- Listed (from your auctions).
+ f.at=time()-2*86400
+ M:UpdateFlipListings({{name='Lupine Vest of Agility',unit=4500,quantity=1,deposit=60}})
+ assert(f.listPrice==4500 and f.deposit==60 and M:FlipNumbers(f).status=='Listed')
+ -- Expired once: deposit lost, back to holding.
+ M:RecordFlipExpired('Lupine Vest of Agility')
+ assert(f.expired==1 and f.depositsLost==60 and M:FlipNumbers(f).status=='Holding (expired x1)')
+ -- Relisted and sold: profit = after cut - paid - lost deposit; days to sell.
+ M:UpdateFlipListings({{name='Lupine Vest of Agility',unit=4000,quantity=1,deposit=60}})
+ M:RecordFlipSale('Lupine Vest of Agility',1,4000,200)
+ local n=M:FlipNumbers(f)
+ assert(n.status=='Sold' and n.net==3800 and n.profit==3800-1200-60 and n.days>=1.9 and n.days<=2.1,'sold numbers '..tostring(n.profit))
+ assert(math.abs(n.roi-(2540/1200))<0.001,'roi')
+end)
+
+check('1.16 Flip Ledger summaries by item and by suffix, time periods, sorting and CSV',function()
+ M.db.flips={}
+ local function flip(name,cost,sold,ageDays)
+  local f=M:RecordFlipBuy({name=name,quantity=1,cost=cost});f.at=time()-ageDays*86400
+  if sold then M:RecordFlipSale(name,1,sold,math.floor(sold*0.05)) end
+  return f
+ end
+ flip('Bandit Boots of the Monkey',500,3000,1);flip('Bandit Boots of the Monkey',700,nil,1)
+ flip('Scouting Tunic of the Monkey',900,2000,1);local old=flip('Sage\'s Sash of Intellect',800,600,10);old.soldAt=time()-9*86400
+ assert(M:FlipSuffix('Bandit Boots of the Monkey')=='of the Monkey' and M:FlipSuffix("Sage's Sash of Intellect")=='of Intellect' and M:FlipSuffix('Linen Cloth')=='No suffix')
+ local by={};for _,g in ipairs(M:FlipGroups('item')) do by[g.name]=g end
+ local boots=by['Bandit Boots of the Monkey']
+ assert(boots.bought==2 and boots.sold==1 and boots.holding==1 and boots.avgPaid==600 and boots.avgSold==2850 and boots.profit==2350,'by item')
+ local suf={};for _,g in ipairs(M:FlipGroups('suffix')) do suf[g.name]=g end
+ assert(suf['of the Monkey'].sold==2 and suf['of the Monkey'].profit==2350+1000 and suf['of Intellect'].profit==570-800,'by suffix')
+ -- 7-day period drops the buy from 10 days ago (sold 9 days ago); bought OR sold in the period counts.
+ assert(#M:FlipRows('all','week')==3 and #M:FlipRows('all','all')==4,'period')
+ assert(M:FlipTotals('week').spent==2100,'week totals')
+ -- Window: views, sort by header, CSV.
+ M.flipView=nil;M.flipSort=nil;M:ShowFlipLedger();local f=M.flipLedger
+ f.views[3].scripts.OnClick(f.views[3]);assert(M.flipView=='bysuffix' and f.rows[1].c[1]:GetText()=='of the Monkey','suffix view, best profit first')
+ f.views[2].scripts.OnClick(f.views[2]);assert(f.headers[7].text:GetText()=='ROI')
+ f.headers[2].scripts.OnClick(f.headers[2]);assert(f.rows[1].c[1]:GetText()=='Bandit Boots of the Monkey','sorted by bought')
+ f.views[1].scripts.OnClick(f.views[1]);assert(f.headers[4].text:GetText()=='Listed at')
+ local csv=M:FlipLedgerCSV();assert(csv:find('^Item,Quantity,Paid') and select(2,csv:gsub('\n',''))==4,'csv rows')
+ f:Hide();M.flipView=nil;M.flipSort=nil;M.db.flips={}
+end)
+
+check('1.16 Selling shows what you paid for the selected item',function()
+ M.db.flips={};M:RecordFlipBuy({name='Lupine Vest of Agility',quantity=1,cost=1450})
+ assert(M:SellPaidText({name='Lupine Vest of Agility',itemLink='|cff1eff00|Hitem:5|h[Lupine Vest of Agility]|h|r'}):find(M:Coins(1450),1,true))
+ assert(M:SellPaidText({name='Never Bought'})=='')
+ M:SetView('selling');M.selectedRow={name='Lupine Vest of Agility',itemID=5,itemLink='|cff1eff00|Hitem:5|h[Lupine Vest of Agility]|h|r'}
+ local ok,err=pcall(function() M:RenderUI() end)
+ if ok and M.sellScreen and M.sellScreen.paid then assert(M.sellScreen.paid:GetText():find('You paid',1,true),'label') end
+ M.selectedRow=nil;M:SetView('browse');M.db.flips={};assert(ok,err)
 end)
 
 check('1.14 Vs Avg compares against the exact suffix history and sorts deals first',function()

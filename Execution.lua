@@ -167,7 +167,11 @@ function M:ResolveWonAuction(msg)
       and (n==want or want:sub(1,#n)==n or n:sub(1,#want)==want)
       and (not best or (p.id or 0)<(best.id or 0)) then best=p end
   end
-  if not best then return false end
+  if not best then
+    -- Bought outside Market (normal AH or another addon): record it from the bid sent.
+    if self.RecordOutsideBuy then return self:RecordOutsideBuy(name) end
+    return false
+  end
   self:ResolvePurchase(best,'confirmed','Observed "auction won" system message')
   local x=self.execution
   if x and x.order==best then x.state='complete'; x.message='Purchase confirmed' end

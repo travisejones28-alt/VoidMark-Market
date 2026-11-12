@@ -76,7 +76,7 @@ function M:CaptureOwnedAuctions()
       end
       if debugprofilestop()-start>=4 then return false end
     end
-  end,function() self.ownedRows=rows; self:RefreshInventory(); self:RefreshUI() end)
+  end,function() self.ownedRows=rows; if self.UpdateFlipListings then self:UpdateFlipListings(rows) end; self:RefreshInventory(); self:RefreshUI() end)
 end
 function M:AnalyzeOwnedLive(row)
   local market=row and self.db.market[row.marketKey]
