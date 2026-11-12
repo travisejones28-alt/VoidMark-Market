@@ -1,3 +1,7 @@
+## 1.20.0
+- **Flip Ledger is its own AH tab** (between Listings and VoidMark). The Flip Ledger button on Shopping and `/vmm flips` open that tab while the AH is open; away from the AH, `/vmm flips` still opens it as a window.
+- 243 regressions.
+
 ## 1.19.0
 - **Item tooltips show "Last Bought" and "Last Sold"** (per item, always on), like the flipping addon your friend uses. Hold Ctrl for when, which character bought it, what it sold for after the cut, and averages if you've traded it more than once.
 - **Never sell below what you paid.** For an item you bought and still hold, the suggested post price never goes under what you paid plus the 5% AH cut. Selling says "held at what you paid + AH cut" when that kicks in. A higher "Never below" you set still wins. Turn it off with `/vmm paidfloor off`.

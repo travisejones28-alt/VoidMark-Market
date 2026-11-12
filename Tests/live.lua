@@ -282,10 +282,10 @@ check('Auction House tabs work with Auctionator disabled and restore the standal
  emit('AUCTION_HOUSE_SHOW')
  native.IsShown=function()return true end
  native.GetPoint=function()return 'TOPLEFT',UIParent,'TOPLEFT',120,-80 end
- local tabs=M.auctionTabs;assert(#tabs==4 and #native.Tabs==3)
+ local tabs=M.auctionTabs;assert(#tabs==5 and #native.Tabs==3)
  M:InstallAuctionTabs();assert(M.auctionTabs==tabs)
- local labels={'Shopping','Selling','Listings','VoidMark'}
- local views={'browse','selling','my auctions','market'}
+ local labels={'Shopping','Selling','Listings','Flip Ledger','VoidMark'}
+ local views={'browse','selling','my auctions','flip ledger','market'}
  M.db.settings.lastAuctionView=nil
  for i,tab in ipairs(tabs) do
   assert(tab.button.text==labels[i])
@@ -293,7 +293,7 @@ check('Auction House tabs work with Auctionator disabled and restore the standal
   assert(M.view==views[i] and M.auctionDock.page==tab.page and parentFrame==tab.page)
   assert(M.window:IsShown() and M.window:GetScale()>0 and M.window.testLevel>native:GetFrameLevel())
   for j,other in ipairs(tabs) do assert(other.page:IsShown()==(j==i)) end
-  if i<=3 then
+  if i<=4 then
    -- A trading tab stands alone: no section buttons, BACK only on sub-screens.
    for _,b in pairs(M.navigation) do assert(not b:IsShown()) end
    assert(not M.dockBack:IsShown())
@@ -359,7 +359,7 @@ check('Auction House tabs work with Auctionator disabled and restore the standal
   CreateTab=function(_,id,page,label)registered[id]={page=page,label=label,button=oldCreate('Button')} end,
   GetButton=function(_,id)return registered[id].button end}
  LibStub=function()return lib end;M.auctionTabs=nil;M:InstallAuctionTabs()
- local n=0;for _ in pairs(registered) do n=n+1 end;assert(n==4 and not registered.VoidMarkMarketFlips)
+ local n=0;for _ in pairs(registered) do n=n+1 end;assert(n==5 and not registered.VoidMarkMarketFlips and registered.VoidMarkMarketFlipLedger.label=='Flip Ledger')
  assert(registered.VoidMarkMarketShopping.label=='Shopping' and registered.VoidMarkMarketVoidMark.label=='VoidMark')
  registered.VoidMarkMarketSelling.page:Show()
  assert(M.view=='selling' and M.auctionDock)

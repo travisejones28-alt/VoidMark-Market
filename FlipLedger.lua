@@ -371,18 +371,14 @@ local VIEWS={
   {'Expired',778,60,function(_,g) return g.expired>0 and ('|cffff9060'..g.expired..'|r') or '0' end,function(g) return g.expired end}},
 }
 local MAXCOLS=10
-function M:ShowFlipLedger()
- local f=self.flipLedger
- if not f then
-  f=CreateFrame('Frame',nil,UIParent,'BackdropTemplate');self.flipLedger=f
-  f:SetSize(940,560);f:SetPoint('CENTER');f:SetFrameStrata('DIALOG');f:SetMovable(true);f:EnableMouse(true)
-  f:RegisterForDrag('LeftButton');f:SetScript('OnDragStart',function(w) w:StartMoving() end);f:SetScript('OnDragStop',function(w) w:StopMovingOrSizing() end)
-  if f.SetBackdrop then
-   f:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Tooltips\\UI-Tooltip-Border',edgeSize=14})
-   f:SetBackdropColor(0.035,0.026,0.065,0.98);f:SetBackdropBorderColor(0.48,0.25,0.75,1)
+-- Builds the ledger into a frame: the "Flip Ledger" AH tab (embedded, inside
+-- the Market window) or a floating window (/vmm flips away from the AH).
+local function buildLedger(self,f,embedded)
+ do
+  if not embedded then
+   label(f,'|cffc8a0ffFLIP LEDGER|r',16,-14,200,'GameFontNormalLarge')
+   button(f,'Close',852,-11,74,function() f:Hide() end)
   end
-  label(f,'|cffc8a0ffFLIP LEDGER|r',16,-14,200,'GameFontNormalLarge')
-  button(f,'Close',852,-11,74,function() f:Hide() end)
   button(f,'Export CSV',762,-11,86,function()
    if not self.ShowTransferWindow then return end
    self:ShowTransferWindow()
@@ -437,10 +433,44 @@ function M:ShowFlipLedger()
   f.totals2=label(f,'',14,-502,912,'GameFontHighlight')
   f.hint=label(f,DIM..'Buys from Market and the normal AH are recorded. Sales and expired auctions are read when you open your mailbox. Click a header to sort; right-click a buy to remove it.|r',14,-530,912,'GameFontHighlightSmall')
  end
+end
+-- Floating window. While the AH is open with Market's tabs, the tab is used instead.
+function M:ShowFlipLedger()
+ if self.auctionTabs and self.ahOpen then
+  for _,t in ipairs(self.auctionTabs) do
+   if t.key=='flipledger' and t.button and t.button:GetScript('OnClick') then t.button:GetScript('OnClick')(t.button);return end
+  end
+ end
+ local f=self.flipLedger
+ if not f then
+  f=CreateFrame('Frame',nil,UIParent,'BackdropTemplate');self.flipLedger=f
+  f:SetSize(940,560);f:SetPoint('CENTER');f:SetFrameStrata('DIALOG');f:SetMovable(true);f:EnableMouse(true)
+  f:RegisterForDrag('LeftButton');f:SetScript('OnDragStart',function(w) w:StartMoving() end);f:SetScript('OnDragStop',function(w) w:StopMovingOrSizing() end)
+  if f.SetBackdrop then
+   f:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Tooltips\\UI-Tooltip-Border',edgeSize=14})
+   f:SetBackdropColor(0.035,0.026,0.065,0.98);f:SetBackdropBorderColor(0.48,0.25,0.75,1)
+  end
+  buildLedger(self,f,false)
+ end
  f:Show();self:RenderFlipLedger()
 end
+-- The AH tab: lives in the Market window like Shopping/Selling/Listings.
+function M:InitializeFlipScreen(parent)
+ if self.flipScreen then return end
+ local f=CreateFrame('Frame',nil,parent);f:SetPoint('TOPLEFT',18,-108);f:SetSize(1004,554);f:Hide()
+ self.flipScreen=f
+ buildLedger(self,f,true)
+end
+function M:RenderFlipScreen()
+ local f=self.flipScreen;if not f then return end
+ f:Show();self:RenderFlipFrame(f)
+end
 function M:RenderFlipLedger()
- local f=self.flipLedger;if not f or not f:IsShown() then return end
+ if self.flipScreen and self.flipScreen:IsShown() then self:RenderFlipFrame(self.flipScreen) end
+ if self.flipLedger and self.flipLedger:IsShown() then self:RenderFlipFrame(self.flipLedger) end
+end
+function M:RenderFlipFrame(f)
+ if not f or not f:IsShown() then return end
  local view=self.flipView or 'items';local filter=self.flipFilter or 'all';local period=self.flipPeriod or 'all'
  for _,b in ipairs(f.views) do b:SetEnabled(b.key~=view) end
  for _,b in ipairs(f.filters) do b:SetEnabled(b.key~=filter);b:SetShown(view=='items') end

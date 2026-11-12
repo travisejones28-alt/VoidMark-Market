@@ -7,6 +7,7 @@ local sections = {
   {key='shopping', label='Shopping', root='browse'},
   {key='selling', label='Selling', root='selling'},
   {key='cancelling', label='Listings', root='my auctions'},  -- key kept for saved settings
+  {key='flipledger', label='Flip Ledger', id='FlipLedger', root='flip ledger'},
   {key='voidmark', label='VoidMark'},
 }
 local toolViews = {market=true, banker=true, vendor=true, crafting=true, settings=true, tools=true, sync=true}
@@ -270,7 +271,7 @@ function M:InstallAuctionTabs()
     page:SetScript('OnHide', function() endGesture(self); undock(self, page) end)
     -- Prefix only when Auctionator's own Shopping/Selling tabs are also shown.
     local label = (auctionator and section.key~='voidmark') and ('VM '..section.label) or section.label
-    local id = 'VoidMarkMarket'..section.label
+    local id = 'VoidMarkMarket'..(section.id or section.label)
     local button
     if lib then
       -- Share the same row manager when Auctionator (or another host) supplies it.

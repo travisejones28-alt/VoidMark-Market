@@ -605,6 +605,20 @@ check('1.19 Daily lows are capped; /vmm check reports how an item is labeled and
  M.Print=oldPrint;assert(ok,err)
 end)
 
+check('1.20 Flip Ledger is its own AH tab; the Shopping button opens that tab',function()
+ M.db.flips={};M:RecordFlipBuy({name='Tab Test Vest',quantity=1,cost=500})
+ M:SetView('flip ledger');M:RenderUI()
+ assert(M.flipScreen and M.flipScreen:IsShown() and not M.shopScreen:IsShown(),'tab screen shown')
+ assert(M.flipScreen.rows[1]:IsShown() and M.flipScreen.rows[1].c[1]:GetText()=='Tab Test Vest','renders rows')
+ M:SetView('browse');M:RenderUI();assert(not M.flipScreen:IsShown(),'hidden on other tabs')
+ local clicked;local oldTabs,oldOpen=M.auctionTabs,M.ahOpen
+ M.auctionTabs={{key='flipledger',button={GetScript=function() return function() clicked=true end end}}};M.ahOpen=true
+ M:ShowFlipLedger();assert(clicked,'switches to the tab while the AH is open')
+ M.auctionTabs,M.ahOpen=oldTabs,oldOpen;M.db.flips={}
+ local found;for _,sec in ipairs(M.auctionSections) do if sec.key=='flipledger' then found=sec end end
+ assert(found and found.root=='flip ledger' and found.label=='Flip Ledger')
+end)
+
 check('1.14 Vs Avg compares against the exact suffix history and sorts deals first',function()
  fresh();M:SetView('browse');M.ahOpen=false
  local monkey,bear=M:Key(600,-10),M:Key(600,-12)

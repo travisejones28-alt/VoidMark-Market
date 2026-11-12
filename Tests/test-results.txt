@@ -176,7 +176,7 @@ PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
 PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
 PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
-BENCH scan: 94 frames (1.6s at 60fps, 3.1s at 30fps), worst frame 12.2ms, cpu 0.93s | after:prune=3 after:share-scan=17 done=1 model=56 processing=17
+BENCH scan: 142 frames (2.4s at 60fps, 4.7s at 30fps), worst frame 12.2ms, cpu 1.44s | after:prune=5 after:share-scan=24 done=1 model=87 processing=25
 PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.13 history stores only the fields it needs; latest keeps the full snapshot
 PASS 1.9.13 history saved by older versions is shrunk once at login without losing prices
@@ -242,5 +242,6 @@ PASS 1.18 Quality and exact-name terms: greens-only query to the server, other q
 PASS 1.18 An unconfirmed item buy no longer blocks buying; in-flight buys and commodity buys still do
 PASS 1.19 Never sell below what you paid: post price is held at paid + AH cut; held flips listed first
 PASS 1.19 Daily lows are capped; /vmm check reports how an item is labeled and what is saved
+PASS 1.20 Flip Ledger is its own AH tab; the Shopping button opens that tab
 PASS 1.14 Vs Avg compares against the exact suffix history and sorts deals first
-ALL 242 TESTS PASSED
+ALL 243 TESTS PASSED
