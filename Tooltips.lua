@@ -59,6 +59,15 @@ local function bindBlocksAuction(link)
  local ok,_,_,_,_,_,_,_,_,_,_,_,_,_,bind=pcall(info,link)
  return ok and (bind==1 or bind==4) -- bind on pickup / quest items never reach the AH
 end
+-- Newest completed full scan, this character's or the synced partner's.
+function M:NewestFullScanAt()
+ local t=self.db.latestScan and tonumber(self.db.latestScan.completedAt) or nil
+ local peer=self.db.syncPeer and self.db.shareReceived and self.db.shareReceived[self.db.syncPeer]
+ local p=peer and tonumber(peer.scanAt)
+ if p and (not t or p>t) then t=p end
+ if t and t>time()+60 then return nil end
+ return t
+end
 function M:TooltipAgeText(at)
  local age=math.max(0,time()-at)
  return age>=86400 and math.floor(age/86400)..'d' or age>=3600 and math.floor(age/3600)..'h' or math.max(1,math.floor(age/60))..'m'
@@ -90,7 +99,13 @@ function M:AppendMarketTooltip(tip,link,count)
  end
  local stale=time()-p.at>self.db.settings.maxDataAge or p.unverified
  local name=stale and ('Auction |cff999999('..self:TooltipAgeText(p.at)..' old)|r') or 'Auction'
- local r,g,b=1,1,1;if stale then r,g,b=.6,.6,.6 end
+ -- A full scan (here or on the synced character) ran after this price was last
+ -- seen: the item isn't on the AH right now. Say so instead of just "14h old".
+ local scan=self:NewestFullScanAt()
+ if scan and p.at<scan-300 and not p.unverified then
+  name='Auction |cff999999(none listed now, last seen '..self:TooltipAgeText(p.at)..' ago)|r'
+ end
+ local r,g,b=1,1,1;if stale or name:find('none listed',1,true) then r,g,b=.6,.6,.6 end
  tip:AddDoubleLine(name,self:Coins(p.floor),1,.82,0,r,g,b)
  if count then tip:AddDoubleLine('Auction x'..count,self:Coins(p.floor*count),1,.82,0,r,g,b) end
 end

@@ -1,3 +1,7 @@
+## 1.22.2
+- **Clearer tooltip age.** When a full scan (yours or the synced character's) ran after an item's price was last seen, the item isn't on the AH right now. The Auction line now says "(none listed now, last seen 14h ago)" instead of just "(14h old)", so an old price no longer looks like a stale scan.
+- 253 regressions.
+
 ## 1.22.1
 - **Settings has the flipping switches:** Sale alerts, Coin sound, Send to partner, Never sell below what I paid (hover each for what it does). They match the `/vmm salealerts`, `/vmm salesound` and `/vmm paidfloor` commands.
 - 252 regressions.

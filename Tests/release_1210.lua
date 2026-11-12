@@ -126,4 +126,23 @@ check('1.22.1 Settings has checkboxes for sale alerts, coin sound, sending to pa
  SlashCmdList.VOIDMARKMARKET('salesound on');M:RenderUI();assert(byKey.saleAlertSound:GetChecked(),'slash and checkbox agree')
  M.db.settings.sellNeverBelowPaid=true;M:SetView('browse')
 end)
+
+check('1.22.2 Tooltip: an item missing from the latest full scan says "none listed now" instead of just "14h old"',function()
+ local key=M:Key(1070);local lines={}
+ local tip={AddDoubleLine=function(_,l,r) lines[#lines+1]=l..'='..r end,AddLine=function() end}
+ local oldLink=M.LinkIdentity;M.LinkIdentity=function() return key end
+ M.db.market[key]={itemID=1070,marketKey=key,lastSeen=time()-14*3600,latest={floor=3200}}
+ local oldScan=M.db.latestScan
+ M.db.latestScan={completedAt=time()-20*60}
+ M:AppendMarketTooltip(tip,'|Hitem:1070|h[x]|h')
+ assert(lines[#lines]:find('none listed now, last seen 14h ago',1,true) and lines[#lines]:find(M:Coins(3200),1,true),lines[#lines])
+ -- Seen in the latest scan: normal line.
+ lines={};M.db.market[key].lastSeen=time()-20*60;M:AppendMarketTooltip(tip,'|Hitem:1070|h[x]|h')
+ assert(not lines[#lines]:find('none listed',1,true),lines[#lines])
+ -- The partner's newer scan counts too.
+ lines={};M.db.market[key].lastSeen=time()-14*3600;M.db.latestScan={completedAt=time()-30*3600}
+ M.db.syncPeer='bank';M.db.shareReceived={bank={scanAt=time()-600}}
+ M:AppendMarketTooltip(tip,'|Hitem:1070|h[x]|h');assert(lines[#lines]:find('none listed now',1,true))
+ M.db.market[key]=nil;M.db.latestScan=oldScan;M.LinkIdentity=oldLink;M.db.syncPeer=nil;M.db.shareReceived={}
+end)
 end
