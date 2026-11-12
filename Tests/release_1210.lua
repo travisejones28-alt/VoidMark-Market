@@ -310,4 +310,28 @@ check('1.22.11 /vmm testsound plays the chime and explains why when it cannot be
  M.Print,PlaySoundFile,PlaySound,GetCVar=oldPrint,oldFile,oldSound,oldCVar
  if not ok then error(err,0) end
 end)
+
+check('1.22.13 Forever base-name links still find what you paid; Listings shows a Paid column',function()
+ M.db.flips={}
+ -- Bought from "You won" mail (no key) under the full AH name.
+ local b=M:RecordFlipBuy({name='Durable Belt of the Physician',quantity=1,cost=1000})
+ local lines={};local tip={AddLine=function(_,t) lines[#lines+1]=t end,AddDoubleLine=function(_,l,r) lines[#lines+1]=l..'='..r end}
+ -- Forever's bag link carries only the base name.
+ M:AppendBoughtTooltip(tip,'|cff1eff00|Hitem:1090::::::::25|h[Durable Belt]|h|r')
+ assert(lines[1]=='Last Bought='..M:Coins(1000),table.concat(lines,' / '))
+ -- Keys decide when both are known: a different suffix is not this item.
+ b.key=M:Key(1090,-12);lines={}
+ M:AppendBoughtTooltip(tip,'|cff1eff00|Hitem:1090:0:0:0:0:0:-10|h[Durable Belt]|h|r')
+ assert(#lines==0,'other suffix not matched')
+ b.key=nil
+ -- Listings: Paid column, red when your price after the cut is below it.
+ M.ownedRows={{auctionID=1,name='Durable Belt',unit=3000,quantity=1,status=0},{auctionID=2,name='Durable Belt',unit=1000,quantity=1,status=0},
+  {auctionID=3,name='Never Bought',unit=500,quantity=1,status=0}}
+ M:SetView('my auctions');M:RenderUI();local s=M.cancelScreen
+ local byName={};for _,r in ipairs(s.rows) do if r:IsShown() then byName[#byName+1]=r end end
+ assert(byName[1].c[7]:GetText():find(M:Coins(1000),1,true) and byName[1].c[7]:GetText():find('c8a0ff',1,true),'paid shown')
+ assert(byName[2].c[7]:GetText():find('ff6060',1,true),'red: 10s after the cut is less than 10s paid')
+ assert(byName[3].c[7]:GetText():find('--',1,true),'no buy record')
+ M.ownedRows=nil;M.db.flips={};M:SetView('browse')
+end)
 end

@@ -8,7 +8,7 @@ local function button(parent,text,x,y,w,fn,h)
  local b=CreateFrame('Button',nil,parent,'UIPanelButtonTemplate');b:SetPoint('TOPLEFT',x,y);b:SetSize(w,h or 24);b:SetText(text);b:SetScript('OnClick',fn);return b
 end
 local ROWS=16
-local COLS={{'Item',40,330},{'Qty',376,60},{'Your price / unit',442,160},{'Lowest other',608,150},{'Time left',764,100},{'State',870,120}}
+local COLS={{'Item',40,250},{'Qty',296,50},{'Your price / unit',352,140},{'Lowest other',612,130},{'Time left',748,100},{'State',854,140},{'Paid',498,110}}
 
 -- Undercut listings first, then not-checked, then the rest; stable by name.
 function M:CancelRows()
@@ -70,6 +70,13 @@ function M:RenderCancelScreen()
    r.icon:SetTexture(self:RowItemIcon(o,o.itemKey and o.itemKey.itemID or o.itemID) or 'Interface\\Icons\\INV_Misc_QuestionMark')
    local cells={tostring(o.name or '?'),tostring(o.quantity or '?'),o.unit and self:Coins(o.unit) or '?',
     o.competition and self:Coins(o.competition) or (o.liveAt and 'None' or '--'),self:FormatTimeLeft(o.timeLeft),self:OwnedState(o)}
+   -- What you paid (Flip Ledger); red when your price after the AH cut doesn't cover it.
+   local paid=self.PaidForListing and self:PaidForListing(o)
+   if paid then
+    local cut=tonumber(self.db.settings.ahCut) or 0.05
+    local losing=o.unit and o.unit*(1-cut)<paid
+    cells[7]=(losing and '|cffff6060' or '|cffc8a0ff')..self:Coins(paid)..'|r'
+   else cells[7]='|cff8f8f8f--|r' end
    for j=1,#cells do r.c[j]:SetText(cells[j]) end
   end
  end

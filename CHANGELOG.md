@@ -1,3 +1,8 @@
+## 1.22.13
+- **Fixed: "Last Bought"/"Last Sold" missing on tooltips.** Forever's item links carry only the base name ("Durable Belt") while the AH and sale mail use the full name ("Durable Belt of the Physician"), so buys recorded from mail never matched. Tooltips now match on item + suffix when both are known, otherwise on the base name + "of ...".
+- **Listings has a Paid column:** what you paid for each listed item (purple), red when your price after the 5% cut doesn't cover it, "--" when there's no buy on record.
+- 260 regressions.
+
 ## 1.22.12
 - **Fixed: the AH's Sell slot and "Create Auction" button showing over Market's tabs.** Clicking or dragging a bag item switches the AH to its own Sell view behind Market's page, and its item slot drew on top. Market's tab pages now sit near the top of the AH's layer (frame level 8000, was +200). Blizzard's frames are still never hidden or changed, and Market's popups and windows stay on top.
 - 259 regressions.

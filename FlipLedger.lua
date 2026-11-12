@@ -349,15 +349,24 @@ function M:FlipLedgerCSV()
 end
 
 -- Ctrl + hover: what you last paid -------------------------------------------
-function M:BoughtHistory(link)
+-- Does a ledger row (name, key) belong to the hovered item? Forever item links
+-- carry the base name ("Durable Belt") while AH names include the suffix
+-- ("Durable Belt of the Physician"): match on item + suffix when both keys are
+-- known, else on the name, allowing the base name + " of ...".
+function M:FlipMatcher(link)
  local name=nameOf(link);local key=self.LinkIdentity and self:LinkIdentity(link)
  local _,kid,ks=self:ParseKey(key)
- local out={}
- local function same(nm,k)
-  if name and type(nm)=='string' and nm:lower()==name:lower() then return true end
-  if kid and k~=nil then local _,id,s=self:ParseKey(k);return id==kid and (s or 0)==(ks or 0) end
-  return false
+ local lname=name and name:lower()
+ return function(nm,k)
+  if kid and k~=nil then local _,id,s=self:ParseKey(k);if id then return id==kid and (s or 0)==(ks or 0) end end
+  if not lname or type(nm)~='string' then return false end
+  local n=nm:lower()
+  return n==lname or n:sub(1,#lname+4)==lname..' of '
  end
+end
+function M:BoughtHistory(link)
+ local same=self:FlipMatcher(link)
+ local out={}
  for _,f in ipairs(self:FlipBook()) do
   if f.cost and same(f.name,f.key) then out[#out+1]={cost=f.cost,qty=f.qty or 1,at=f.at,sold=f.sold or 0,net=self:FlipNumbers(f).net,soldAt=f.soldAt,char=f.char} end
  end
@@ -373,10 +382,9 @@ function M:BoughtHistory(link)
 end
 -- Sales of the hovered item, newest first (per-unit price the buyer paid).
 function M:SoldHistory(link)
- local name=nameOf(link);local out={}
- if not name then return out end
+ local same=self:FlipMatcher(link);local out={}
  for _,f in ipairs(self:FlipBook()) do
-  if (f.sold or 0)>0 and type(f.name)=='string' and f.name:lower()==name:lower() then
+  if (f.sold or 0)>0 and same(f.name,f.key) then
    out[#out+1]={unit=math.floor((f.gross or 0)/f.sold+0.5),net=self:FlipNumbers(f).net,qty=f.sold,at=f.soldAt or f.at}
   end
  end
@@ -414,6 +422,22 @@ end
 -- Oldest buy of this item you haven't sold yet (nil if none).
 function M:HeldFlip(name,link,key)
  return openFlips(self,nameOf(link,name),key)[1]
+end
+-- What you paid for one of your listed auctions (oldest unsold buy, else the
+-- latest buy of that item), per unit; nil if no buy is on record.
+function M:PaidForListing(o)
+ if type(o)~='table' then return nil end
+ local f=self:HeldFlip(o.name,o.itemLink,o.marketKey)
+ if not f then
+  local same=self:FlipMatcher(o.itemLink or (o.name and ('['..o.name..']')))
+  local best
+  for _,x in ipairs(self:FlipBook()) do
+   local keyOk=o.marketKey~=nil and x.key~=nil and (function() local _,a,sa=self:ParseKey(o.marketKey);local _,b,sb=self:ParseKey(x.key);return a and a==b and (sa or 0)==(sb or 0) end)()
+   if x.cost and (keyOk or same(x.name,nil)) and (not best or (x.at or 0)>(best.at or 0)) then best=x end
+  end
+  f=best
+ end
+ return f and f.cost and math.floor(f.cost/math.max(1,f.qty or 1)+0.5) or nil
 end
 -- Lowest post price that still gets back what you paid after the AH cut.
 function M:PaidFloor(row)
