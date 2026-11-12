@@ -1,3 +1,12 @@
+## 1.13.0
+- **Shopping tab now matches Auctionator's layout and behavior** (rebuilt in Market's own code, VoidMark colors):
+  - Top bar: Search Term box with a clear button, **Search** (turns into **Cancel** while searching), **More...** and **Add to List**. An empty box with a list open searches the whole list.
+  - Left: **Shopping Lists** / **Recent Searches** tabs. Lists open like folders (+/−) to show their items and search the whole list; click an item to search just that item. Lists have search / rename / delete icons, items have remove, recent searches have delete / copy-to-list. Right-click collapses. **New List**, **Import**, **Export** underneath. The main Shopping list can't be renamed or deleted.
+  - Results: sortable **Price / Name / Available** headers, scrolling instead of pages. Left-click opens the buy view, right-click shows price history, shift-click copies the name into the search box. **Export Results** gives CSV.
+  - **More...**: exact name, max price and min available filters (a plain Search clears them).
+- Lists still hold items (not search text) and still sync between your accounts.
+- 211 regressions (8 new).
+
 ## 1.12.2
 - **Fixed: wrong "Auction xN" on tooltips.** Hovering a mail attachment (or any button numbered like a bag slot) showed the stack size of whatever sat in that backpack slot, e.g. "Auction x20" on 2 Rosecap. Mail attachments now use their own count, and a bag slot is only trusted when it holds the hovered item.
 - 203 regressions.

@@ -99,7 +99,7 @@ check('1.9 shopping screen searches by name, keeps recent searches and opens lis
  for _,r in ipairs(M.shopScreen.leftRows) do if r.value then names[#names+1]=r.value end end
  assert(names[1]=='Shopping' and names[2]=='Mats')
  M.browseRows={{marketKey=61,itemID=61,name='Linen',floor=43,quantity=120,status='LIVE BROWSE'}};M.shoppingListMode=false;M:RenderUI()
- local r=M.shopScreen.rows[1];assert(r:IsShown() and r.c[2]:GetText()=='Linen' and r.c[3]:GetText()=='120' and r.c[4]:GetText():find('Live',1,true))
+ local r=M.shopScreen.rows[1];assert(r:IsShown() and r.c[2]:GetText()=='Linen' and r.c[3]:GetText()=='120')
  r.scripts.OnClick(r);assert(M.selectedRow.marketKey==61)
  M:ShopAddSelected();assert(M:ListBook(M.activeList)[61])
 end)
@@ -139,12 +139,12 @@ check('1.9 Cancelling screen lists undercut auctions first and enables the right
 end)
 
 check('1.9 the shopping list column scrolls when there are more lists than fit',function()
- reset();M:SetView('browse')
- for i=1,20 do M:SetList(('List%02d'):format(i)) end
+ reset();M:SetView('browse');M.shopExpanded=nil
+ for i=1,23 do M:SetList(('List%02d'):format(i)) end
  M.shopLeft='lists';M.shopLeftOffset=0;M:RenderUI();assert(M.shopScreen.leftRows[1].value=='Shopping')
  M.shopScreen.left.scripts.OnMouseWheel(M.shopScreen.left,-1);M:RenderUI()
- assert(M.shopLeftOffset==4 and M.shopScreen.leftRows[1].value=='List04')
- M.shopLeftOffset=99;M:RenderUI();assert(M.shopLeftOffset==5 and M.shopScreen.leftRows[16].value=='List20')
+ assert(M.shopLeftOffset==3 and M.shopScreen.leftRows[1].value=='List03')
+ M.shopLeftOffset=99;M:RenderUI();assert(M.shopLeftOffset==4 and M.shopScreen.leftRows[20].value=='List23')
 end)
 
 check('1.9.1 a minimum can be saved for an item this account never scanned; owned rows carry ids and names',function()

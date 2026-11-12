@@ -176,11 +176,11 @@ PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
 PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
 PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
-BENCH scan: 68 frames (1.1s at 60fps, 2.3s at 30fps), worst frame 12.1ms, cpu 0.66s | after:prune=4 after:share-scan=11 done=1 model=40 processing=12
+BENCH scan: 71 frames (1.2s at 60fps, 2.4s at 30fps), worst frame 12.7ms, cpu 0.69s | after:prune=4 after:share-scan=12 done=1 model=41 processing=13
 PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.13 history stores only the fields it needs; latest keeps the full snapshot
 PASS 1.9.13 history saved by older versions is shrunk once at login without losing prices
-MEM per scan of 5,000 items: 2.8 MB (was ~6.5 MB before 1.9.13)
+MEM per scan of 5,000 items: 2.7 MB (was ~6.5 MB before 1.9.13)
 PASS MEM 1.9.13 memory after 6 scans of 5,000 items
 PASS 1.9.7 A refresh that answers without an event still fills the price (Linen Cloth)
 PASS 1.9.7 No live answer: last scan price after 10 s, and a late live answer replaces it
@@ -204,4 +204,12 @@ PASS 1.11.4 Scan skips per-row link work for plain items and resolves each gear 
 PASS 1.11.4 Selling finds an item that moved slots instead of failing; locked retries quickly
 PASS 1.11.4 Bag list and price-check jobs run before a long background job; background jobs take turns
 PASS 1.12.2 Mail attachments show their own stack size, not a bag slot with the same number
-ALL 203 TESTS PASSED
+PASS 1.13 Shopping lists expand like folders; items search alone; right-click collapses
+PASS 1.13 Search button: Cancel while searching, empty box searches the open list
+PASS 1.13 Results sort by clicking Price / Name / Available and scroll with the wheel
+PASS 1.13 Result clicks: left buys, right shows history, shift puts the name in the box
+PASS 1.13 Recent searches: delete and copy to the open list
+PASS 1.13 Lists: rename keeps items, delete removes, the main list is protected
+PASS 1.13 More... filters (exact name, max price, min available) and CSV export
+PASS 1.13 Searching one list entry only queues that item
+ALL 211 TESTS PASSED

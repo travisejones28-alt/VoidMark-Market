@@ -41,7 +41,7 @@ check('1.10 Clicking a Shopping result opens the buy view with live price tiers'
   M:RenderUI();local s=M.shopScreen;local r=s.rows[1];assert(r:IsShown())
   r.scripts.OnClick(r);answer(true,769);M:RenderUI()
   assert(M.shopBuy and M.shopBuy.commodity and #M.shopBuy.rows==3)
-  assert(s.buyView:IsShown() and not s.results:IsShown() and not s.buy:IsShown(),'buy view replaces results')
+  assert(s.buyView:IsShown() and not s.results:IsShown() and not s.exportResults:IsShown(),'buy view replaces results')
   local v=s.buyView
   assert(v.rows[1]:IsShown() and v.rows[3]:IsShown() and not v.rows[4]:IsShown())
   assert(v.rows[2].c[3]:GetText()=='947' and v.qty:GetText()=='1')

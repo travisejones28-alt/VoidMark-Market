@@ -54,9 +54,13 @@ local function marketFor(self,key,row)
  if not k then return end
  return self.db.market[k] or {marketKey=k,itemID=id,itemSuffix=s,itemLevel=l,battlePetSpeciesID=p,name=row and row.name or ('Item '..id)}
 end
-function M:SearchShoppingList()
+-- onlyKey: search a single entry of the list (clicking an item in the lists panel).
+function M:SearchShoppingList(onlyKey)
  if not self.ahOpen or not self:CanUseAuctionHouse() then self:Print('Open the Auction House to search a list');return false end
  local rows=self:GetWatchRows()
+ if onlyKey~=nil then
+  local one={};for _,r in ipairs(rows) do if r.marketKey==onlyKey then one[1]=r end end;rows=one
+ end
  if #rows==0 then self:Print('This shopping list is empty');return false end
  local run={list=self.activeList,total=0,done=0,found=0,none=0,failed=0}
  self.listSearch=run;self.listEmpty=self.listEmpty or {}
