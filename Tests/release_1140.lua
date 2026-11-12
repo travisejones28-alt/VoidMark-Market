@@ -266,6 +266,28 @@ check('1.14.4 Results show the required level and sort by it',function()
  GetItemInfo=orig;assert(ok,err)
 end)
 
+check('1.14.5 Tooltips show the exact suffix (link, then item key) and sit below the buy-view icon',function()
+ local calls={}
+ local tip={SetHyperlink=function(_,l) calls[#calls+1]='link:'..l end,
+  SetItemKey=function(_,id,lvl,suf) calls[#calls+1]='key:'..id..':'..lvl..':'..suf end,
+  SetItemByID=function(_,id) calls[#calls+1]='id:'..id end}
+ assert(M:SetVariantTooltip(tip,M:Key(70,-5),70,'|Hitem:70|h')=='link' and calls[1]=='link:|Hitem:70|h')
+ assert(M:SetVariantTooltip(tip,M:Key(70,-5),70)=='key' and calls[2]=='key:70:0:-5','suffix via item key')
+ assert(M:SetVariantTooltip(tip,70,70)=='base' and calls[3]=='id:70','plain item by ID')
+ tip.SetItemKey=nil;assert(M:SetVariantTooltip(tip,M:Key(70,-5),70)=='base','older client falls back')
+ -- Buy-view icon: anchored below the icon, not ANCHOR_RIGHT.
+ local old=GameTooltip;local anchor,point
+ GameTooltip={SetOwner=function(_,_,a) anchor=a end,ClearAllPoints=function() end,SetPoint=function(_,p) point=p end,
+  SetHyperlink=function() end,SetItemKey=function() end,SetItemByID=function() end,SetText=function() end,Show=function() end,Hide=function() end}
+ local ok,err=pcall(function()
+  M:SetView('browse');M:RenderUI()
+  M.shopBuy={key=M:Key(70,-5),name='Sandals of Healing',market={itemID=70,marketKey=M:Key(70,-5)},rows={{itemLink='|Hitem:70:x|h'}}}
+  local v=M.shopScreen.buyView;v.iconButton.scripts.OnEnter(v.iconButton)
+  assert(anchor=='ANCHOR_NONE' and point=='TOPLEFT','anchored below the icon')
+ end)
+ GameTooltip=old;M.shopBuy=nil;assert(ok,err)
+end)
+
 check('1.14 Vs Avg compares against the exact suffix history and sorts deals first',function()
  fresh();M:SetView('browse');M.ahOpen=false
  local monkey,bear=M:Key(600,-10),M:Key(600,-12)

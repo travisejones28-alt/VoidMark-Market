@@ -57,8 +57,10 @@ function M:ShowRowTooltip(row)
   if not id then return end
   GameTooltip:SetOwner(row,'ANCHOR_RIGHT')
   -- Use the exact link when available; item ID fallback is labeled as base metadata.
-  if o.itemLink then GameTooltip:SetHyperlink(o.itemLink)
-  else GameTooltip:SetItemByID(id);GameTooltip:AddLine('Base item metadata; prices use the selected variant.',0.7,0.6,0.9,true) end
+  local shown=self:SetVariantTooltip(GameTooltip,o.marketKey,id,o.itemLink or (m and m.itemLink))
+  if shown=='base' and o.marketKey and tostring(o.marketKey):find(':s',1,true) then
+   GameTooltip:AddLine('Base item shown; prices use the selected variant.',0.7,0.6,0.9,true)
+  end
   GameTooltip:Show()
 end
 function M:FinancialSummaryText()

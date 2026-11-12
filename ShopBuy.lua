@@ -224,8 +224,11 @@ function M:InitializeShopBuyView(s)
  v.icon=v.iconButton:CreateTexture(nil,'ARTWORK');v.icon:SetAllPoints()
  v.iconButton:SetScript('OnEnter',function(f)
   local b=self.shopBuy;if not b or not GameTooltip then return end
-  GameTooltip:SetOwner(f,'ANCHOR_RIGHT')
-  if GameTooltip.SetItemByID then GameTooltip:SetItemByID(b.market.itemID) else GameTooltip:SetText(b.name) end
+  -- Below the icon, inside the buy view (ANCHOR_RIGHT grew upward over the search bar).
+  GameTooltip:SetOwner(f,'ANCHOR_NONE');GameTooltip:ClearAllPoints();GameTooltip:SetPoint('TOPLEFT',f,'BOTTOMLEFT',0,-6)
+  local row=b.rows and b.rows[b.pick or 1]
+  local shown=self:SetVariantTooltip(GameTooltip,b.key or b.market.marketKey,b.market.itemID,(row and row.itemLink) or b.market.itemLink)
+  if not shown then GameTooltip:SetText(b.name or '?') end
   GameTooltip:Show()
  end)
  v.iconButton:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)

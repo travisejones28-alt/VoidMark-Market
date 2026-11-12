@@ -114,6 +114,21 @@ function M:LevelAllowed(itemID,spec)
  if not req then return true end
  return not (lo and req<lo) and not (hi and req>hi)
 end
+-- Show the exact variant (random suffix) on GameTooltip: auction link first,
+-- then the item key, then the base item. Returns how it was shown.
+function M:SetVariantTooltip(tip,key,itemID,link)
+ if type(link)=='string' and link~='' and tip.SetHyperlink then tip:SetHyperlink(link);return 'link' end
+ local _,id,suffix,level=self:ParseKey(key)
+ id=id or tonumber(itemID)
+ if not id then return nil end
+ if tip.SetItemKey and (tonumber(suffix) or 0)~=0 then
+  local ok=pcall(tip.SetItemKey,tip,id,tonumber(level) or 0,tonumber(suffix) or 0)
+  if ok then return 'key' end
+ end
+ if tip.SetItemByID then tip:SetItemByID(id) end
+ return 'base'
+end
+
 -- Required level of an item (nil until the game has loaded it).
 function M:ItemRequiredLevel(itemID)
  if not GetItemInfo or not tonumber(itemID) then return nil end

@@ -1,3 +1,7 @@
+## 1.14.5
+- **Fixed: item tooltips on Shopping.** Hovering the item in the buy view showed the base item ("Greenweave Sandals", no "of Healing" stats) and opened upward over the search bar. Tooltips now show the exact variant you're buying (auction link, or the item's suffix), and the buy-view tooltip opens below the icon. Result rows show the suffix too.
+- 226 regressions.
+
 ## 1.14.4
 - **Lvl column on Shopping results:** the item's required level (shows -- until the game has loaded the item). Click the header to sort by level.
 - 225 regressions.
