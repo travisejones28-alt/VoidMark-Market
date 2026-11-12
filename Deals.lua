@@ -114,6 +114,18 @@ function M:LevelAllowed(itemID,spec)
  if not req then return true end
  return not (lo and req<lo) and not (hi and req>hi)
 end
+-- Required level of an item (nil until the game has loaded it).
+function M:ItemRequiredLevel(itemID)
+ if not GetItemInfo or not tonumber(itemID) then return nil end
+ local ok,_,_,_,_,req=pcall(GetItemInfo,tonumber(itemID))
+ req=ok and tonumber(req) or nil
+ return req
+end
+function M:RowLevel(row)
+ if type(row)~='table' then return nil end
+ if row.reqLevel==nil then row.reqLevel=self:ItemRequiredLevel(row.itemID) end
+ return row.reqLevel
+end
 function M:LevelRangeText()
  local lo,hi=self:ShopLevelRange()
  if lo and hi then return 'level '..lo..'-'..hi elseif lo then return 'level '..lo..'+' elseif hi then return 'level '..hi..' or lower' end

@@ -176,7 +176,7 @@ PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
 PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
 PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
-BENCH scan: 111 frames (1.9s at 60fps, 3.7s at 30fps), worst frame 12.1ms, cpu 1.10s | after:prune=4 after:share-scan=19 done=1 model=69 processing=18
+BENCH scan: 107 frames (1.8s at 60fps, 3.6s at 30fps), worst frame 13.6ms, cpu 1.07s | after:prune=3 after:share-scan=18 done=1 model=67 processing=18
 PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.13 history stores only the fields it needs; latest keeps the full snapshot
 PASS 1.9.13 history saved by older versions is shrunk once at login without losing prices
@@ -224,5 +224,6 @@ PASS 1.14 Armor-type terms and max buy price filter the sweep; starter list goes
 PASS 1.14 Level range limits term sweeps and name searches; boxes save it
 PASS 1.14.2 Term options: per-term max price and level, armor slot, category-only terms
 PASS 1.14.3 Term sweeps and name searches read every page of results, not just the first
+PASS 1.14.4 Results show the required level and sort by it
 PASS 1.14 Vs Avg compares against the exact suffix history and sorts deals first
-ALL 224 TESTS PASSED
+ALL 225 TESTS PASSED

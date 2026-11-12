@@ -231,7 +231,8 @@ local SORT={
  price=function(r) return (r.floor and r.floor>0) and r.floor or math.huge end,
  name=function(r) return tostring(r.name or ''):lower() end,
  available=function(r) return tonumber(r.quantity) or -1 end,
- deal=function(r) return M:DealRatio(r) or math.huge end}
+ deal=function(r) return M:DealRatio(r) or math.huge end,
+ level=function(r) return M:RowLevel(r) or math.huge end}
 function M:ShopSortBy(field)
  local s=self.shopSort or {field='price',dir=1}
  if s.field==field then s.dir=-s.dir else s={field=field,dir=1} end
@@ -418,7 +419,7 @@ function M:InitializeShopScreen(f)
  -- Right: sortable results
  local res=self.panel(s,302,-40,702,476);s.results=res
  s.headers={}
- local cols={{'price','Price',10,150},{'name','Name',162,300},{'available','Available',576,110},{'deal','Vs Avg',466,106}}
+ local cols={{'price','Price',10,150},{'name','Name',162,246},{'available','Available',576,110},{'deal','Vs Avg',466,106},{'level','Lvl',410,54}}
  for i,c in ipairs(cols) do
   local h=CreateFrame('Button',nil,res);h:SetPoint('TOPLEFT',c[3],-8);h:SetSize(c[4],20);h.field=c[1]
   h.text=label(h,c[2],4,-4,c[4]-20,'GameFontNormal')
@@ -435,7 +436,7 @@ function M:InitializeShopScreen(f)
   r:SetHighlightTexture('Interface\\QuestFrame\\UI-QuestTitleHighlight')
   r.sel=r:CreateTexture(nil,'BACKGROUND');r.sel:SetAllPoints();r.sel:SetColorTexture(.32,.15,.5,.45)
   r.icon=r:CreateTexture(nil,'ARTWORK');r.icon:SetSize(18,18);r.icon:SetPoint('LEFT',160,0)
-  r.c={label(r,'',8,-5,146,'GameFontHighlight'),label(r,'',182,-5,274,'GameFontHighlight'),label(r,'',574,-5,104,'GameFontHighlight'),label(r,'',464,-5,100,'GameFontHighlight')}
+  r.c={label(r,'',8,-5,146,'GameFontHighlight'),label(r,'',182,-5,222,'GameFontHighlight'),label(r,'',574,-5,104,'GameFontHighlight'),label(r,'',464,-5,100,'GameFontHighlight'),label(r,'',408,-5,50,'GameFontHighlight')}
   r:SetScript('OnClick',function(b,mouse) self:ShopRowClicked(b.data,mouse) end)
   r:SetScript('OnEnter',function(b) self:ShowRowTooltip(b) end)
   r:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
@@ -540,6 +541,7 @@ function M:RenderShopScreen()
    r.c[1]:SetText(price);r.c[2]:SetText(o.name or '?')
    r.c[3]:SetText(o.quantity and tostring(o.quantity) or '--')
    r.c[4]:SetText(self:DealText(o))
+   local lv=self:RowLevel(o);r.c[5]:SetText(lv and tostring(lv) or '|cff8f8f8f--|r')
   end
  end
  -- Scroll thumb

@@ -249,6 +249,23 @@ check('1.14.3 Term sweeps and name searches read every page of results, not just
  M:DeleteShoppingList('Flips');assert(ok,err)
 end)
 
+check('1.14.4 Results show the required level and sort by it',function()
+ fresh();M:SetView('browse');M.ahOpen=false
+ local orig=GetItemInfo
+ GetItemInfo=function(id) local req=({[960]=32,[961]=18})[id];if req then return 'X','l',2,30,req end end
+ local ok,err=pcall(function()
+  M.browseRows={{marketKey=960,itemID=960,name='High',floor=100,quantity=1,status='LIVE BROWSE'},
+   {marketKey=961,itemID=961,name='Low',floor=200,quantity=1,status='LIVE BROWSE'},
+   {marketKey=962,itemID=962,name='Unloaded',floor=300,quantity=1,status='LIVE BROWSE'}}
+  M:RenderUI();local s=M.shopScreen
+  assert(s.headers[5].text:GetText()=='Lvl','header')
+  assert(s.rows[1].c[5]:GetText()=='32' and s.rows[2].c[5]:GetText()=='18' and s.rows[3].c[5]:GetText():find('--',1,true),'levels')
+  s.headers[5].scripts.OnClick(s.headers[5]);M:RenderUI()
+  assert(s.rows[1].data.name=='Low' and s.rows[2].data.name=='High' and s.rows[3].data.name=='Unloaded','level sort, unknown last')
+ end)
+ GetItemInfo=orig;assert(ok,err)
+end)
+
 check('1.14 Vs Avg compares against the exact suffix history and sorts deals first',function()
  fresh();M:SetView('browse');M.ahOpen=false
  local monkey,bear=M:Key(600,-10),M:Key(600,-12)

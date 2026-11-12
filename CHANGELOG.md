@@ -1,3 +1,7 @@
+## 1.14.4
+- **Lvl column on Shopping results:** the item's required level (shows -- until the game has loaded the item). Click the header to sort by level.
+- 225 regressions.
+
 ## 1.14.3
 - **Fixed: higher-level items missing from searches.** The Auction House sends search results a page at a time and Market only read the first page, which fills up with cheap low-level greens. Search terms and typed searches now keep asking for more pages (up to 20) before moving on.
 - 224 regressions.
