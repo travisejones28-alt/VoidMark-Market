@@ -176,7 +176,7 @@ PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
 PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
 PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
-BENCH scan: 126 frames (2.1s at 60fps, 4.2s at 30fps), worst frame 13.5ms, cpu 1.25s | after:prune=4 after:share-scan=25 done=1 model=75 processing=21
+BENCH scan: 106 frames (1.8s at 60fps, 3.5s at 30fps), worst frame 12.4ms, cpu 1.06s | after:prune=4 after:share-scan=19 done=1 model=63 processing=19
 PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.13 history stores only the fields it needs; latest keeps the full snapshot
 PASS 1.9.13 history saved by older versions is shrunk once at login without losing prices
@@ -256,4 +256,5 @@ PASS 1.22.1 Settings has checkboxes for sale alerts, coin sound, sending to part
 PASS 1.22.2 Tooltip: an item missing from the latest full scan says "none listed now" instead of just "14h old"
 PASS 1.22.6 Forever AH notifications: a sale (with its auction ID) alerts and relays; a win records the buy
 PASS 1.22.7 Purple sale banner: label, item, numbers, green/red profit, stacking, fade and saved position
-ALL 255 TESTS PASSED
+PASS 1.22.8 Sale price without Listings open: saved listing snapshot, then your last post (price each for stacks)
+ALL 256 TESTS PASSED

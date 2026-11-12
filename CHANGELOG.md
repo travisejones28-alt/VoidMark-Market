@@ -1,3 +1,10 @@
+## 1.22.8
+- **Sale banners show a price more often** (the Silk Cloth alert had none):
+  - Your auctions now load a few seconds after the AH opens, so Listings doesn't have to be opened first.
+  - The last loaded list of your auctions is saved, so prices are still known after a /reload or a fresh login.
+  - Otherwise the price you last posted that item at with Market is used. For stacks (cloth, herbs) that can sell in part, the banner says "Sold at 1s 20c each (your last post)".
+- 256 regressions.
+
 ## 1.22.7
 - **Purple sale banner** (VoidMark Taunt style) replaces the yellow raid-warning text: dark panel with a purple border, "VOIDMARK BANK SOLD" (or "SOLD") label, the item, "Sold 35s · you get 33s 25c · paid 22s", and a big green "+11s 25c flip" (red "loss" when below what you paid; no profit line without a buy record). Middle of the screen, fades after 6 seconds, up to 4 stack. Drag one to move them; the position is saved. Still printed in chat, with the coin sound.
 - 255 regressions.

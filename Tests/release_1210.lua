@@ -213,4 +213,31 @@ check('1.22.7 Purple sale banner: label, item, numbers, green/red profit, stacki
  assert(pos[1]=='CENTER' and pos[2]==40 and pos[3]==201)
  M.db.settings.saleAlertPos=nil
 end)
+
+check('1.22.8 Sale price without Listings open: saved listing snapshot, then your last post (price each for stacks)',function()
+ M.db.flips={};M.ownedRows=nil;M.saleClaimed=nil;M.db.postHistory={}
+ -- Snapshot from an earlier Listings load (e.g. before a /reload).
+ M.db.ownedSnapshot={at=time(),rows={{auctionID=77,name='Twilight Cuffs of the Physician',unit=3500,quantity=1,status=0}}}
+ local a=M:BuildSaleAlert('Twilight Cuffs of the Physician',77);assert(a.gross==3500 and a.net==3325,'from the snapshot')
+ M.db.ownedSnapshot=nil
+ -- Single item posted with Market: its last post price.
+ local key=M:Key(1080);M.nameIndex=M.nameIndex or {};M.nameIndex['Green Gloves']=key
+ M.db.postHistory[key]={{at=time(),unit=2500,quantity=1}}
+ a=M:BuildSaleAlert('Green Gloves');assert(a.gross==2500,'last post price')
+ -- A stack (Silk Cloth x20): only the price each is known.
+ local silk=M:Key(4306);M.nameIndex['Silk Cloth']=silk
+ M.db.postHistory[silk]={{at=time(),unit=120,quantity=20}}
+ a=M:BuildSaleAlert('Silk Cloth');assert(a.unit==120 and not a.gross)
+ assert(M:SaleAlertText(a):find('at '..M:Coins(120)..' each',1,true))
+ local t=M:SaleToast(a,'Voidmark Bank');assert(t.detail:GetText():find('each',1,true))
+ -- Relayed as price-each and shown the same way on the other character.
+ local msg=M:EncodeSaleAlert('1-1',{id='x1',a=a});local f={}
+ for v in (('E\t')..msg..'\t'):gmatch('([^\t]*)\t') do f[#f+1]=v end
+ local shown;local old=M.ShowSaleAlert;M.ShowSaleAlert=function(_,b) shown=b end
+ M:ReceiveSaleAlert(f,'Bank-TestRealm');M.ShowSaleAlert=old
+ assert(shown and shown.unit==120 and not shown.gross,'partner sees price each')
+ M.db.postHistory={};M.nameIndex['Green Gloves']=nil;M.nameIndex['Silk Cloth']=nil
+ -- Loading Listings saves the snapshot.
+ assert(M.db.ownedSnapshot==nil)
+end)
 end

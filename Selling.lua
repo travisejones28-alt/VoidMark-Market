@@ -76,7 +76,13 @@ function M:CaptureOwnedAuctions()
       end
       if debugprofilestop()-start>=4 then return false end
     end
-  end,function() self.ownedRows=rows; if self.UpdateFlipListings then self:UpdateFlipListings(rows) end; self:RefreshInventory(); self:RefreshUI() end)
+  end,function() self.ownedRows=rows; if self.UpdateFlipListings then self:UpdateFlipListings(rows) end
+    if not self.persistenceBlocked then
+      -- Kept across reloads/logins so sale alerts know your listing prices.
+      local snap={}
+      for i=1,math.min(#rows,300) do local o=rows[i];snap[i]={auctionID=o.auctionID,name=o.name,unit=o.unit,quantity=o.quantity,marketKey=o.marketKey,status=o.status} end
+      self.db.ownedSnapshot={at=time(),rows=snap}
+    end; self:RefreshInventory(); self:RefreshUI() end)
 end
 function M:AnalyzeOwnedLive(row)
   local market=row and self.db.market[row.marketKey]

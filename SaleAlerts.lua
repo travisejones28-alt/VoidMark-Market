@@ -27,7 +27,10 @@ end
 -- One of your current auctions for this item (exact name first, then a base
 -- name match); each sale claims a different listing.
 local function claimListing(self,name,auctionID)
- local rows=self.ownedRows or {}
+ -- Live rows from Listings, else the snapshot saved last time they loaded
+ -- (so a /reload or a fresh login still knows your listing prices).
+ local snap=self.db.ownedSnapshot
+ local rows=self.ownedRows or (type(snap)=='table' and type(snap.rows)=='table' and snap.rows) or {}
  self.saleClaimed=self.saleClaimed or {}
  -- The AH notification can name the exact auction: use it when it does.
  if auctionID then
@@ -46,13 +49,25 @@ local function claimListing(self,name,auctionID)
  end
 end
 
-function M:BuildSaleAlert(name,auctionID)
+function M:BuildSaleAlert(name,auctionID,link)
  local cut=tonumber(self.db.settings.ahCut) or 0.05;if not self:Finite(cut,0,0.3) then cut=0.05 end
  local a={name=name,qty=1}
  local o=claimListing(self,name,auctionID)
  local flip=self.HeldFlip and self:HeldFlip(name)
  if o then a.qty=math.max(1,math.floor(tonumber(o.quantity) or 1));a.gross=math.floor(o.unit*a.qty+0.5)
- elseif flip and flip.listPrice then a.qty=1;a.gross=flip.listPrice end
+ elseif flip and flip.listPrice then a.qty=1;a.gross=flip.listPrice
+ else
+  -- Last price you posted this item at with Market. Stacks (cloth etc.) can
+  -- sell in part, so for those only the price each is known.
+  local key=type(link)=='string' and link:find('item:',1,true) and self.LinkIdentity and self:LinkIdentity(link) or nil
+  key=key or (self.UniqueMarketByName and self:UniqueMarketByName(name))
+  local h=key~=nil and type(self.db.postHistory)=='table' and self.db.postHistory[key]
+  h=type(h)=='table' and h[1]
+  if h and self:Finite(h.unit,1,1e12) then
+   if (tonumber(h.quantity) or 1)<=1 then a.qty=1;a.gross=math.floor(h.unit)
+   else a.unit=math.floor(h.unit);a.qty=nil end
+  end
+ end
  if a.gross then a.net=math.floor(a.gross*(1-cut)+0.5) end
  if flip and flip.cost then
   a.paid=math.floor(flip.cost/math.max(1,flip.qty or 1)*a.qty+0.5)
@@ -65,6 +80,7 @@ end
 function M:SaleAlertText(a,from)
  local who=from and ('|cffc8a0ff'..from..':|r ') or ''
  local item=a.qty and a.qty>1 and (a.name..' x'..a.qty) or a.name
+ if not a.gross and a.unit then return who..'Sold '..a.name..' at '..self:Coins(a.unit)..' each (your last post)' end
  if not a.gross then return who..'Sold '..item..' (price shows when the mail arrives)' end
  local text=who..'Sold '..item..' for '..self:Coins(a.gross)..' - you get '..self:Coins(a.net)
  if a.profit then
@@ -158,6 +174,7 @@ function M:SaleToast(a,from)
  t.item:SetText((a.qty and a.qty>1) and (a.name..' x'..a.qty) or a.name)
  local detail
  if a.gross then detail='Sold '..self:Coins(a.gross)..'  ·  you get '..self:Coins(a.net or a.gross)..(a.paid and ('  ·  paid '..self:Coins(a.paid)) or '')
+ elseif a.unit then detail='Sold at '..self:Coins(a.unit)..' each (your last post)'
  else detail='Price shows when the sale mail arrives' end
  t.detail:SetText(detail)
  if flip then
@@ -183,10 +200,10 @@ local function recent(self,kind,name,source)
 end
 M.RecentAHNotice=recent
 -- Local sale: show it here and queue it for the partner.
-function M:HandleAuctionSold(msg,itemName,auctionID)
+function M:HandleAuctionSold(msg,itemName,auctionID,link)
  local name=itemName or self:SoldAuctionName(msg);if not name or not self.db then return false end
  if recent(self,'sold',name,itemName and 'ah' or 'chat') then return true end
- local a=self:BuildSaleAlert(name,auctionID)
+ local a=self:BuildSaleAlert(name,auctionID,link)
  self:ShowSaleAlert(a)
  if self.db.syncPeer and self.db.settings.saleAlertsShare~=false and self.shareRun then
   local r=self.shareRun;r.alerts=r.alerts or {}
@@ -209,7 +226,7 @@ function M:HandleAHNotification(notification,text,auctionID)
  local name=text:match('%[(.-)%]') or text
  name=name:gsub('|c%x%x%x%x%x%x%x%x',''):gsub('|r',''):match('^%s*(.-)%s*$')
  if name=='' then return false end
- if notification==sold then return self:HandleAuctionSold(nil,name,tonumber(auctionID)) end
+ if notification==sold then return self:HandleAuctionSold(nil,name,tonumber(auctionID),text) end
  if notification==won and self.ResolveWonAuction then
   if recent(self,'won',name,'ah') then return true end
   local template=ERR_AUCTION_WON_S or 'You won an auction for %s'
@@ -217,6 +234,14 @@ function M:HandleAHNotification(notification,text,auctionID)
  end
  return false
 end
+-- Load your auctions a few seconds after the AH opens, so sale alerts know
+-- your listing prices without opening Listings first.
+M:RegisterHandler('AUCTION_HOUSE_SHOW',function(self)
+ if not (C_Timer and C_Timer.After) then return end
+ C_Timer.After(4,function()
+  if self.ahOpen and self.db and self.RequestOwnedAuctionsDiagnostic and not self.ownedRows then pcall(self.RequestOwnedAuctionsDiagnostic,self) end
+ end)
+end)
 M:RegisterHandler('AUCTION_HOUSE_SHOW_FORMATTED_NOTIFICATION',function(self,_,notification,text,auctionID) self:HandleAHNotification(notification,text,auctionID) end)
 
 -- Wire format for the partner (sent by Sharing): N, epoch, id, name, qty, gross, net, paid
@@ -224,18 +249,21 @@ local function enc(s) return (tostring(s):gsub('[%%%c,;|/\t]',function(c) return
 local function dec(s) return (tostring(s):gsub('%%(%x%x)',function(x) return string.char(tonumber(x,16)) end)) end
 function M:EncodeSaleAlert(epoch,item)
  local a=item.a
+ -- qty 0 = only the price each is known (a stack that may have sold in part).
+ if not a.gross and a.unit then return table.concat({'N',epoch,item.id,enc(a.name),0,a.unit,0,-1},'\t') end
  return table.concat({'N',epoch,item.id,enc(a.name),a.qty or 1,a.gross or 0,a.net or 0,a.paid or -1},'\t')
 end
 function M:ReceiveSaleAlert(f,sender)
  if #f<9 then return end
  local id=f[4];local name=dec(f[5])
  local qty,gross,net,paid=tonumber(f[6]),tonumber(f[7]),tonumber(f[8]),tonumber(f[9])
- if type(id)~='string' or #id>40 or name=='' or #name>80 or not self:Finite(qty,1,1e6) then return end
+ if type(id)~='string' or #id>40 or name=='' or #name>80 or not self:Finite(qty,0,1e6) then return end
  self.seenSaleAlerts=self.seenSaleAlerts or {}
  if self.seenSaleAlerts[id] then return true end
  self.seenSaleAlerts[id]=true
  local a={name=name,qty=qty}
- if self:Finite(gross,1,1e12) then a.gross=gross;a.net=self:Finite(net,0,1e12) and net or nil end
+ if qty==0 then a.qty=nil;if self:Finite(gross,1,1e12) then a.unit=gross end
+ elseif self:Finite(gross,1,1e12) then a.gross=gross;a.net=self:Finite(net,0,1e12) and net or nil end
  if self:Finite(paid,0,1e12) then a.paid=paid;if a.net then a.profit=a.net-paid end end
  local who=type(sender)=='string' and sender:match('^([^%-]+)') or 'Partner'
  self:ShowSaleAlert(a,who)
