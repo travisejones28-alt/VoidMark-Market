@@ -84,7 +84,7 @@ check('1.22 Sale alert: coin sound, on-screen message with price and flip profit
  C_ChatInfo={RegisterAddonMessagePrefix=function() return 0 end,SendAddonMessage=function(prefix,msg) sent[#sent+1]={prefix,msg};return 0 end}
  local oldSound,oldRaid,oldFrame=PlaySound,RaidNotice_AddMessage,RaidWarningFrame
  local sounds,notices=0,{}
- PlaySound=function() sounds=sounds+1 end;RaidWarningFrame={};RaidNotice_AddMessage=function(_,t) notices[#notices+1]=t end
+ PlaySound=function() sounds=sounds+1 end;local origToast=M.SaleToast;M.SaleToast=function(self,a,from,text) notices[#notices+1]=text;return origToast(self,a,from,text) end
  local ok,err=pcall(function()
   reset();M:PairPeer('Bank');jobs()
   M.db.flips={};M:RecordFlipBuy({name='Lupine Vest of Agility',quantity=1,cost=1400})
@@ -115,7 +115,7 @@ check('1.22 Sale alert: coin sound, on-screen message with price and flip profit
   SlashCmdList.VOIDMARKMARKET('salealerts on');SlashCmdList.VOIDMARKMARKET('salesound on')
   assert(not M:HandleAuctionSold('Some other system message'))
  end)
- C_ChatInfo=old;PlaySound,RaidNotice_AddMessage,RaidWarningFrame=oldSound,oldRaid,oldFrame;M.db.flips={};M.ownedRows=nil
+ C_ChatInfo=old;PlaySound,RaidNotice_AddMessage,RaidWarningFrame=oldSound,oldRaid,oldFrame;M.SaleToast=origToast;M.db.flips={};M.ownedRows=nil
  if not ok then error(err,0) end
 end)
 
@@ -155,7 +155,7 @@ check('1.22.6 Forever AH notifications: a sale (with its auction ID) alerts and 
  local old=C_ChatInfo;local sent={}
  C_ChatInfo={RegisterAddonMessagePrefix=function() return 0 end,SendAddonMessage=function(prefix,msg) sent[#sent+1]={prefix,msg};return 0 end}
  local oldSound,oldRaid,oldFrame=PlaySound,RaidNotice_AddMessage,RaidWarningFrame
- local notices={};PlaySound=function() end;RaidWarningFrame={};RaidNotice_AddMessage=function(_,t) notices[#notices+1]=t end
+ local notices={};PlaySound=function() end;local origToast=M.SaleToast;M.SaleToast=function(self,a,from,text) notices[#notices+1]=text;return origToast(self,a,from,text) end
  local ok,err=pcall(function()
   reset();M:PairPeer('Bank');jobs();M.db.flips={}
   M:RecordFlipBuy({name='Twilight Cuffs of the Physician',quantity=1,cost=2200})
@@ -186,7 +186,31 @@ check('1.22.6 Forever AH notifications: a sale (with its auction ID) alerts and 
   -- Other notifications are ignored.
   assert(not M:HandleAHNotification(0,'Something',1))
  end)
- C_ChatInfo=old;PlaySound,RaidNotice_AddMessage,RaidWarningFrame=oldSound,oldRaid,oldFrame;M.db.flips={};M.ownedRows=nil
+ C_ChatInfo=old;PlaySound,RaidNotice_AddMessage,RaidWarningFrame=oldSound,oldRaid,oldFrame;M.SaleToast=origToast;M.db.flips={};M.ownedRows=nil
  if not ok then error(err,0) end
+end)
+
+check('1.22.7 Purple sale banner: label, item, numbers, green/red profit, stacking, fade and saved position',function()
+ M.saleToasts=nil;M.saleToastAnchor=nil;M.db.settings.saleAlertPos=nil
+ local t1=M:SaleToast({name='Twilight Cuffs of the Physician',qty=1,gross=3500,net=3325,paid=2200,profit=1125},'Voidmark Bank')
+ assert(t1:IsShown() and t1.label:GetText()=='VOIDMARK BANK SOLD' and t1.item:GetText()=='Twilight Cuffs of the Physician')
+ assert(t1.detail:GetText():find(M:Coins(3500),1,true) and t1.detail:GetText():find('paid',1,true))
+ assert(t1.profit:GetText()=='+'..M:Coins(1125)..' flip' and t1:GetHeight()==78)
+ local t2=M:SaleToast({name="Elder's Sash of the Physician",qty=1,gross=4000,net=3800})
+ assert(t2~=t1 and t2.label:GetText()=='SOLD' and t2.profit:GetText()=='' and t2:GetHeight()==58,'no profit line without a buy')
+ local t3=M:SaleToast({name='Bad Flip',qty=1,gross=500,net=475,paid=900,profit=-425})
+ assert(t3.profit:GetText()=='-'..M:Coins(425)..' loss')
+ local t4=M:SaleToast({name='Unknown',qty=2})
+ assert(t4.detail:GetText():find('mail',1,true) and t4.item:GetText()=='Unknown x2')
+ -- A fifth reuses the oldest banner (at most 4 on screen).
+ local t5=M:SaleToast({name='Fifth',qty=1});assert(#M.saleToasts==4 and t5==t1)
+ -- Fades out after 6s.
+ advance(8);for _,t in ipairs(M.saleToasts) do t.scripts.OnUpdate(t) end
+ for _,t in ipairs(M.saleToasts) do assert(not t:IsShown(),'faded') end
+ -- Dragging saves the position.
+ local a=M.saleToastAnchor;a.GetPoint=function() return 'CENTER',UIParent,'CENTER',40.4,200.6 end
+ t1.scripts.OnDragStop(t1);local pos=M.db.settings.saleAlertPos
+ assert(pos[1]=='CENTER' and pos[2]==40 and pos[3]==201)
+ M.db.settings.saleAlertPos=nil
 end)
 end

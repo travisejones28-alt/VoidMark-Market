@@ -1,3 +1,7 @@
+## 1.22.7
+- **Purple sale banner** (VoidMark Taunt style) replaces the yellow raid-warning text: dark panel with a purple border, "VOIDMARK BANK SOLD" (or "SOLD") label, the item, "Sold 35s · you get 33s 25c · paid 22s", and a big green "+11s 25c flip" (red "loss" when below what you paid; no profit line without a buy record). Middle of the screen, fades after 6 seconds, up to 4 stack. Drag one to move them; the position is saved. Still printed in chat, with the coin sound.
+- 255 regressions.
+
 ## 1.22.6
 - **Fixed: no sale alert when an auction sold.** Forever's AH reports "A buyer has been found..." and "You won an auction..." through its own notification event (AUCTION_HOUSE_SHOW_FORMATTED_NOTIFICATION), which the chat frame prints itself; no system chat message is ever sent, so 1.22 never saw them. Market now listens to that event:
   - Sales alert (sound, screen, chat) and are sent to the synced character. The notification names the exact auction, so the alert uses that auction's price.

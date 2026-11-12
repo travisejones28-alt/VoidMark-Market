@@ -81,11 +81,93 @@ function M:ShowSaleAlert(a,from)
   local coin=SOUNDKIT and (SOUNDKIT.LOOT_WINDOW_COIN_SOUND or SOUNDKIT.IG_BACKPACK_COIN_OK) or 120
   pcall(PlaySound,coin,'Master')
  end
- if RaidNotice_AddMessage and RaidWarningFrame then
-  pcall(RaidNotice_AddMessage,RaidWarningFrame,text,{r=1,g=0.82,b=0.2})
- end
+ pcall(self.SaleToast,self,a,from,text)
  self:Print(text)
  self.lastSaleAlert={text=text,at=time()}
+end
+
+-- Purple sale banner (1.22.7), styled like VoidMark Taunt's flash: dark void
+-- panel, purple border, small bright label, centered text, fades after 6s.
+-- Several sales stack downward. Drag any banner to move them; position saved.
+local VOID={bg={0.015,0.010,0.025,0.88},purple={0.46,0.13,0.72,1},bright={0.72,0.35,1,1},
+ text={0.94,0.91,0.98,1},muted={0.62,0.56,0.68,1},gain={0.30,0.89,0.42,1},loss={1,0.38,0.38,1}}
+local SHOW,FADE,MAXTOASTS,W=6,1.5,4,380
+local function anchor(self)
+ local a=self.saleToastAnchor;if a then return a end
+ a=CreateFrame('Frame','VoidMarkMarketSaleAnchor',UIParent);a:SetSize(W,1)
+ a:SetFrameStrata('FULLSCREEN_DIALOG');a:SetMovable(true);a:SetClampedToScreen(true)
+ local pos=self.db.settings.saleAlertPos
+ a:ClearAllPoints()
+ if type(pos)=='table' and type(pos[1])=='string' and self:Finite(pos[2],-5000,5000) and self:Finite(pos[3],-5000,5000) then
+  a:SetPoint(pos[1],UIParent,pos[1],pos[2],pos[3])
+ else a:SetPoint('CENTER',UIParent,'CENTER',0,115) end
+ self.saleToastAnchor=a;return a
+end
+local function makeToast(self)
+ local f=CreateFrame('Frame',nil,UIParent,'BackdropTemplate');f:SetSize(W,62)
+ f:SetFrameStrata('FULLSCREEN_DIALOG');f:EnableMouse(true)
+ if f.SetBackdrop then
+  f:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Buttons\\WHITE8X8',edgeSize=1})
+  f:SetBackdropColor(unpack(VOID.bg))
+ end
+ local function fs(font,y,color)
+  local t=f:CreateFontString(nil,'OVERLAY',font);t:SetPoint('TOP',0,y);t:SetWidth(W-16);t:SetJustifyH('CENTER')
+  if t.SetWordWrap then t:SetWordWrap(false) end;t:SetTextColor(unpack(color));return t
+ end
+ f.label=fs('GameFontNormalSmall',-6,VOID.bright)
+ f.item=fs('GameFontHighlight',-20,VOID.text)
+ f.detail=fs('GameFontHighlightSmall',-38,VOID.muted)
+ f.profit=fs('GameFontNormalLarge',-54,VOID.gain)
+ if f.RegisterForDrag then f:RegisterForDrag('LeftButton') end
+ f:SetScript('OnDragStart',function() anchor(self):StartMoving() end)
+ f:SetScript('OnDragStop',function()
+  local a=anchor(self);a:StopMovingOrSizing()
+  local point,_,_,x,y=a:GetPoint()
+  if not self.persistenceBlocked and point then self.db.settings.saleAlertPos={point,math.floor((x or 0)+0.5),math.floor((y or 0)+0.5)} end
+ end)
+ f:SetScript('OnUpdate',function(t)
+  if not t.expiresAt then return end
+  local now=GetTime()
+  if now<=t.expiresAt then t:SetAlpha(1);return end
+  local gone=now-t.expiresAt
+  if gone>=FADE then t.expiresAt=nil;t:Hide();t:SetAlpha(1);self:LayoutSaleToasts();return end
+  t:SetAlpha(1-gone/FADE)
+ end)
+ f:Hide();return f
+end
+function M:LayoutSaleToasts()
+ local a=anchor(self);local y=0
+ for _,t in ipairs(self.saleToasts or {}) do
+  if t:IsShown() then t:ClearAllPoints();t:SetPoint('TOP',a,'TOP',0,y);y=y-(t:GetHeight()+6) end
+ end
+end
+function M:SaleToast(a,from)
+ self.saleToasts=self.saleToasts or {}
+ -- Reuse the oldest banner when all are showing.
+ local t
+ for _,x in ipairs(self.saleToasts) do if not x:IsShown() then t=x;break end end
+ if not t then
+  if #self.saleToasts<MAXTOASTS then t=makeToast(self);self.saleToasts[#self.saleToasts+1]=t
+  else t=table.remove(self.saleToasts,1);self.saleToasts[#self.saleToasts+1]=t end
+ else
+  for i,x in ipairs(self.saleToasts) do if x==t then table.remove(self.saleToasts,i);break end end
+  self.saleToasts[#self.saleToasts+1]=t
+ end
+ local flip=a.profit~=nil
+ t.label:SetText(from and (tostring(from):upper()..' SOLD') or 'SOLD')
+ t.item:SetText((a.qty and a.qty>1) and (a.name..' x'..a.qty) or a.name)
+ local detail
+ if a.gross then detail='Sold '..self:Coins(a.gross)..'  ·  you get '..self:Coins(a.net or a.gross)..(a.paid and ('  ·  paid '..self:Coins(a.paid)) or '')
+ else detail='Price shows when the sale mail arrives' end
+ t.detail:SetText(detail)
+ if flip then
+  t.profit:SetText((a.profit>=0 and '+' or '-')..self:Coins(math.abs(a.profit))..(a.profit>=0 and ' flip' or ' loss'))
+  t.profit:SetTextColor(unpack(a.profit>=0 and VOID.gain or VOID.loss));t.profit:Show();t:SetHeight(78)
+ else t.profit:SetText('');t.profit:Hide();t:SetHeight(58) end
+ if t.SetBackdropBorderColor then t:SetBackdropBorderColor(unpack(flip and VOID.bright or VOID.purple)) end
+ t.expiresAt=GetTime()+SHOW;t:SetAlpha(1);t:Show()
+ self:LayoutSaleToasts()
+ return t
 end
 
 -- The same sale can be reported by both the AH notification and a chat line;
