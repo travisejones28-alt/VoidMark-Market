@@ -30,13 +30,14 @@ function M:LiveNameSearch(text)
  if not C_AuctionHouse.GetBrowseResults then self:Print('Live browse unavailable');return end
  self.shoppingListMode=false;self.shoppingSearchStatus='Searching the Auction House for '..text..'...';self.browseRows={};self:RefreshUI()
  local q={searchString=text,sorts={},filters={},itemClassFilters={}}
+ if self.ApplyLevelQuery then self:ApplyLevelQuery(q) end
  self:QueueRequest({id='browse-name',kind='browse',query=q,priority=50,done=function()
   if self.view~='browse' or (self.db.settings.filter or ''):match('^%s*(.-)%s*$')~=text then return end
   local result=C_AuctionHouse.GetBrowseResults() or {};local out={}
   for i=1,math.min(300,#result) do
    local b=result[i];local k=b.itemKey
    local key=k and self:Key(k.itemID,k.itemSuffix,k.itemLevel,k.battlePetSpeciesID)
-   if key then
+   if key and (not self.LevelAllowed or self:LevelAllowed(k.itemID)) then
     if self.RecordLiveFloor then self:RecordLiveFloor(key,b.minPrice,b.totalQuantity) end
     local m=self.db.market[key];local info=C_AuctionHouse.GetItemKeyInfo and C_AuctionHouse.GetItemKeyInfo(k)
     out[#out+1]={marketKey=key,itemID=k.itemID,name=(info and info.itemName) or (m and m.name) or ('Item '..k.itemID),

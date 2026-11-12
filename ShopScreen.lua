@@ -348,6 +348,15 @@ function M:InitializeShopScreen(f)
  s.searchButton=button(s,'Search',332,-4,96,function() self:ShopSearchClicked() end)
  s.moreButton=button(s,'More...',432,-4,90,function() self:ShowShopMore() end)
  s.addButton=button(s,'Add to List',526,-4,110,function() self:ShopAddSelected() end)
+ -- Level range for every Shopping search (blank = no limit).
+ label(s,'Level:',652,-10,44,'GameFontNormal')
+ s.minLevel=edit(s,700,-5,34);label(s,'-',740,-10,10,'GameFontNormal');s.maxLevel=edit(s,754,-5,34)
+ local function saveLevels() self:SetShopLevelRange(s.minLevel:GetText(),s.maxLevel:GetText()) end
+ for _,e in ipairs({s.minLevel,s.maxLevel}) do
+  if e.SetNumeric then e:SetNumeric(true) end;if e.SetMaxLetters then e:SetMaxLetters(2) end
+  e:SetScript('OnEnterPressed',function(b) b:ClearFocus();saveLevels() end)
+  e:SetScript('OnEditFocusLost',function() saveLevels() end)
+ end
  -- Left: mini tabs + lists / recents panel
  s.tabLists=miniTab(s,'Shopping Lists',10,function() self.shopLeft='lists';self.shopLeftOffset=0;self:RefreshUI() end)
  s.tabRecent=miniTab(s,'Recent Searches',148,function() self.shopLeft='recent';self.shopLeftOffset=0;self:RefreshUI() end)
@@ -507,6 +516,10 @@ function M:RenderShopScreen()
  s.results:SetShown(not buying);s.exportResults:SetShown(not buying);s.status:SetShown(not buying)
  if buying then s.buyView:Show();return self:RenderShopBuy() end
  s.buyView:Hide()
+ local lo,hi=self:ShopLevelRange()
+ for e,v in pairs({[s.minLevel]=lo,[s.maxLevel]=hi}) do
+  if not (e.HasFocus and e:HasFocus()) then e:SetText(v and tostring(v) or '') end
+ end
  if self.shopSearch and not (self.shopSearch.HasFocus and self.shopSearch:HasFocus()) and not self.shoppingListMode then
   self.shopSearch:SetText(self.db.settings.filter or '')
  end
@@ -523,6 +536,7 @@ function M:RenderShopScreen()
    r.sel:SetShown(self.selectedRow==o or (self.selectedRow and self.selectedRow.marketKey==o.marketKey))
    r.icon:SetTexture(self:RowItemIcon(o,o.itemID) or 'Interface\\Icons\\INV_Misc_QuestionMark')
    local price=o.floor and o.floor>0 and self:Coins(o.floor) or (o.status=='NONE' and DIM..'None listed|r' or DIM..'Unknown|r')
+   if type(o.name)~='string' or o.name:match('^Item %d+$') then o.name=self:ItemName(o.itemID) or o.name end
    r.c[1]:SetText(price);r.c[2]:SetText(o.name or '?')
    r.c[3]:SetText(o.quantity and tostring(o.quantity) or '--')
    r.c[4]:SetText(self:DealText(o))
@@ -548,6 +562,7 @@ function M:RenderShopScreen()
   status=#source..' result'..(#source==1 and '' or 's')
   if self.shoppingListMode then status=status..'  |  List: '..(self.activeList or 'Shopping') end
   status=status..'  |  Green Vs Avg = '..self:DealPercent()..'% of average or less'
+  local lv=self:LevelRangeText();if lv then status=status..'  |  '..lv end
   if self.shoppingListMode and self:FlipMaxBuy() then status=status..'  |  Terms: max '..self:Coins(self:FlipMaxBuy()) end
   local f=self.shopFilters
   if f and not self.shoppingListMode then

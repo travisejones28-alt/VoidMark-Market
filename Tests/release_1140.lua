@@ -134,6 +134,41 @@ check('1.14 Armor-type terms and max buy price filter the sweep; starter list go
  M.db.shopTerms=nil
 end)
 
+check('1.14 Level range limits term sweeps and name searches; boxes save it',function()
+ fresh();M:SetView('browse');M.ahOpen=true;M.queue.nextSend=0
+ local A=C_AuctionHouse;local origGet,origSend,origInfo=A.GetBrowseResults,A.SendBrowseQuery,GetItemInfo
+ local sent={}
+ A.SendBrowseQuery=function(q) sent[#sent+1]=q end
+ GetItemInfo=function(id) local req=({[800]=15,[801]=25,[802]=45})[id];if req then return 'X','l',2,30,req end end
+ A.GetBrowseResults=function() return {
+  {itemKey={itemID=800,itemSuffix=-10,itemLevel=0},minPrice=500,totalQuantity=1},
+  {itemKey={itemID=801,itemSuffix=-10,itemLevel=0},minPrice=600,totalQuantity=1},
+  {itemKey={itemID=802,itemSuffix=-10,itemLevel=0},minPrice=700,totalQuantity=1},
+  {itemKey={itemID=803,itemSuffix=-10,itemLevel=0},minPrice=800,totalQuantity=1}} end -- uncached: kept
+ local ok,err=pcall(function()
+  M:RenderUI();local s=M.shopScreen
+  s.minLevel:SetText('40');s.maxLevel:SetText('20');s.minLevel.scripts.OnEnterPressed(s.minLevel)
+  local lo,hi=M:ShopLevelRange();assert(lo==20 and hi==40,'saved and ordered: '..tostring(lo)..'-'..tostring(hi))
+  M:SetList('Flips');M:AddShopTerm('Flips','of the Monkey')
+  M:OpenShoppingList('Flips');M.queue.nextSend=0;M:PumpQueue();emit('AUCTION_HOUSE_BROWSE_RESULTS_UPDATED')
+  assert(sent[#sent].minLevel==20 and sent[#sent].maxLevel==40,'query carries the range')
+  local ids={};for _,r in ipairs(M:ShoppingResultRows()) do ids[#ids+1]=r.itemID end;table.sort(ids)
+  assert(table.concat(ids,',')=='801,803','level filter: '..table.concat(ids,','))
+  M:RenderUI();assert(s.status:GetText():find('level 20-40',1,true),'status shows range')
+  -- Plain name searches use it too.
+  M.queue.waiting={};M.queue.dedupe={};M.queue.active=nil
+  M.db.settings.filter='Monkey';M:LiveNameSearch('Monkey');M.queue.nextSend=0;M:PumpQueue();emit('AUCTION_HOUSE_BROWSE_RESULTS_UPDATED');jobs()
+  assert(sent[#sent].minLevel==20 and #M.browseRows==2,'name search filtered: '..#M.browseRows)
+  -- Blank boxes clear it.
+  s.minLevel:SetText('');s.maxLevel:SetText('');s.maxLevel.scripts.OnEditFocusLost(s.maxLevel)
+  assert(M:ShopLevelRange()==nil and select(2,M:ShopLevelRange())==nil,'cleared')
+ end)
+ A.GetBrowseResults,A.SendBrowseQuery,GetItemInfo=origGet,origSend,origInfo
+ M.db.settings.shopMinLevel=0;M.db.settings.shopMaxLevel=0
+ M.queue.waiting={};M.queue.dedupe={};M.queue.active=nil
+ M:DeleteShoppingList('Flips');assert(ok,err)
+end)
+
 check('1.14 Vs Avg compares against the exact suffix history and sorts deals first',function()
  fresh();M:SetView('browse');M.ahOpen=false
  local monkey,bear=M:Key(600,-10),M:Key(600,-12)

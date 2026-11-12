@@ -30,6 +30,39 @@ function M:FlipMaxBuy()
  local v=tonumber(self.db.settings.flipMaxBuy)
  return (v and v>=1 and v<=1e10) and math.floor(v) or nil
 end
+-- Required-level range for Shopping searches (0 = no limit on that end).
+function M:ShopLevelRange()
+ local lo,hi=tonumber(self.db.settings.shopMinLevel),tonumber(self.db.settings.shopMaxLevel)
+ lo=(lo and lo>=1 and lo<=80) and math.floor(lo) or nil
+ hi=(hi and hi>=1 and hi<=80) and math.floor(hi) or nil
+ if lo and hi and lo>hi then lo,hi=hi,lo end
+ return lo,hi
+end
+function M:SetShopLevelRange(lo,hi)
+ if self.persistenceBlocked then return end
+ lo,hi=tonumber(lo),tonumber(hi)
+ self.db.settings.shopMinLevel=(lo and lo>=1 and lo<=80) and math.floor(lo) or 0
+ self.db.settings.shopMaxLevel=(hi and hi>=1 and hi<=80) and math.floor(hi) or 0
+ self:RefreshUI()
+end
+function M:ApplyLevelQuery(q)
+ local lo,hi=self:ShopLevelRange();q.minLevel=lo;q.maxLevel=hi;return q
+end
+-- The AH query already limits level; this double-checks when the item is
+-- cached. Items the client doesn't know yet are kept.
+function M:LevelAllowed(itemID)
+ local lo,hi=self:ShopLevelRange();if not lo and not hi then return true end
+ if not GetItemInfo then return true end
+ local ok,_,_,_,_,req=pcall(GetItemInfo,itemID)
+ req=ok and tonumber(req) or nil
+ if not req then return true end
+ return not (lo and req<lo) and not (hi and req>hi)
+end
+function M:LevelRangeText()
+ local lo,hi=self:ShopLevelRange()
+ if lo and hi then return 'level '..lo..'-'..hi elseif lo then return 'level '..lo..'+' elseif hi then return 'level '..hi..' or lower' end
+end
+
 -- Adds the starter terms to the main Shopping list (one list for everything).
 function M:AddFlipStarter()
  local added=0
@@ -106,7 +139,7 @@ function M:SearchShopTerms(list,onlyTerm)
  for _,term in ipairs(terms) do
   local text,armor=self:ParseShopTerm(term)
   local queued=self:QueueRequest({id='browse-term:'..term:lower(),kind='browse',priority=40,
-   query={searchString=text,sorts={},filters={},itemClassFilters={}},
+   query=self:ApplyLevelQuery({searchString=text,sorts={},filters={},itemClassFilters={}}),
    done=function()
     if self.termSearch~=run then return end
     local result=C_AuctionHouse.GetBrowseResults() or {}
@@ -117,9 +150,9 @@ function M:SearchShopTerms(list,onlyTerm)
       self:RecordLiveFloor(key,b.minPrice,b.totalQuantity)
       local old=run.byKey[key]
       local max=self:FlipMaxBuy()
-      if (not old or b.minPrice<old.floor) and armorMatches(k.itemID,armor) and not (max and b.minPrice>max) then
+      if (not old or b.minPrice<old.floor) and armorMatches(k.itemID,armor) and not (max and b.minPrice>max) and self:LevelAllowed(k.itemID) then
        local m=self.db.market[key];local info=C_AuctionHouse.GetItemKeyInfo and C_AuctionHouse.GetItemKeyInfo(k)
-       local row={marketKey=key,itemID=k.itemID,name=(info and info.itemName) or (m and m.name) or ('Item '..k.itemID),
+       local row={marketKey=key,itemID=k.itemID,name=(info and info.itemName) or (m and m.name) or self:ItemName(k.itemID) or ('Item '..k.itemID),
         floor=b.minPrice,quantity=tonumber(b.totalQuantity),fair=m and m.fairValue or 0,
         confidence=m and m.confidence or 'Unknown',status='LIVE BROWSE',term=term}
        if not old then run.rows[#run.rows+1]=row;run.found=run.found+1 else for j,r in ipairs(run.rows) do if r==old then run.rows[j]=row end end end

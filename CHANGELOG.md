@@ -1,3 +1,8 @@
+## 1.14.1
+- **Level range on Shopping:** Level [min] - [max] boxes next to Add to List. Applies to every Shopping search (search terms and typed names). Leave a box blank for no limit. The range shows under the results.
+- Term results show the item's name instead of "Item 14117" once the game has loaded it.
+- 222 regressions.
+
 ## 1.14.0
 - **Flipping: search terms in shopping lists.** A list can now hold search text like "of the Monkey" as well as items. Type it in the Search Term box and click **Add to List** (or copy a recent search to the list). Opening the list searches its items and every term, and merges the results.
 - **Armor type in a term:** "leather: of the Monkey", "cloth: of Healing", "mail: of the Bear" (cloth, leather, mail, plate) only show that armor type.

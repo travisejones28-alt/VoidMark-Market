@@ -1,7 +1,7 @@
 local _,M=...
 M.defaults={debug=false,maxTransaction=100000,maxItemSpend=500000,maxQuantity=20,
  maxExposure=2000000,minProfit=100,minROI=0.20,minConfidence=42,minLiquidity=15,
- riskTolerance=0.35,ahCut=0.05,depositReserve=100,maxDataAge=7200,historyDays=90,filter='',sort='score',minGoldReserve=0,sellStrategy='competitive',sellMinMargin=0,sellUndercut=1,postDuration=3,dealPercent=60,flipMaxBuy=0}
+ riskTolerance=0.35,ahCut=0.05,depositReserve=100,maxDataAge=7200,historyDays=90,filter='',sort='score',minGoldReserve=0,sellStrategy='competitive',sellMinMargin=0,sellUndercut=1,postDuration=3,dealPercent=60,flipMaxBuy=0,shopMinLevel=0,shopMaxLevel=0}
 function M:InitializeDatabase()
   if type(VoidMarkMarketDB)~='table' then VoidMarkMarketDB={} end
   local root=VoidMarkMarketDB
