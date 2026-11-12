@@ -1,6 +1,6 @@
 local addonName, M = ...
 _G.VoidMarkMarket = M
-M.name, M.version = addonName or 'VoidMarkMarket', '1.22.10'
+M.name, M.version = addonName or 'VoidMarkMarket', '1.22.11'
 M.eventHandlers, M.runtimeLog, M.jobs = {}, {}, {}
 M.ahOpen = false
 M.scanState = {running=false, phase='idle', status='No scan yet', progress=0}
@@ -258,6 +258,7 @@ SlashCmdList.VOIDMARKMARKET=function(msg)
     if v=='on' then M.db.settings[key]=true elseif v=='off' then M.db.settings[key]=false end
     M:Print('Sale alerts: '..(M.db.settings.saleAlerts==false and 'OFF' or 'ON')..' | sound: '..(M.db.settings.saleAlertSound==false and 'OFF' or 'ON')
      ..'. /vmm salealerts on|off, /vmm salesound on|off')
+  elseif msg=='testsound' then M:TestSaleSound()
   elseif msg=='flipsrebuild' then
     local b,s=M:BackfillFlips();M:Print(('Flip Ledger: added %d buys and %d sales from your history (nothing already there was added twice).'):format(b,s))
   elseif msg=='check' or msg:match('^check%s') then M:CheckItem(raw:match('^%S+%s+(.+)$'))

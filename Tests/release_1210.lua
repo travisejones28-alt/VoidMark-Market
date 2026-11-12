@@ -291,4 +291,23 @@ check('1.22.10 With both characters online only one chimes: the bank stays quiet
  PlaySoundFile,M.SaleToast,M.IsBankCharacter,M.PartnerOnline=oldFile,oldToast,oldBank,oldOnline;M.db.settings.saleSoundQuietWithPartner=nil;M.shareRun={}
  if not ok then error(err,0) end
 end)
+
+check('1.22.11 /vmm testsound plays the chime and explains why when it cannot be heard',function()
+ local printed={};local oldPrint,oldFile,oldSound,oldCVar=M.Print,PlaySoundFile,PlaySound,GetCVar
+ M.Print=function(_,t) printed[#printed+1]=t end
+ local cv={Sound_MasterVolume='0.8',Sound_EnableAllSound='1',Sound_EnableSoundWhenGameIsInBG='0'}
+ GetCVar=function(k) return cv[k] end
+ local ok,err=pcall(function()
+  PlaySoundFile=function() return true,5 end;PlaySound=function() return true end
+  SlashCmdList.VOIDMARKMARKET('testsound')
+  local all=table.concat(printed,'\n')
+  assert(all:find('chime played',1,true) and all:find('80%',1,true) and all:find('Sound in Background',1,true),all)
+  printed={};PlaySoundFile=function() return false end
+  M:TestSaleSound();all=table.concat(printed,'\n')
+  assert(all:find('did NOT play',1,true) and all:find('Coin sound played instead',1,true) and all:find('restart WoW',1,true),all)
+  assert(M.shopScreen or true)
+ end)
+ M.Print,PlaySoundFile,PlaySound,GetCVar=oldPrint,oldFile,oldSound,oldCVar
+ if not ok then error(err,0) end
+end)
 end

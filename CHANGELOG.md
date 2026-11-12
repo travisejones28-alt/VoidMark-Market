@@ -1,3 +1,7 @@
+## 1.22.11
+- **Test sound** button in Settings (and `/vmm testsound`): plays the sale sound and says in chat whether the chime played, whether the coin sound was used instead, and what in your sound settings would keep you from hearing it (all sound off, Master volume 0, "Sound in Background" off, Sale sound switched off, or quiet while the partner is online).
+- 259 regressions.
+
 ## 1.22.10
 - **Only one chime when both characters are online.** New Settings switch "Quiet when partner online": that character plays no sale sound while the synced character is online (banner and chat still show). On by default for Voidmark Bank, off elsewhere, so the main chimes for both its own sales and the bank's. When the bank is on alone, it chimes as usual.
 - 258 regressions.

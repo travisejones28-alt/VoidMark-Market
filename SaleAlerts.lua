@@ -93,16 +93,38 @@ end
 M.SALE_CHIME='Interface\\AddOns\\VoidMarkMarket\\Media\\LockChime.ogg'
 -- The chime (Media\LockChime.ogg); the game's coin sound if the file can't play.
 function M:PlaySaleSound()
- local played=false
+ local played,why=false,nil
  if PlaySoundFile then
   local ok,willPlay=pcall(PlaySoundFile,self.SALE_CHIME,'Master')
-  played=ok and willPlay~=false
- end
+  played=ok and willPlay~=false and willPlay~=nil
+  if not ok then why='error: '..tostring(willPlay) elseif not played then why='the game could not find or play the file' end
+ else why='PlaySoundFile is not available on this client' end
+ local coin=false
  if not played and PlaySound then
-  local coin=SOUNDKIT and (SOUNDKIT.LOOT_WINDOW_COIN_SOUND or SOUNDKIT.IG_BACKPACK_COIN_OK) or 120
-  pcall(PlaySound,coin,'Master')
+  local id=SOUNDKIT and (SOUNDKIT.LOOT_WINDOW_COIN_SOUND or SOUNDKIT.IG_BACKPACK_COIN_OK) or 120
+  local ok,res=pcall(PlaySound,id,'Master');coin=ok and res~=false
  end
+ self.lastSoundResult={chime=played,coin=coin,why=why,at=time()}
  return played
+end
+-- /vmm testsound and the Settings "Test sound" button: play it and say what happened.
+function M:TestSaleSound()
+ self:PlaySaleSound();local r=self.lastSoundResult or {}
+ local master=GetCVar and tonumber(GetCVar('Sound_MasterVolume'))
+ local enabled=GetCVar and GetCVar('Sound_EnableAllSound')
+ local bg=GetCVar and GetCVar('Sound_EnableSoundWhenGameIsInBG')
+ if r.chime then self:Print('Sale sound: chime played (Master channel, volume '..tostring(master and math.floor(master*100+0.5)..'%' or '?')..').')
+ else
+  self:Print('Sale sound: chime did NOT play ('..tostring(r.why)..'). '..(r.coin and 'Coin sound played instead.' or 'Coin sound also failed.'))
+  self:Print('  Check that Interface\\AddOns\\VoidMarkMarket\\Media\\LockChime.ogg exists, then fully restart WoW (a /reload does not find new files).')
+ end
+ if enabled=='0' then self:Print('  All game sound is turned off (System > Sound > Enable Sound).') end
+ if master and master<=0 then self:Print('  Master volume is 0.') end
+ if bg=='0' then self:Print('  "Sound in Background" is off: nothing plays while WoW is not the focused window.') end
+ local quiet=self:SaleSoundQuietHere()
+ if self.db.settings.saleAlertSound==false then self:Print('  Note: Sale sound is switched off in Settings, so real sales are silent.')
+ elseif quiet then self:Print('  Note: this character is quiet while your partner is online (Quiet when partner online).') end
+ return r
 end
 -- "Quiet when partner is online": this character stays silent while the synced
 -- character is online, so only one chime plays. Default: on for Voidmark Bank.

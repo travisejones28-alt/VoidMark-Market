@@ -297,6 +297,7 @@ function M:InitializeUI()
     c:SetScript('OnLeave',function() GameTooltip:Hide() end)
     self.flipToggles[#self.flipToggles+1]=c
   end
+  button(self.settingsFrame,'Test sound',744,-482,110,function() self:TestSaleSound() end)
   self.view='browse';self:BuildBrowseRows(self.db.settings.filter or ''); self.page=1; self:RefreshUI(); f:Hide() -- Keep Market closed on login/reload until opened by the user.
 end
 function M:ShowReport()
