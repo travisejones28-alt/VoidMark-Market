@@ -1,5 +1,5 @@
 local _,M=...
-local tabs={{'SHOPPING','browse'},{'SELLING','selling'},{'CANCELING','my auctions'},{'SCANNING','market'},
+local tabs={{'SHOPPING','browse'},{'SELLING','selling'},{'LISTINGS','my auctions'},{'SCANNING','market'},
  {'HISTORY','banker'},{'VENDOR','vendor'},{'CRAFTING','crafting'},{'SETTINGS','settings'},{'TOOLS','tools'}}
 local function label(parent,text,x,y,w,font)
   local f=parent:CreateFontString(nil,'OVERLAY',font or 'GameFontNormalSmall'); f:SetPoint('TOPLEFT',x,y)

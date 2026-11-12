@@ -50,7 +50,9 @@ function M:RefreshInventory()
   end)
 end
 function M:RequestOwnedAuctionsDiagnostic()
-  self:QueueRequest({id='owned',kind='owned',priority=30,done=function() M:CaptureOwnedAuctions() end,
+  -- You're looking at Listings and waiting: ahead of list/name searches (only a
+  -- purchase you're in the middle of, priority 90, goes first).
+  self:QueueRequest({id='owned',kind='owned',priority=85,done=function() M:CaptureOwnedAuctions() end,
     fail=function(e) M:Log('OWNED',e); M:Print(e) end})
 end
 function M:CaptureOwnedAuctions()

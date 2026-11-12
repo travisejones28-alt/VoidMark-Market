@@ -2,11 +2,11 @@
 
 [Download the installable addon](https://github.com/travisejones28-alt/VoidMark-Market/raw/refs/heads/main/dist/VoidMarkMarket.zip). Install the `VoidMarkMarket` folder under `_forever_/Interface/AddOns`. If the game folder links to your GitHub Desktop checkout, pull `main` instead. Use the same version on both accounts.
 
-Open the Auction House and use the **Shopping**, **Selling**, **Cancelling**, and **VoidMark** tabs. Auctionator can be disabled. Use **/vmm** for the standalone window. Safe Mode has been removed. Market starts closed, never trades at login, and doesn’t send orders from timers, scans, shopping lists, or received messages. Your existing account’s settings, history, ledger, pending purchases and cost basis stay in its own SavedVariables.
+Open the Auction House and use the **Shopping**, **Selling**, **Listings**, and **VoidMark** tabs. Auctionator can be disabled. Use **/vmm** for the standalone window. Safe Mode has been removed. Market starts closed, never trades at login, and doesn’t send orders from timers, scans, shopping lists, or received messages. Your existing account’s settings, history, ledger, pending purchases and cost basis stay in its own SavedVariables.
 
 ## What changed in 1.7
 
-- Auctionator-style tabs on the Auction House: **Shopping**, **Selling**, **Cancelling**, and **VoidMark** (Scanning, History, Vendor, Crafting, Settings, Tools). With Auctionator also enabled, VoidMark's trading tabs are labelled **VM Shopping**, etc.
+- Auctionator-style tabs on the Auction House: **Shopping**, **Selling**, **Listings**, and **VoidMark** (Scanning, History, Vendor, Crafting, Settings, Tools). With Auctionator also enabled, VoidMark's trading tabs are labelled **VM Shopping**, etc.
 - Left-drag any empty part of the AH to move it. Right-drag the title bar to resize. Position and size are remembered (MoveAny overrides this when installed). **Settings > Reset Window** restores the default.
 - Hover any item: price per unit, stack total for bag stacks, and whether the price is **CURRENT** or **STALE**, with its source and age.
 - After updating both accounts, the bank re-offers its older scan prices once so the main catches up.

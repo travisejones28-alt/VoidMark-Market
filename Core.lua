@@ -1,6 +1,6 @@
 local addonName, M = ...
 _G.VoidMarkMarket = M
-M.name, M.version = addonName or 'VoidMarkMarket', '1.13.1'
+M.name, M.version = addonName or 'VoidMarkMarket', '1.13.2'
 M.eventHandlers, M.runtimeLog, M.jobs = {}, {}, {}
 M.ahOpen = false
 M.scanState = {running=false, phase='idle', status='No scan yet', progress=0}
@@ -85,17 +85,26 @@ end
 -- Jobs you are waiting on (bag list, a price check's results, a search) run
 -- first each frame; background jobs take turns so a long scan or model job
 -- never starves the rest.
-M.interactiveJobs={bags=true,results=true,browse=true}
+M.interactiveJobs={bags=true,results=true,browse=true,owned=true}
+-- Bank sync is the lowest priority: it only gets frame time left over after
+-- every other job (it catches up when the scan and everything else are done).
+M.lowJobs={['share-scan']=true,['share-seed']=true,['sync-count']=true}
 function M:RunJobs()
   local start=debugprofilestop()
   self.budget=self:FrameBudget()
-  local ids,rest={},{}
-  for id in pairs(self.jobs) do if self.interactiveJobs[id] then ids[#ids+1]=id else rest[#rest+1]=id end end
-  if #rest>1 then
-    table.sort(rest,function(a,b) return tostring(a)<tostring(b) end)
-    self.jobTurn=(self.jobTurn or 0)%#rest+1
-    for n=0,#rest-1 do ids[#ids+1]=rest[(self.jobTurn-1+n)%#rest+1] end
-  elseif rest[1] then ids[#ids+1]=rest[1] end
+  local ids,rest,low={},{},{}
+  for id in pairs(self.jobs) do
+    if self.interactiveJobs[id] then ids[#ids+1]=id elseif self.lowJobs[id] then low[#low+1]=id else rest[#rest+1]=id end
+  end
+  table.sort(ids,function(a,b) return tostring(a)<tostring(b) end)
+  local function turns(list,field)
+    if #list>1 then
+      table.sort(list,function(a,b) return tostring(a)<tostring(b) end)
+      self[field]=(self[field] or 0)%#list+1
+      for n=0,#list-1 do ids[#ids+1]=list[(self[field]-1+n)%#list+1] end
+    elseif list[1] then ids[#ids+1]=list[1] end
+  end
+  turns(rest,'jobTurn');turns(low,'lowJobTurn')
   for _,id in ipairs(ids) do
     local job=self.jobs[id]
     if job then

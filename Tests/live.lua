@@ -284,7 +284,7 @@ check('Auction House tabs work with Auctionator disabled and restore the standal
  native.GetPoint=function()return 'TOPLEFT',UIParent,'TOPLEFT',120,-80 end
  local tabs=M.auctionTabs;assert(#tabs==4 and #native.Tabs==3)
  M:InstallAuctionTabs();assert(M.auctionTabs==tabs)
- local labels={'Shopping','Selling','Cancelling','VoidMark'}
+ local labels={'Shopping','Selling','Listings','VoidMark'}
  local views={'browse','selling','my auctions','market'}
  M.db.settings.lastAuctionView=nil
  for i,tab in ipairs(tabs) do

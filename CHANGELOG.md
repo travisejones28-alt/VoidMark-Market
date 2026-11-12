@@ -1,3 +1,10 @@
+## 1.13.2
+- **Cancelling is now called Listings** (it's your auctions overview: status, undercuts, inbound gold). Saved settings are unchanged.
+- **Your auctions load faster:** opening Listings or pressing Refresh now goes ahead of list and name searches in the Auction House queue (only a purchase in progress goes first), and reading the results is treated as something you're waiting on.
+- **Bank sync is the lowest priority:** its background work only uses time left over after everything else, and catches up once the AH work is done.
+- Note: if a full price scan is already downloading, the AH answers that first; Listings loads right after.
+- 213 regressions.
+
 ## 1.13.1
 - **Cancelling: inbound gold tally.** Under the list: **Inbound** = gold from sold auctions on its way by mail (count and when the next mail arrives), and **Listed** = what your active auctions bring in if they all sell. Both after the AH cut (5% by default).
 - 212 regressions.

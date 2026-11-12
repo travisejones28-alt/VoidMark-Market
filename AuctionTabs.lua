@@ -6,7 +6,7 @@ local _, M = ...
 local sections = {
   {key='shopping', label='Shopping', root='browse'},
   {key='selling', label='Selling', root='selling'},
-  {key='cancelling', label='Cancelling', root='my auctions'},
+  {key='cancelling', label='Listings', root='my auctions'},  -- key kept for saved settings
   {key='voidmark', label='VoidMark'},
 }
 local toolViews = {market=true, banker=true, vendor=true, crafting=true, settings=true, tools=true, sync=true}
