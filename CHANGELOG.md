@@ -1,3 +1,7 @@
+## 1.22.12
+- **Fixed: the AH's Sell slot and "Create Auction" button showing over Market's tabs.** Clicking or dragging a bag item switches the AH to its own Sell view behind Market's page, and its item slot drew on top. Market's tab pages now sit near the top of the AH's layer (frame level 8000, was +200). Blizzard's frames are still never hidden or changed, and Market's popups and windows stay on top.
+- 259 regressions.
+
 ## 1.22.11
 - **Test sound** button in Settings (and `/vmm testsound`): plays the sale sound and says in chat whether the chime played, whether the coin sound was used instead, and what in your sound settings would keep you from hearing it (all sound off, Master volume 0, "Sound in Background" off, Sale sound switched off, or quiet while the partner is online).
 - 259 regressions.

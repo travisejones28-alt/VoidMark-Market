@@ -293,7 +293,7 @@ check('Auction House tabs work with Auctionator disabled and restore the standal
   tab.button.scripts.OnClick();M:RenderUI();assert(rawget(native,"displayMode")==nil)
   assert(M.view==views[i] and M.auctionDock.page==tab.page and parentFrame==tab.page)
   assert(M.window:IsShown() and M.window:GetScale()>0 and M.window.testLevel>native:GetFrameLevel())
-  assert(tab.page:GetFrameLevel()>=native:GetFrameLevel()+200,'page sits above the native Auctions/Bids tabs')
+  assert(tab.page:GetFrameLevel()>=8000 and M.window.testLevel>8000,'page near the top of the AH strata, above the native Sell view and Auctions/Bids tabs')
   for j,other in ipairs(tabs) do assert(other.page:IsShown()==(j==i)) end
   if i<=4 then
    -- A trading tab stands alone: no section buttons, BACK only on sub-screens.

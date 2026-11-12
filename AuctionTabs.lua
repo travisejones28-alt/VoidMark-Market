@@ -246,10 +246,12 @@ function M:InstallAuctionTabs()
     page:SetPoint('TOPLEFT', ah, 'TOPLEFT', 8, -36)
     page:SetPoint('BOTTOMRIGHT', ah, 'BOTTOMRIGHT', -8, 8)
     -- Sit above the native Buy/Sell/Auctions content and hide it visually.
-    -- 1.22.5: +200 (was +30). The native Auctions view's own "Auctions/Bids"
-    -- tabs sit higher than +30 and showed through over the Market title. We
-    -- only raise our page; Blizzard's frames are never hidden or changed (taint).
-    page:SetFrameLevel(ah:GetFrameLevel()+200)
+    -- 1.22.12: near the top of the AH's strata (was +200, before that +30).
+    -- Clicking or dragging a bag item switches the AH to its Sell view, whose
+    -- item slot and Create Auction button drew over +200. Same strata as the AH
+    -- (so StaticPopups and Market's own windows, one strata up, stay on top);
+    -- Blizzard's frames are never hidden or changed (taint).
+    page:SetFrameLevel(math.max(ah:GetFrameLevel()+200,8000))
     local shade = page:CreateTexture(nil, 'BACKGROUND')
     shade:SetAllPoints(page)
     shade:SetColorTexture(.035, .02, .055, 1)
