@@ -10,7 +10,8 @@ local _,M=...
 --  Right:  sortable Price | Name | Available results that scroll.
 --          Left-click = buy view, right-click = price history,
 --          shift-click = put the name in the search box. Export Results below.
--- Market lists hold items (and sync between your accounts), not search text.
+-- Market lists hold items (and sync between your accounts) plus, since 1.14,
+-- search terms like "of the Monkey" (kept on this character; see Deals.lua).
 local function label(parent,text,x,y,w,font)
  local f=parent:CreateFontString(nil,'OVERLAY',font or 'GameFontNormalSmall');f:SetPoint('TOPLEFT',x,y)
  if w then f:SetWidth(w) end;f:SetJustifyH('LEFT');f:SetText(text or '');return f
@@ -51,8 +52,17 @@ end
 function M:ShopCopyRecent(text)
  if not self.shopExpanded then self:Print('Open a shopping list first, then copy the search into it');return false end
  local key,name=self:ShopFindItemByName(text)
- if not key then self:Print('"'..text..'" is not a known item yet. Search it, select a result and click Add to List.');return false end
+ if not key then local ok,why=self:AddShopTerm(self.shopExpanded,text);self:Print(ok and ('Search term "'..text..'" added to '..self.shopExpanded) or why);return ok end
  local ok,why=self:SetWatch(key,nil);self:Print(ok and (name..' added to '..self.activeList) or why);return ok
+end
+
+-- Clicking a search term inside an open list sweeps just that term.
+function M:SearchListTerm(list,term)
+ if self.ShopBuyClose then self:ShopBuyClose() end
+ if self.StopTermSearch then self:StopTermSearch() end
+ self.shoppingListMode=true;self.shopOnlyKey=nil;self.shopOnlyTerm=term;self.selectedRow=nil;self.shopScroll=0;self.termRows=nil
+ if self.ahOpen then self:SearchShopTerms(list,term) else self:Print('Open the Auction House to search') end
+ self:RefreshUI()
 end
 
 -- Searching ------------------------------------------------------------------
@@ -61,6 +71,7 @@ function M:ShopSearch(text,keepFilters)
  if #text<2 then self:Print('Type at least two characters');return end
  if self.ShopBuyClose then self:ShopBuyClose() end
  if not keepFilters then self.shopFilters=nil end
+ self.shopOnlyTerm=nil
  self.shoppingListMode=false;self.shopOnlyKey=nil;self.selectedRow=nil;self.page=1;self.shopScroll=0
  self.db.settings.filter=text
  if self.shopSearch and self.shopSearch:GetText()~=text then self.shopSearch:SetText(text) end
@@ -71,11 +82,13 @@ end
 function M:ShopSearching()
  local r=self.listSearch
  if r and not r.finished then return true end
+ if self.TermSearchRunning and self:TermSearchRunning() then return true end
  local st=self.shoppingSearchStatus
  return type(st)=='string' and st:find('^Searching the Auction House') and true or false
 end
 function M:ShopStopSearch()
  self.listSearch=nil
+ if self.StopTermSearch then self:StopTermSearch() end
  if self:ShopSearching() then self:CancelJob('browse');self.shoppingSearchStatus=nil end
  self:RefreshUI()
 end
@@ -92,14 +105,22 @@ end
 function M:OpenShoppingList(name)
  local ok,why=self:SetList(name);if not ok then self:Print(why);return end
  if self.ShopBuyClose then self:ShopBuyClose() end
- self.shopExpanded=name;self.shopOnlyKey=nil
+ self.shopExpanded=name;self.shopOnlyKey=nil;self.shopOnlyTerm=nil
  self.shoppingListMode=true;self.selectedRow=nil;self.page=1;self.shopScroll=0;self.db.settings.filter=''
  if self.shopSearch then self.shopSearch:SetText('') end
- if self.ahOpen then self:SearchShoppingList() end
+ if self.StopTermSearch then self:StopTermSearch() end
+ self.termRows=nil
+ if self.ahOpen then
+  local terms=self.ShopTerms and self:ShopTerms(name) or {}
+  if next(self:ListBook(name) or {})~=nil or #terms==0 then self:SearchShoppingList() end
+  if #terms>0 then self:SearchShopTerms(name) end
+ end
  self:RefreshUI()
 end
 function M:CollapseShoppingList()
- self.shopExpanded=nil;self.listSearch=nil;self:RefreshUI()
+ self.shopExpanded=nil;self.listSearch=nil;self.termRows=nil
+ if self.StopTermSearch then self:StopTermSearch() end
+ self:RefreshUI()
 end
 function M:ToggleShoppingList(name)
  if self.shopExpanded==name then self:CollapseShoppingList() else self:OpenShoppingList(name) end
@@ -107,6 +128,7 @@ end
 -- Clicking an item inside an open list searches just that item.
 function M:SearchListEntry(key)
  if self.ShopBuyClose then self:ShopBuyClose() end
+ self.shopOnlyTerm=nil
  self.shoppingListMode=true;self.shopOnlyKey=key;self.selectedRow=nil;self.shopScroll=0
  if self.ahOpen then self:SearchShoppingList(key) end
  self:RefreshUI()
@@ -131,7 +153,9 @@ function M:ShopTreeRows()
    end
    table.sort(items,function(a,b) return tostring(a.name):lower()<tostring(b.name):lower() end)
    for _,i in ipairs(items) do out[#out+1]=i end
-   if #items==0 then out[#out+1]={type='empty'} end
+   local terms=self.ShopTerms and self:ShopTerms(name) or {}
+   for _,t in ipairs(terms) do out[#out+1]={type='term',list=name,text=t} end
+   if #items==0 and #terms==0 then out[#out+1]={type='empty'} end
   end
  end
  return out
@@ -165,6 +189,7 @@ function M:DeleteShoppingList(name)
  if name=='Shopping' or not self.db.shoppingLists[name] then self:Print('The main Shopping list can be emptied but not deleted');return false end
  for key in pairs(self.db.shoppingLists[name]) do self:PublishWatch(name,key,nil) end
  self.db.shoppingLists[name]=nil
+ if type(self.db.shopTerms)=='table' then self.db.shopTerms[name]=nil end
  if self.shopExpanded==name then self.shopExpanded=nil end
  if self.activeList==name then self.activeList='Shopping';self.db.activeList='Shopping';self.shoppingListMode=false end
  self:RefreshUI();return true
@@ -179,13 +204,21 @@ function M:RenameShoppingList(old,new)
  for key,entry in pairs(book) do
   if type(entry)=='table' then self.db.shoppingLists[new][key]=entry;self:PublishWatch(new,key,entry) end
  end
+ for _,t in ipairs(self.ShopTerms and self:ShopTerms(old) or {}) do self:AddShopTerm(new,t) end
  self:DeleteShoppingList(old)
  self:OpenShoppingList(new);return true
 end
 function M:ShopAddSelected()
  local row=self.shopBuy and {marketKey=self.shopBuy.key} or self.selectedRow
  if not row and not self.shoppingListMode and #(self.browseRows or {})==1 then row=self.browseRows[1] end
- if not row or row.marketKey==nil then self:Print('Select a result first');return end
+ if not row or row.marketKey==nil then
+  local text=self.shopSearch and self.shopSearch:GetText();if type(text)~='string' then text='' end
+  if self.shopExpanded and not text:match('^%s*$') then
+   local ok,why=self:AddShopTerm(self.shopExpanded,text)
+   self:Print(ok and ('Search term "'..text:match('^%s*(.-)%s*$')..'" added to '..self.shopExpanded) or why);return
+  end
+  self:Print('Select a result first');return
+ end
  local ok,why=self:SetWatch(row.marketKey,nil);self:Print(ok and ('Added to '..self.activeList) or why)
 end
 function M:ShopRemoveSelected()
@@ -197,7 +230,8 @@ end
 local SORT={
  price=function(r) return (r.floor and r.floor>0) and r.floor or math.huge end,
  name=function(r) return tostring(r.name or ''):lower() end,
- available=function(r) return tonumber(r.quantity) or -1 end}
+ available=function(r) return tonumber(r.quantity) or -1 end,
+ deal=function(r) return M:DealRatio(r) or math.huge end}
 function M:ShopSortBy(field)
  local s=self.shopSort or {field='price',dir=1}
  if s.field==field then s.dir=-s.dir else s={field=field,dir=1} end
@@ -210,6 +244,7 @@ function M:ShopVisibleRows()
  for _,r in ipairs(self:ShoppingResultRows()) do
   local keep=true
   if self.shoppingListMode and self.shopOnlyKey~=nil and r.marketKey~=self.shopOnlyKey then keep=false end
+  if self.shoppingListMode and self.shopOnlyTerm~=nil and r.term~=self.shopOnlyTerm then keep=false end
   if keep and f and not self.shoppingListMode then
    if f.exact and (r.name or ''):lower()~=(self.db.settings.filter or ''):lower() then keep=false end
    if f.maxPrice and not (r.floor and r.floor>0 and r.floor<=f.maxPrice) then keep=false end
@@ -332,6 +367,7 @@ function M:InitializeShopScreen(f)
    if mouse=='RightButton' then if self.shopExpanded then self:CollapseShoppingList() end;return end
    if e.type=='list' then self:ToggleShoppingList(e.name)
    elseif e.type=='item' then self:SearchListEntry(e.key)
+   elseif e.type=='term' then self:SearchListTerm(e.list,e.text)
    elseif e.type=='recent' then self:ShopSearch(e.text) end
   end)
   r:SetScript('OnEnter',function(b)
@@ -343,6 +379,7 @@ function M:InitializeShopScreen(f)
    local e=r.entry;if not e then return end
    if e.type=='list' then self:OpenShoppingList(e.name)
    elseif e.type=='item' then self:RemoveWatch(e.key)
+   elseif e.type=='term' then self:RemoveShopTerm(e.list,e.text)
    elseif e.type=='recent' then self:DeleteRecentSearch(e.text) end
   end)
   r.opt2:SetScript('OnClick',function()
@@ -372,7 +409,7 @@ function M:InitializeShopScreen(f)
  -- Right: sortable results
  local res=self.panel(s,302,-40,702,476);s.results=res
  s.headers={}
- local cols={{'price','Price',10,150},{'name','Name',162,410},{'available','Available',576,110}}
+ local cols={{'price','Price',10,150},{'name','Name',162,300},{'available','Available',576,110},{'deal','Vs Avg',466,106}}
  for i,c in ipairs(cols) do
   local h=CreateFrame('Button',nil,res);h:SetPoint('TOPLEFT',c[3],-8);h:SetSize(c[4],20);h.field=c[1]
   h.text=label(h,c[2],4,-4,c[4]-20,'GameFontNormal')
@@ -389,7 +426,7 @@ function M:InitializeShopScreen(f)
   r:SetHighlightTexture('Interface\\QuestFrame\\UI-QuestTitleHighlight')
   r.sel=r:CreateTexture(nil,'BACKGROUND');r.sel:SetAllPoints();r.sel:SetColorTexture(.32,.15,.5,.45)
   r.icon=r:CreateTexture(nil,'ARTWORK');r.icon:SetSize(18,18);r.icon:SetPoint('LEFT',160,0)
-  r.c={label(r,'',8,-5,146,'GameFontHighlight'),label(r,'',182,-5,384,'GameFontHighlight'),label(r,'',574,-5,104,'GameFontHighlight')}
+  r.c={label(r,'',8,-5,146,'GameFontHighlight'),label(r,'',182,-5,274,'GameFontHighlight'),label(r,'',574,-5,104,'GameFontHighlight'),label(r,'',464,-5,100,'GameFontHighlight')}
   r:SetScript('OnClick',function(b,mouse) self:ShopRowClicked(b.data,mouse) end)
   r:SetScript('OnEnter',function(b) self:ShowRowTooltip(b) end)
   r:SetScript('OnLeave',function() if GameTooltip then GameTooltip:Hide() end end)
@@ -440,6 +477,10 @@ local function renderLeft(self,s)
     r.text:SetPoint('TOPLEFT',30,-4);r.text:SetText(e.name)
     r.sel:SetShown(self.shoppingListMode and self.shopOnlyKey==e.key)
     r.opt1.icon:SetTexture(ICON.delete);r.opt1.tip='Remove from list';r.opt1:Show()
+   elseif e.type=='term' then
+    r.sel:SetShown(self.shoppingListMode and self.shopOnlyTerm==e.text)
+    r.text:SetPoint('TOPLEFT',30,-4);r.text:SetText('|T'..ICON.search..':12:12|t '..PURPLE..e.text..'|r')
+    r.opt1.icon:SetTexture(ICON.delete);r.opt1.tip='Remove search term';r.opt1:Show()
    elseif e.type=='recent' then
     r.text:SetPoint('TOPLEFT',8,-4);r.text:SetText(e.text)
     r.sel:SetShown(not self.shoppingListMode and (self.db.settings.filter or '')==e.text)
@@ -458,7 +499,8 @@ function M:RenderShopScreen()
  renderLeft(self,s)
  local searching=self:ShopSearching()
  s.searchButton:SetText(searching and 'Cancel' or 'Search')
- local canAdd=self.shopExpanded~=nil and (self.selectedRow~=nil or self.shopBuy~=nil or (not self.shoppingListMode and #(self.browseRows or {})==1))
+ local typed=self.shopSearch and self.shopSearch:GetText();typed=type(typed)=='string' and not typed:match('^%s*$')
+ local canAdd=self.shopExpanded~=nil and (self.selectedRow~=nil or self.shopBuy~=nil or typed or (not self.shoppingListMode and #(self.browseRows or {})==1))
  s.addButton:SetEnabled(canAdd and true or false)
  -- Buy view replaces the results (Auctionator-style)
  local buying=self.shopBuy~=nil
@@ -483,6 +525,7 @@ function M:RenderShopScreen()
    local price=o.floor and o.floor>0 and self:Coins(o.floor) or (o.status=='NONE' and DIM..'None listed|r' or DIM..'Unknown|r')
    r.c[1]:SetText(price);r.c[2]:SetText(o.name or '?')
    r.c[3]:SetText(o.quantity and tostring(o.quantity) or '--')
+   r.c[4]:SetText(self:DealText(o))
   end
  end
  -- Scroll thumb
@@ -495,15 +538,17 @@ function M:RenderShopScreen()
  if #source==0 then
   local f=self.db.settings.filter or ''
   empty=self.shoppingSearchStatus or (self.shoppingListMode and (self.shopOnlyKey~=nil and 'No price for this item yet. Open the Auction House and click it again.'
-    or 'This list is empty. Search for an item, select it and click Add to List.'))
+    or 'This list is empty. Add an item, or type a search term like "of the Monkey" and click Add to List.'))
    or (f~='' and ('No saved prices match "'..f..'".'..(self.ahOpen and ' Press Search to check the Auction House.' or ' Open the Auction House to search it live.')))
    or 'Type an item name and press Enter, or open a shopping list on the left.'
  end
  s.empty:SetText(empty);s.empty:SetShown(empty~='')
- local status=self.ListSearchStatus and self:ListSearchStatus()
+ local status=(self.ListSearchStatus and self:ListSearchStatus()) or (self.TermSearchStatus and self:TermSearchStatus())
  if not status and #source>0 then
   status=#source..' result'..(#source==1 and '' or 's')
   if self.shoppingListMode then status=status..'  |  List: '..(self.activeList or 'Shopping') end
+  status=status..'  |  Green Vs Avg = '..self:DealPercent()..'% of average or less'
+  if self.shoppingListMode and self:FlipMaxBuy() then status=status..'  |  Terms: max '..self:Coins(self:FlipMaxBuy()) end
   local f=self.shopFilters
   if f and not self.shoppingListMode then
    local bits={}

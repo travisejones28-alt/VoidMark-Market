@@ -2,7 +2,7 @@
 ## Title: VoidMark Market
 ## Notes: Forever market intelligence, live-validated trading and local ledger. Click to trade.
 ## Author: Taliaa / OpenAI
-## Version: 1.13.2
+## Version: 1.14.0
 ## SavedVariables: VoidMarkMarketDB, TaliaaTradeBetaDB
 ## IconTexture: Interface\Icons\INV_Misc_Coin_01
 
@@ -32,6 +32,7 @@ Diagnostics.lua
 SellScreen.lua
 ShopScreen.lua
 ShopBuy.lua
+Deals.lua
 CancelScreen.lua
 UI.lua
 TradingUI.lua

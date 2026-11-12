@@ -138,6 +138,10 @@ function M:ImportShoppingTransfer(raw)
   if self.persistenceBlocked then return false,'Database read-only' end
   if type(raw)~='string' or #raw>35000 then return false,'Invalid shopping transfer length' end
   raw=raw:gsub('\r\n','\n'):gsub('\n+$','')
+  -- Auctionator list export ("Name^term^term"): imported as search terms.
+  if not raw:find('^VMMW') and raw:find('^',1,true) and self.ImportAuctionatorLists then
+    local ok,msg=self:ImportAuctionatorLists(raw);if ok then self:Print(msg) end;return ok,msg
+  end
   local lines={}
   for line in (raw..'\n'):gmatch('(.-)\n') do lines[#lines+1]=line end
   if #lines<1 or #lines>201 then return false,'Too many shopping rows' end

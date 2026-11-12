@@ -143,6 +143,13 @@ function M:ShoppingResultRows()
    out[#out+1]=row
   end
  end
+ -- Search-term results (Deals.lua) join the list's own items.
+ local seen={};for _,r in ipairs(out) do seen[r.marketKey]=true end
+ for _,row in ipairs(self.termRows or {}) do
+  if not seen[row.marketKey] and (needle=='' or tostring(row.name):lower():find(needle,1,true)) then
+   seen[row.marketKey]=true;out[#out+1]=row
+  end
+ end
  return out
 end
 function M:ShowTradingEmptyState(view,n)

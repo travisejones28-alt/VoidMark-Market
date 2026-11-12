@@ -93,7 +93,8 @@ check('1.13 Recent searches: delete and copy to the open list',function()
  M:SetList('Mats');M.shopExpanded='Mats';M.shopLeft='recent';M:RenderUI();local s=M.shopScreen
  assert(s.tabRecent.text and s.leftRows[1].entry.text=='Linen' and s.leftRows[1].opt2:IsShown())
  s.leftRows[1].opt2.scripts.OnClick(s.leftRows[1].opt2);assert(M:ListBook('Mats')[61],'copy to list')
- assert(not M:ShopCopyRecent('Mystery thing'),'unknown names are not added')
+ -- 1.14: unknown text becomes a search term on the list instead of an item.
+ assert(M:ShopCopyRecent('Mystery thing') and M:ShopTerms('Mats')[1]=='Mystery thing' and not M:ListBook('Mats')['Mystery thing'],'unknown names become search terms')
  M.shopExpanded=nil;assert(not M:ShopCopyRecent('Linen'),'needs an open list')
  M:RenderUI();s.leftRows[2].opt1.scripts.OnClick(s.leftRows[2].opt1)
  assert(#M.db.recentSearches==1 and M.db.recentSearches[1]=='Linen','delete recent')

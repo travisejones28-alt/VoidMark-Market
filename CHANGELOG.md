@@ -1,3 +1,13 @@
+## 1.14.0
+- **Flipping: search terms in shopping lists.** A list can now hold search text like "of the Monkey" as well as items. Type it in the Search Term box and click **Add to List** (or copy a recent search to the list). Opening the list searches its items and every term, and merges the results.
+- **Armor type in a term:** "leather: of the Monkey", "cloth: of Healing", "mail: of the Bear" (cloth, leather, mail, plate) only show that armor type.
+- **Starter list:** `/vmm flipstarter` adds 11 terms to your main Shopping list: leather of Agility / Monkey / Tiger, cloth of Healing / Intellect / Sorcerer / Physician / Magic, mail of Bear / Tiger / Strength.
+- **Max buy price:** `/vmm flipmax 15` hides term results above 15 silver (`/vmm flipmax 0` turns it off).
+- **Vs Avg column** on Shopping results: the lowest price as a % of that exact item's 30-day average (each random suffix is its own price; needs at least 2 scans). Green = a deal, at or under 60% by default (`/vmm deal 50` to change). Click the header to sort deals first.
+- **Import** also accepts an Auctionator list export (`Name^term^term`).
+- Search terms stay on the character that made them (items still sync to your other account).
+- 221 regressions (8 new).
+
 ## 1.13.2
 - **Cancelling is now called Listings** (it's your auctions overview: status, undercuts, inbound gold). Saved settings are unchanged.
 - **Your auctions load faster:** opening Listings or pressing Refresh now goes ahead of list and name searches in the Auction House queue (only a purchase in progress goes first), and reading the results is treated as something you're waiting on.

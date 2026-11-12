@@ -176,7 +176,7 @@ PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
 PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
 PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
-BENCH scan: 71 frames (1.2s at 60fps, 2.4s at 30fps), worst frame 12.1ms, cpu 0.69s | after:prune=3 after:share-scan=13 done=1 model=42 processing=12
+BENCH scan: 114 frames (1.9s at 60fps, 3.8s at 30fps), worst frame 12.2ms, cpu 1.07s | after:prune=3 after:share-scan=30 done=1 model=61 processing=19
 PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.13 history stores only the fields it needs; latest keeps the full snapshot
 PASS 1.9.13 history saved by older versions is shrunk once at login without losing prices
@@ -214,4 +214,12 @@ PASS 1.13 More... filters (exact name, max price, min available) and CSV export
 PASS 1.13 Searching one list entry only queues that item
 PASS 1.13.1 Cancelling shows inbound gold from sold auctions and the value still listed
 PASS 1.13.2 Listings tab name; your auctions load first; bank sync runs last
-ALL 213 TESTS PASSED
+PASS 1.14 Search terms: add, dedupe, limit, remove; shown under the open list
+PASS 1.14 Add to List with typed text and no selection adds a search term
+PASS 1.14 Rename moves search terms; delete removes them
+PASS 1.14 Import accepts an Auctionator list export as search terms
+PASS 1.14 Opening a list sweeps its terms; suffix variants stay separate, lowest price kept
+PASS 1.14 Cancel stops a term sweep and clears its queued searches
+PASS 1.14 Armor-type terms and max buy price filter the sweep; starter list goes on the main list
+PASS 1.14 Vs Avg compares against the exact suffix history and sorts deals first
+ALL 221 TESTS PASSED
