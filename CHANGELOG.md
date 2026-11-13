@@ -1,3 +1,10 @@
+## 1.22.23
+- **Sale banners at login show the price.** Each session starts with an empty list of your auctions, and the banner only looked at the list saved from last time when there was no list at all. So right after logging in it never used the saved list ("price shows when the mail arrives"). It now checks this session's list, then the saved one.
+- A listing already shown as SOLD can match its sale banner (it sold while you were online but the message came later).
+- Opening the AH now loads your auctions automatically, as intended in 1.22.x. The same empty list stopped that too.
+- The post-price and market-price fallbacks never use another suffix's price.
+- 273 regressions.
+
 ## 1.22.22 — suffix sweep
 Forever's item links leave out the suffix ("[Pagan Belt]"), while the AH sells each suffix as its own item. Everything that matches items now goes through one set of rules (exact AH key > full name > base name), instead of each screen guessing.
 - **Scans keep a price per suffix.** Every suffix of an item used to land under one price. A scan now records each suffix's own lowest price; the shared entry is named after the base item and marked as mixed.

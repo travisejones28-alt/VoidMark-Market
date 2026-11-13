@@ -24,8 +24,17 @@ end
 local function claimListing(self,name,auctionID)
  -- Live rows from Listings, else the snapshot saved last time they loaded
  -- (so a /reload or a fresh login still knows your listing prices).
+ -- 1.22.23: ownedRows starts each session as an empty list, so "live or
+ -- snapshot" always picked the empty list and alerts at login had no price.
+ -- Search both: this session's rows first, then the saved ones.
  local snap=self.db.ownedSnapshot
- local rows=self.ownedRows or (type(snap)=='table' and type(snap.rows)=='table' and snap.rows) or {}
+ local rows,seen={},{}
+ for _,list in ipairs({self.ownedRows or {},type(snap)=='table' and type(snap.rows)=='table' and snap.rows or {}}) do
+  for _,o in ipairs(list) do
+   local id=o.auctionID
+   if not (id and seen[id]) then if id then seen[id]=true end;rows[#rows+1]=o end
+  end
+ end
  self.saleClaimed=self.saleClaimed or {}
  -- The AH notification can name the exact auction: use it when it does.
  if auctionID then
@@ -33,11 +42,15 @@ local function claimListing(self,name,auctionID)
    if o.auctionID==auctionID and self:Finite(o.unit,1,1e12) then self.saleClaimed[auctionID]=true;return o end
   end
  end
- for pass=1,2 do
+ -- By name: exact, then base name; a row already shown as SOLD is the likeliest
+ -- match, then your other listings of it.
+ for pass=1,4 do
+  local wantSold=pass==1 or pass==3
   for _,o in ipairs(rows) do
    local id=o.auctionID or o
-   if not self.saleClaimed[id] and not (self.OwnedSold and self:OwnedSold(o)) and self:Finite(o.unit,1,1e12)
-    and (pass==1 and lower(o.name)==lower(name) or pass==2 and self:NameScore(o.name,name)==1) then
+   local sold=self.OwnedSold and self:OwnedSold(o) or false
+   if not self.saleClaimed[id] and sold==wantSold and self:Finite(o.unit,1,1e12)
+    and (pass<=2 and lower(o.name)==lower(name) or pass>=3 and self:NameScore(o.name,name)==1) then
     self.saleClaimed[id]=true;return o
    end
   end
@@ -55,15 +68,26 @@ function M:BuildSaleAlert(name,auctionID,link)
   -- Last price you posted this item at with Market. Stacks (cloth etc.) can
   -- sell in part, so for those only the price each is known.
   local key=type(link)=='string' and link:find('item:',1,true) and self.LinkIdentity and self:LinkIdentity(link) or nil
-  key=key or (self.UniqueMarketByName and self:UniqueMarketByName(name))
-  local h=key~=nil and type(self.db.postHistory)=='table' and self.db.postHistory[key]
-  h=type(h)=='table' and h[1]
+  local keys={}
+  if flip and flip.key~=nil then keys[#keys+1]=flip.key end
+  if key~=nil then keys[#keys+1]=key end
+  local byName=self.UniqueMarketByName and self:UniqueMarketByName(name);if byName~=nil then keys[#keys+1]=byName end
+  local h
+  for _,k in ipairs(keys) do
+   local list=type(self.db.postHistory)=='table' and self.db.postHistory[k]
+   -- A key shared by several suffixes: only trust it when the scan says so.
+   local m=self.db.market[k]
+   if type(list)=='table' and list[1] and not (m and m.mixedVariants) then h=list[1];key=k;break end
+  end
+  key=key or keys[1]
   if h and self:Finite(h.unit,1,1e12) then
    if (tonumber(h.quantity) or 1)<=1 then a.qty=1;a.gross=math.floor(h.unit)
    else a.unit=math.floor(h.unit);a.qty=nil end
   elseif key~=nil and self.StoredPriceObservation then
    -- Last resort: the current market price, clearly marked as an estimate.
-   local p=self:StoredPriceObservation(key)
+   -- Never another suffix's price (see VariantPrice in Tooltips.lua).
+   local state,sf=self:VariantPrice(key,name,self:LinkName(link))
+   local p=state=='suffix' and {floor=sf.floor} or state=='key' and self:StoredPriceObservation(key) or nil
    if p and self:Finite(p.floor,1,1e12) then a.unit=math.floor(p.floor);a.qty=nil;a.estimate=true end
   end
  end
@@ -284,7 +308,7 @@ end
 M:RegisterHandler('AUCTION_HOUSE_SHOW',function(self)
  if not (C_Timer and C_Timer.After) then return end
  C_Timer.After(4,function()
-  if self.ahOpen and self.db and self.RequestOwnedAuctionsDiagnostic and not self.ownedRows then pcall(self.RequestOwnedAuctionsDiagnostic,self) end
+  if self.ahOpen and self.db and self.RequestOwnedAuctionsDiagnostic and not self.ownedLoadedAt then pcall(self.RequestOwnedAuctionsDiagnostic,self) end
  end)
 end)
 M:RegisterHandler('AUCTION_HOUSE_SHOW_FORMATTED_NOTIFICATION',function(self,_,notification,text,auctionID) self:HandleAHNotification(notification,text,auctionID) end)

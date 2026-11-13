@@ -622,4 +622,19 @@ check('1.22.22 Sweep: what you paid, post history, Listings names and old buys a
  end)
  A.GetItemKeyInfo=oldInfo;M.db.flips={};M.db.keyNames=nil;M.db.postHistory={};M.ownedRows=nil;M.saleClaimed={};assert(ok,err)
 end)
+
+check('1.22.23 Sale at login: the saved listing gives the price even though this session has no listings loaded',function()
+ M.ownedRows={} -- how every session starts
+ M.saleClaimed={};M.db.flips={}
+ M.db.ownedSnapshot={at=time()-3600,rows={
+  {auctionID=71,name='Greenweave Gloves',unit=3500,quantity=1,status=0},
+  {auctionID=72,name='Greenweave Gloves of the Sorcerer',unit=2900,quantity=1,status=0}}}
+ local a=M:BuildSaleAlert('Greenweave Gloves of Healing')
+ assert(a.gross==3500,'price from the saved listing: '..tostring(a.gross))
+ assert(M:SaleAlertText(a):find('for '..M:Coins(3500),1,true))
+ -- A row already shown as SOLD counts (it sold while you were online).
+ M.saleClaimed={};M.db.ownedSnapshot={at=time(),rows={{auctionID=81,name='Pagan Belt of Intellect',unit=1300,quantity=1,status=1}}}
+ a=M:BuildSaleAlert('Pagan Belt of Intellect');assert(a.gross==1300,tostring(a.gross))
+ M.db.ownedSnapshot=nil;M.saleClaimed={}
+end)
 end

@@ -94,7 +94,7 @@ function M:CaptureOwnedAuctions()
       if debugprofilestop()-start>=4 then return false end
     end
   end,function() if self.CarryOwnedVerdicts then self:CarryOwnedVerdicts(self.ownedRows,rows) end
-    self.ownedRows=rows; if self.UpdateFlipListings then self:UpdateFlipListings(rows) end
+    self.ownedRows=rows; self.ownedLoadedAt=time(); if self.UpdateFlipListings then self:UpdateFlipListings(rows) end
     if not self.persistenceBlocked then
       -- Kept across reloads/logins so sale alerts know your listing prices.
       local snap={}
