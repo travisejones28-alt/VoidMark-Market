@@ -171,12 +171,15 @@ function M:Search(m,priority,done,fail,valid,allowCached)
   return self:QueueRequest({id='search:'..tostring(self:Key(key.itemID,key.itemSuffix,key.itemLevel,key.battlePetSpeciesID)),kind='search',
     key=key,commodity=commodity,priority=priority,done=done,fail=fail,valid=valid,allowCached=allowCached})
 end
--- Forever sometimes answers a refresh of an item already searched this session
--- without a "results updated" event. For price checks that only fill the sell
--- price (never purchases), read the client's complete results after a short wait.
+-- Forever sometimes answers a search of an item already searched this session
+-- without a "results updated" event (buy page stuck, then "Request timed out").
+-- Read the client's complete results after a short wait instead. Price checks
+-- after 2.5s; buy pages after 3s. Buying stays safe: an item auction is bought
+-- by its auction ID (a gone auction just fails) and commodities get a fresh
+-- quote with the exact total before you confirm.
 function M:PollSearch(r)
-  if not r or r.kind~='search' or not r.allowCached or r.reading or r.resend or r.polled then return end
-  if GetTime()-(r.sent or 0)<2.5 then return end
+  if not r or r.kind~='search' or r.reading or r.resend or r.polled then return end
+  if GetTime()-(r.sent or 0)<(r.allowCached and 2.5 or 3) then return end
   local A=C_AuctionHouse; local arg=r.commodity and r.key.itemID or r.key
   local fullFn=r.commodity and A.HasFullCommoditySearchResults or A.HasFullItemSearchResults
   if type(fullFn)~='function' then return end

@@ -787,4 +787,20 @@ check('1.23.9 Gear check: weapons and armor yes, trade goods and bags no',functi
  end)
  C_Item=old;assert(ok,err)
 end)
+
+check('1.23.10 Buy page reads results when Forever sends no "results updated" (item already searched)',function()
+ local q=M.queue;q.waiting={};q.dedupe={};q.active=nil;q.lateReplicate=nil;q.nextSend=0
+ local A=C_AuctionHouse;local saved={M.ahOpen,M.SendAHRequest,M.ThrottleReady,M.ReadSearch,A.HasFullItemSearchResults,M.IsCommodity}
+ M.ahOpen=true;M.ThrottleReady=function() return true end;M.SendAHRequest=function() end;M.IsCommodity=function() return false end
+ local read;M.ReadSearch=function(_,ev,key) read=ev end
+ A.HasFullItemSearchResults=function() return true end
+ local ok,err=pcall(function()
+  assert(M:Search({itemID=7406,itemSuffix=1033,itemLevel=25},90,function() end,function() end))
+  M:PumpQueue();assert(q.active and not q.active.allowCached)
+  advance(2);M:PumpQueue();assert(read==nil,'waits a moment for the event first')
+  advance(1.5);M:PumpQueue();assert(read=='poll','then reads the complete results')
+ end)
+ M.ahOpen,M.SendAHRequest,M.ThrottleReady,M.ReadSearch,A.HasFullItemSearchResults,M.IsCommodity=saved[1],saved[2],saved[3],saved[4],saved[5],saved[6]
+ q.waiting={};q.dedupe={};q.active=nil;assert(ok,err)
+end)
 end

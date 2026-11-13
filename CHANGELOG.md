@@ -1,3 +1,7 @@
+## 1.23.10
+- **Buy pages no longer time out on items you already looked at.** Forever sometimes refreshes a search of an item already searched this session without sending "results updated". The buy page (e.g. from Listings → See listings / buy after an undercut check) then waited, retried and failed with "Request timed out". It now reads the complete results after 3 seconds, like price checks already did. Buying stays safe: an item auction is bought by its auction ID (a gone auction just fails), and commodities get a fresh quote before you confirm.
+- 297 regressions.
+
 ## 1.23.9
 - Mail tracking (won mail, mailing between your characters) is only for **gear**: weapons and armor like boots, belts, cloaks. Stackables like leather and cloth aren't tracked through the mail.
 - 296 regressions.
