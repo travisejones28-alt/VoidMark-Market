@@ -17,7 +17,8 @@ return function(M,check,jobs,advance,emit)
  local day=math.floor(time()/86400)
  local function history(id,price,days)
   local key=M:Key(id,0,0,0);M.db.dailyLows=M.db.dailyLows or {}
-  local t={};for d=1,days or 4 do t[day-d]=price end;M.db.dailyLows[tostring(key)]=t;return key
+  local t={};for d=1,days or 4 do t[day-d]=price end;M.db.dailyLows[tostring(key)]=t
+  M.db.sharedPrices[key]={id=id,floor=price,at=time()};return key
  end
  local function reset()
   M:StopSnipe();M.snipe=nil;M.snipeView=false;M.shopBuy=nil
@@ -64,6 +65,7 @@ return function(M,check,jobs,advance,emit)
   assert(M.snipe.lastRound.pages==3 and M.snipe.lastRound.items==3,'pages '..tostring(M.snipe.lastRound.pages))
   assert(#M:SnipeRows()==1,'hit on the last page')
   for k,v in pairs(copy) do assert(lows[k]==v) end
+  local sp=M.db.sharedPrices[M:Key(91001,0,0,0)];assert(sp.floor==10000,'shared price untouched')
   local n=0;for k in pairs(lows) do n=n+1 end;local c=0;for _ in pairs(copy) do c=c+1 end;assert(n==c,'no daily low written')
   local seenAfter=0;for _ in pairs(M.db.liveSeen or {}) do seenAfter=seenAfter+1 end
   assert(seenAfter==seenBefore and M.db.shareJournal.seq==journal,'no live price or sync row')
@@ -100,7 +102,7 @@ return function(M,check,jobs,advance,emit)
   local rows=M:ShopVisibleRows();assert(#rows==1 and rows[1].status=='MISPOST')
   assert(M.view=='browse');M:RenderUI();local sc=M.shopScreen
   assert(sc.snipeButton:GetText()=='Stop Snipe' and sc.snipeHits:GetText():find('Hits %(1%)') and sc.status:GetText():find('Sniper ON'))
-  assert(M:ListSearchStatus():find('Sniper ON'))
+  assert(M:SnipeStatus():find('Sniper ON'))
   M:ShopRowClicked(rows[1],'LeftButton');assert(M.shopBuy and M.shopBuy.key==rows[1].marketKey)
   M:ShopBuyClose();M:ShopSearch('Linen');assert(not M.snipeView)
  end)
@@ -110,6 +112,35 @@ return function(M,check,jobs,advance,emit)
   M:StartSnipe();round();assert(#M:SnipeRows()==0,'45% is above 40%')
   M:SnipeCommand('pct 95');assert(M:SnipePercent()==40,'out of range ignored')
   reset()
+ end)
+check('1.23.1 Level box filters saved-price results; your list items and snipe hits always show',function()
+  reset();M.snipeView=false;M.shoppingListMode=false;M.shopFilters=nil;M.shopOnlyKey=nil;M.shopOnlyTerm=nil
+  local oldRows=M.browseRows
+  M.browseRows={{marketKey=M:Key(91100,0,0,0),itemID=91100,name='Kodo Meat',floor=50,quantity=3}}
+  M:SetShopLevelRange(15,nil);assert(#M:ShopVisibleRows()==0,'required level 1 is under 15')
+  M:SetShopLevelRange(nil,nil);assert(#M:ShopVisibleRows()==1)
+  M:SetShopLevelRange(15,nil);M.shoppingListMode=true;local r=M:ShoppingResultRows()
+  M.shoppingListMode=false;M:SetShopLevelRange(nil,nil);M.browseRows=oldRows
+ end)
+ check('1.23.1 A blank AH name falls back to the item name instead of an empty row',function()
+  assert(M:KeyInfoName({itemName=''})==nil and M:KeyInfoName({itemName='X'})=='X' and M:KeyInfoName(nil)==nil)
+  reset();M.snipeView=false;M.shoppingListMode=false;M.shopFilters=nil;M.db.settings.filter=''
+  local oldRows=M.browseRows
+  M:SetView('browse');jobs();M.browseRows={{marketKey=M:Key(91101,0,0,0),itemID=91101,name='',floor=50,quantity=3}};M:RenderUI()
+  assert(M.browseRows[1].name~='' ,'name filled at render')
+  M.browseRows=oldRows
+ end)
+check('1.23.1 Falling prices are not misposts: the recent scan price caps the average',function()
+  reset();history(91200,10000);M.db.sharedPrices[M:Key(91200,0,0,0)].floor=2500
+  pages={{row(91200,2000)}};M:StartSnipe();round();assert(#M:SnipeRows()==0,'80% of today is not a mispost')
+  reset();history(91201,10000);M.db.sharedPrices[M:Key(91201,0,0,0)].at=time()-7*3600
+  pages={{row(91201,1000)}};M:StartSnipe();round();assert(#M:SnipeRows()==0,'no scan in 6 hours = no alert')
+  reset();history(91202,10000);M.db.sharedPrices[M:Key(91202,0,0,0)].floor=8000
+  pages={{row(91202,1000)}};M:StartSnipe();round();assert(#M:SnipeRows()==1 and M:SnipeRows()[1].ref==8000)
+ end)
+ check('1.23.1 Sniper status stays on the Shopping line; the top scan line is untouched',function()
+  reset();M:ShowSnipeHits();assert(M:ListSearchStatus()==nil or not tostring(M:ListSearchStatus()):find('Sniper'))
+  M.snipeView=false
  end)
  A.IsThrottledMessageSystemReady,A.GetBrowseResults,A.HasFullBrowseResults,A.RequestMoreBrowseResults,A.SendBrowseQuery,A.GetItemKeyInfo=unpack(saved)
  M.db.dailyLows,M.db.dailyLowsBase=oldLows,oldBase

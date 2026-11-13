@@ -251,6 +251,9 @@ function M:ShopVisibleRows()
    if f.maxPrice and not (r.floor and r.floor>0 and r.floor<=f.maxPrice) then keep=false end
    if f.minQuantity and not ((tonumber(r.quantity) or 0)>=f.minQuantity) then keep=false end
   end
+  -- The Level box filters every search result, saved prices included (it
+  -- used to apply only to live AH searches). Your own list items always show.
+  if keep and not self.shoppingListMode and not self.snipeView and r.itemID and self.LevelAllowed and not self:LevelAllowed(r.itemID) then keep=false end
   if keep then out[#out+1]=r end
  end
  local s=self.shopSort or {field='price',dir=1};local key=SORT[s.field] or SORT.price
@@ -547,7 +550,7 @@ function M:RenderShopScreen()
    r.sel:SetShown(self.selectedRow==o or (self.selectedRow and self.selectedRow.marketKey==o.marketKey))
    r.icon:SetTexture(self:RowItemIcon(o,o.itemID) or 'Interface\\Icons\\INV_Misc_QuestionMark')
    local price=o.floor and o.floor>0 and self:Coins(o.floor) or (o.status=='NONE' and DIM..'None listed|r' or DIM..'Unknown|r')
-   if type(o.name)~='string' or o.name:match('^Item %d+$') then o.name=self:ItemName(o.itemID) or o.name end
+   if type(o.name)~='string' or o.name=='' or o.name:match('^Item %d+$') then o.name=self:ItemName(o.itemID) or ((type(o.name)=='string' and o.name~='') and o.name) or ('Item '..tostring(o.itemID)) end
    r.c[1]:SetText(price);r.c[2]:SetText(o.name or '?')
    r.c[3]:SetText(o.quantity and tostring(o.quantity) or '--')
    r.c[4]:SetText(self:DealText(o))
@@ -569,7 +572,7 @@ function M:RenderShopScreen()
    or 'Type an item name and press Enter, or open a shopping list on the left.'
  end
  s.empty:SetText(empty);s.empty:SetShown(empty~='')
- local status=(self.ListSearchStatus and self:ListSearchStatus()) or (self.TermSearchStatus and self:TermSearchStatus())
+ local status=(self.snipeView and self.SnipeStatus and self:SnipeStatus()) or (self.ListSearchStatus and self:ListSearchStatus()) or (self.TermSearchStatus and self:TermSearchStatus())
  if not status and #source>0 then
   status=#source..' result'..(#source==1 and '' or 's')
   if self.shoppingListMode then status=status..'  |  List: '..(self.activeList or 'Shopping') end

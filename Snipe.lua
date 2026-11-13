@@ -3,8 +3,9 @@ local _,M=...
 -- Re-reads the whole Auction House over and over with an empty browse search
 -- (one lowest price per item, not the 15-minute full scan) and flags any item
 -- listed far under its own 30-day price: a fat-fingered or misposted listing.
---  * Only items with real history count: this exact suffix's 30-day median
---    (DealReference, never the all-suffixes estimate), so new items never fire.
+--  * Reference = the LOWER of this exact suffix's 30-day average (never the
+--    all-suffixes estimate) and its newest full scan, which must be under 6
+--    hours old (yours or Bank's). No recent scan = never fires.
 --  * A hit needs both: price <= snipe % of average AND a resale gain (after the
 --    5% AH cut) of at least the minimum gain. Defaults 50% and 50s.
 --  * New hits chime, print in chat and list under Shopping > Snipe Hits.
@@ -29,11 +30,33 @@ local function state(self)
  return self.snipe
 end
 
+M.SNIPE_SCAN_AGE=6*3600
+-- What the item sells for now: the newest full-scan price (this account's
+-- bait-resistant floor, or the synced Bank price), if it is recent.
+function M:SnipeCurrentPrice(key)
+ local best,at
+ local m=self.db.market[key]
+ if type(m)=='table' and type(m.latest)=='table' and not m.cacheUntrusted and not m.analysisIncomplete then
+  local v=tonumber(m.latest.meaningfulFloor) or tonumber(m.latest.floor)
+  if self:Finite(v,1,1e12) and self:Finite(m.lastSeen,time()-self.SNIPE_SCAN_AGE,time()+60) then best,at=v,m.lastSeen end
+ end
+ local p=self.db.sharedPrices and self.db.sharedPrices[key]
+ if type(p)=='table' and self:Finite(p.floor,1,1e12) and self:Finite(p.at,time()-self.SNIPE_SCAN_AGE,time()+60) and (not at or p.at>at) then best=p.floor end
+ return best
+end
 -- Is this lowest price a mispost? Returns the hit row or nil.
 function M:SnipeCheck(key,itemID,floor,quantity,name)
  if key==nil or not self:Finite(floor,1,1e12) then return nil end
- local ref,samples,approx=self:DealReference(key)
- if not ref or approx or ref<=floor then return nil end
+ local month,samples,approx=self:DealReference(key)
+ if not month or approx then return nil end
+ -- Prices move fast (a new server's prices fall for weeks), so a 30-day
+ -- average alone calls half the AH a mispost. Also require a full scan from
+ -- the last few hours (this account's or Bank's) and use the lower of the two:
+ -- a mispost is far under what the item sells for now, not last week.
+ local now=self:SnipeCurrentPrice(key)
+ if not now then return nil end
+ local ref=math.min(month,now)
+ if ref<=floor then return nil end
  local pct=floor/ref*100
  if pct>self:SnipePercent() then return nil end
  local gain=math.floor(ref*(1-(self.db.settings.ahCut or 0.05)))-floor
@@ -49,8 +72,8 @@ function M:SnipeAlert(hit)
  s.alerted[hit.marketKey]=hit.floor
  for i=#s.hits,1,-1 do if s.hits[i].marketKey==hit.marketKey then table.remove(s.hits,i) end end
  table.insert(s.hits,1,hit);while #s.hits>MAX_HITS do table.remove(s.hits) end
- if self.db.settings.snipeSound~=false and self.PlaySaleSound then pcall(self.PlaySaleSound,self) end
- local text=('|cff40ff40MISPOST|r %s at %s - average %s (%d%%), about +%s. Shopping > Snipe Hits to buy.')
+ if self.db.settings.snipeSound~=false and self.PlaySaleSound and GetTime()>=(s.chimeAt or 0) then s.chimeAt=GetTime()+15;pcall(self.PlaySaleSound,self) end
+ local text=('|cff40ff40MISPOST|r %s at %s - normally %s (%d%%), about +%s. Shopping > Snipe Hits to buy.')
   :format(hit.name,self:Coins(hit.floor),self:Coins(hit.ref),hit.pct,self:Coins(hit.gain))
  self:Print(text)
  if UIErrorsFrame and UIErrorsFrame.AddMessage then pcall(UIErrorsFrame.AddMessage,UIErrorsFrame,'Mispost: '..hit.name..' '..hit.pct..'%',0.25,1,0.25) end
@@ -109,7 +132,7 @@ function M:SnipeTick()
       local old=s.alerted[key]
       if not old or b.minPrice<old then
        local info=C_AuctionHouse.GetItemKeyInfo and C_AuctionHouse.GetItemKeyInfo(k)
-       local hit=self:SnipeCheck(key,k.itemID,b.minPrice,b.totalQuantity,type(info)=='table' and info.itemName or nil)
+       local hit=self:SnipeCheck(key,k.itemID,b.minPrice,b.totalQuantity,self:KeyInfoName(info))
        if hit then self:SnipeAlert(hit) end
       end
      end
@@ -202,11 +225,6 @@ local origRows=M.ShoppingResultRows
 function M:ShoppingResultRows()
  if self.snipeView then return self:SnipeRows() end
  return origRows(self)
-end
-local origStatus=M.ListSearchStatus
-function M:ListSearchStatus()
- if self.snipeView then return self:SnipeStatus() end
- return origStatus and origStatus(self)
 end
 
 -- /vmm snipe ...

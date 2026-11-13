@@ -353,6 +353,10 @@ end)
 -- The receiving account may never have seen an item, so the client has no name
 -- for it and a name search would miss it. Names are requested slowly in the
 -- background and remembered; a pending name search refreshes when they arrive.
+-- Name from C_AuctionHouse.GetItemKeyInfo; the AH answers '' until the item loads.
+function M:KeyInfoName(info)
+ if type(info)=='table' and type(info.itemName)=='string' and info.itemName~='' then return info.itemName end
+end
 function M:ItemName(id)
  id=tonumber(id);if not id then return end
  local info=C_Item and C_Item.GetItemNameByID or GetItemInfo

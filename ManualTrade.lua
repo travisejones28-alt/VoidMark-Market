@@ -44,7 +44,7 @@ function M:LiveNameSearch(text)
    if key and (not self.LevelAllowed or self:LevelAllowed(k.itemID)) then
     if self.RecordLiveFloor then self:RecordLiveFloor(key,b.minPrice,b.totalQuantity) end
     local m=self.db.market[key];local info=C_AuctionHouse.GetItemKeyInfo and C_AuctionHouse.GetItemKeyInfo(k)
-    out[#out+1]={marketKey=key,itemID=k.itemID,name=(info and info.itemName) or (m and m.name) or ('Item '..k.itemID),
+    out[#out+1]={marketKey=key,itemID=k.itemID,name=self:KeyInfoName(info) or (m and m.name) or self:ItemName(k.itemID) or ('Item '..k.itemID),
      floor=b.minPrice or 0,quantity=tonumber(b.totalQuantity),fair=m and m.fairValue or 0,modelReady=self:CanEstimateResale(m),confidence=m and m.confidence or 'Unknown',status='LIVE BROWSE'}
    end
   end

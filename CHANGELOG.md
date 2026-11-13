@@ -1,3 +1,11 @@
+## 1.23.1 — sniper false alarms
+- **Far fewer false hits.** 1.23.0 compared listings only with the 30-day average. Forever prices are still falling, so whole markets (850 Fel Leather "at 23%") looked like misposts. The sniper now uses the **lower** of the 30-day average and the newest full scan (yours or Bank's, synced), and that scan must be under 6 hours old. No recent scan = the item never fires.
+- The chime plays at most once every 15 seconds.
+- The sniper's status stays on the Shopping status line; the top line shows the scan timer again.
+- **Level box** now filters saved-price results too, not only live AH searches. Your own list items and snipe hits always show.
+- Rows no longer show a blank name when the AH hasn't loaded an item's name yet.
+- 285 regressions.
+
 ## 1.23.0 — mispost sniper
 - **Snipe** (Shopping tab, top right, or `/vmm snipe`). While the AH is open it re-reads the whole Auction House again and again (one lowest price per item, the quick browse read, not the 15-minute full scan) and flags anything listed far under its own 30-day price: a misposted or fat-fingered listing.
   - A hit needs **both**: price at **50% of average or less**, and **50s or more** gain after the 5% AH cut. Change them with `/vmm snipe pct 40` and `/vmm snipe min 1g`.

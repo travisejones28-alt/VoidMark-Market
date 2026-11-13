@@ -333,7 +333,7 @@ function M:SearchShopTerms(list,onlyTerm)
        and not (info and spec.exact and type(info.itemName)=='string' and info.itemName:lower()~=text:lower())
       if keep and (not old or b.minPrice<old.floor) and itemMatches(k.itemID,spec) and not (max and b.minPrice>max) and self:LevelAllowed(k.itemID,spec) then
        local m=self.db.market[key];info=info or (C_AuctionHouse.GetItemKeyInfo and C_AuctionHouse.GetItemKeyInfo(k))
-       local row={marketKey=key,itemID=k.itemID,name=(info and info.itemName) or (m and m.name) or self:ItemName(k.itemID) or ('Item '..k.itemID),
+       local row={marketKey=key,itemID=k.itemID,name=self:KeyInfoName(info) or (m and m.name) or self:ItemName(k.itemID) or ('Item '..k.itemID),
         floor=b.minPrice,quantity=tonumber(b.totalQuantity),fair=m and m.fairValue or 0,
         confidence=m and m.confidence or 'Unknown',status='LIVE BROWSE',term=term}
        if not old then run.rows[#run.rows+1]=row;run.found=run.found+1 else for j,r in ipairs(run.rows) do if r==old then run.rows[j]=row end end end
