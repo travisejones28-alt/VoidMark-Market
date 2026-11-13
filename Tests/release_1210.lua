@@ -825,4 +825,37 @@ check('1.23.11 Selling price check jumps a sniper page in flight; the sniper wai
  M.ahOpen,M.SendAHRequest,M.ThrottleReady=saved[1],saved[2],saved[3]
  q.waiting={};q.dedupe={};q.active=nil;assert(ok,err)
 end)
+
+check('1.23.12 Buy page lists your own listing too (marked, not buyable), like the AH',function()
+ local oldSearch,oldOpen=M.Search,M.ahOpen;M.ahOpen=true
+ M.Search=function(_,m,p,done) done({commodity=false,rows={{unit=900,total=900,quantity=1,auctionID=5}},
+   all={{unit=900,quantity=1,own=false},{unit=1500,quantity=1,own=true}}});return true end
+ local ok,err=pcall(function()
+  M.view='shopping';M:ShopBuyClose();M:ShopBuyOpen({marketKey=M:Key(15600,1033,23),name="Outrunner's Cuffs of Strength"})
+  M:RefreshUI();if M.RenderShopBuy then M:RenderShopBuy() end
+  local v=M.shopScreen.buyView;local r1,r2=v.rows[1],v.rows[2]
+  assert(r1:IsShown() and r1.c[1]:GetText()==M:Coins(900) and r1.buyIndex==1,'other seller first, buyable')
+  assert(r2:IsShown() and r2.c[2]:GetText():find('yours',1,true) and rawget(r2,'buyIndex')==nil,'your own listing shown, not buyable')
+  -- Only your own listing up: nothing to buy, but you see it.
+  M.Search=function(_,m,p,done) done({commodity=false,rows={},all={{unit=1500,quantity=1,own=true}}});return true end
+  M:ShopBuyRefresh();M:RenderShopBuy()
+  assert(v.rows[1]:IsShown() and rawget(v.rows[1],'buyIndex')==nil and M.shopBuy.status:find('Only your own',1,true))
+ end)
+ M:ShopBuyClose();M.Search,M.ahOpen=oldSearch,oldOpen;M.view=nil;assert(ok,err)
+end)
+
+check('1.23.12 Listings: a stack of Rosecap shows its real price each (not divided by the stack)',function()
+ local A=C_AuctionHouse;local saved={A.GetOwnedAuctions,A.GetItemKeyInfo}
+ A.GetOwnedAuctions=function() return {
+  {auctionID=1,itemKey={itemID=2452,itemSuffix=0,itemLevel=0,battlePetSpeciesID=0},quantity=3,buyoutAmount=1589,status=0},
+  {auctionID=2,itemKey={itemID=15600,itemSuffix=1033,itemLevel=23,battlePetSpeciesID=0},quantity=1,buyoutAmount=1500,status=0}} end
+ A.GetItemKeyInfo=function(k) return {isCommodity=k.itemID==2452,itemName=k.itemID==2452 and 'Rosecap' or "Outrunner's Cuffs of Strength"} end
+ local ok,err=pcall(function()
+  M:CaptureOwnedAuctions();jobs()
+  local by={};for _,o in ipairs(M.ownedRows) do by[o.auctionID]=o end
+  assert(by[1].unit==1589,'Rosecap each: '..tostring(by[1].unit))
+  assert(by[2].unit==1500,'cuffs: '..tostring(by[2].unit))
+ end)
+ A.GetOwnedAuctions,A.GetItemKeyInfo=saved[1],saved[2];M.ownedRows=nil;M.db.keyNames=nil;assert(ok,err)
+end)
 end

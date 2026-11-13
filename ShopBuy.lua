@@ -55,7 +55,15 @@ function M:ShopBuyRefresh()
    if b.max>0 then b.quantity=math.max(1,math.min(b.quantity or 1,b.max)) end
   else b.pick=1 end
   b.offset=0
-  b.status=#b.rows==0 and 'None available to buy right now.' or nil
+  -- What you see: every listing, like the AH's own list. Yours are shown
+  -- (marked, not buyable) so you can see where you stand against an undercut.
+  b.view={}
+  for i,r in ipairs(b.rows) do b.view[#b.view+1]={row=r,index=i,unit=r.unit} end
+  for _,a in ipairs(result.all or {}) do
+   if a.own then b.view[#b.view+1]={mine=true,unit=a.unit,quantity=a.quantity} end
+  end
+  table.sort(b.view,function(x,y) if x.unit==y.unit then return (x.index or 1e9)<(y.index or 1e9) end return x.unit<y.unit end)
+  b.status=#b.rows==0 and (#b.view>0 and 'Only your own listing is up - nothing to buy.' or 'None available to buy right now.') or nil
   self:RefreshUI()
  end,function(err)
   if self.shopBuy~=b or b.token~=token then return end
@@ -268,14 +276,15 @@ function M:InitializeShopBuyView(s)
   r:SetHighlightTexture('Interface\\QuestFrame\\UI-QuestTitleHighlight')
   r.sel=r:CreateTexture(nil,'BACKGROUND');r.sel:SetAllPoints();r.sel:SetColorTexture(.32,.15,.5,.55)
   r.c={label(r,'',6,-6,138,'GameFontHighlight'),label(r,'',144,-6,124,'GameFontHighlight'),label(r,'',274,-6,100,'GameFontHighlight')}
-  r:SetScript('OnClick',function(f) if f.index then self:ShopBuyPickRow(f.index) end end)
-  r:SetScript('OnDoubleClick',function(f) if f.index then self:ShopBuyPickRow(f.index);self:ShopBuyNow() end end)
+  r:SetScript('OnClick',function(f) if f.buyIndex then self:ShopBuyPickRow(f.buyIndex) end end)
+  r:SetScript('OnDoubleClick',function(f) if f.buyIndex then self:ShopBuyPickRow(f.buyIndex);self:ShopBuyNow() end end)
   v.rows[i]=r
  end
  list:EnableMouseWheel(true)
  list:SetScript('OnMouseWheel',function(_,d)
   local b=self.shopBuy;if not b or not b.rows then return end
-  b.offset=math.max(0,math.min(math.max(0,#b.rows-ROWS),(b.offset or 0)-(d>0 and 3 or -3)));self:RefreshUI()
+  local n=#(b.view or b.rows)
+  b.offset=math.max(0,math.min(math.max(0,n-ROWS),(b.offset or 0)-(d>0 and 3 or -3)));self:RefreshUI()
  end)
  v.empty=label(list,'',12,-180,374,'GameFontHighlight');v.empty:SetJustifyH('CENTER')
 end
@@ -303,12 +312,22 @@ function M:RenderShopBuy()
  local unit,total=self:ShopBuyPrices(b)
  v.unit:SetText(unit and self:Coins(unit) or '--');v.total:SetText(total and self:Coins(total) or '--')
  local rows=b.rows or {}
- local off=math.max(0,math.min(b.offset or 0,math.max(0,#rows-ROWS)));b.offset=off
+ local view=b.view;if not view then view={};for i,r in ipairs(rows) do view[i]={row=r,index=i,unit=r.unit} end end
+ local off=math.max(0,math.min(b.offset or 0,math.max(0,#view-ROWS)));b.offset=off
  local running=0;local before={}
- for i,r in ipairs(rows) do before[i]=running;running=running+r.quantity;if i>=off+ROWS then break end end
+ for i,r in ipairs(rows) do before[i]=running;running=running+r.quantity end
  for i,r in ipairs(v.rows) do
-  local idx=i+off;local o=rows[idx];r.index=o and idx or nil;r:SetShown(o~=nil)
-  if o then
+  local e=view[i+off];r:SetShown(e~=nil)
+  r.buyIndex=e and e.index or nil
+  if e and e.mine then
+   -- Your own listing: shown for comparison, can't be bought.
+   r.sel:SetShown(false)
+   local total=(e.unit or 0)*(com and 1 or (e.quantity or 1))
+   r.c[1]:SetText('|cff8f8f8f'..self:Coins(com and e.unit or total)..'|r')
+   r.c[2]:SetText('|cffc8a0ff(yours)|r')
+   r.c[3]:SetText('|cff8f8f8f'..tostring(e.quantity or 1)..'|r')
+  elseif e then
+   local o,idx=e.row,e.index
    local selected=com and (before[idx] or 0)<(b.quantity or 0) or (not com and (b.pick or 1)==idx)
    r.sel:SetShown(selected and true or false)
    if com then
@@ -319,8 +338,8 @@ function M:RenderShopBuy()
    r.c[3]:SetText(tostring(o.quantity))
   end
  end
- v.empty:SetText(#rows==0 and (b.searching and (self:SearchWaitText() or 'Searching...') or (b.status or '')) or '')
- v.empty:SetShown(#rows==0)
+ v.empty:SetText(#view==0 and (b.searching and (self:SearchWaitText() or 'Searching...') or (b.status or '')) or '')
+ v.empty:SetShown(#view==0)
  local ok,lines=self:ShopBuyCheck(b)
  v.buyNow:SetEnabled(ok and true or false)
  v.refresh:SetEnabled(self.ahOpen and not b.searching and true or false)

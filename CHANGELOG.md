@@ -1,3 +1,8 @@
+## 1.23.12
+- **Listings: stack prices are right.** For stackables the AH already gives your price per item, and Market divided it by the stack again. So 3 Rosecap at 15s 89c each showed as 5s 29c and "LOWEST" while 1,000+ were cheaper. Fixed. This also fixes "Listed (if all sell)", undercut checks and sale banners for stacks.
+- **Buy page shows your own listing too**, greyed and marked "(yours)", in price order, like the AH's own list. It can't be bought. If only yours is up, it says so.
+- 300 regressions.
+
 ## 1.23.11
 - **Selling price checks start right away.** Clicking an item to sell no longer waits behind a sniper page, a background price check or a search-term page already in flight. Those go back in line and your price check goes first, like buy pages since 1.22.15.
 - The sniper doesn't start a new round for 15 seconds after you search, click an item to sell or check listings, or while a price check is running. Its extra pages now come after anything you click.

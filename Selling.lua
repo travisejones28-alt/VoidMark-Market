@@ -86,7 +86,14 @@ function M:CaptureOwnedAuctions()
       if type(info)=='table' and type(info.itemKey)=='table' then
         local key=self:Key(info.itemKey.itemID,info.itemKey.itemSuffix,info.itemKey.itemLevel,info.itemKey.battlePetSpeciesID)
         local m=self.db.market[key]; local qty=tonumber(info.quantity) or 1
-        local unit=tonumber(info.unitPrice) or (tonumber(info.buyoutAmount) or 0)/math.max(1,qty)
+        -- Stackables (commodities): the AH gives the price per item already;
+        -- dividing by the quantity again made 3 Rosecap at 15s 89c look like
+        -- 5s 29c ("LOWEST" while undercut). Gear: the buyout is for the auction.
+        local unit=tonumber(info.unitPrice)
+        if not unit then
+          local buyout=tonumber(info.buyoutAmount) or 0
+          unit=self:IsCommodity(info.itemKey)==true and buyout or buyout/math.max(1,qty)
+        end
         rows[#rows+1]={auctionID=info.auctionID,itemKey=info.itemKey,itemID=info.itemKey.itemID,marketKey=key,name=self:OwnedAuctionName(key,m,info),quantity=qty,
           unit=unit,timeLeft=info.timeLeftSeconds or info.timeLeft,status=info.status,action='INSPECT',deposit=info.depositAmount,
           floor=m and m.latest and m.latest.meaningfulFloor,reason='Snapshot comparison only; refresh item before deciding'}
