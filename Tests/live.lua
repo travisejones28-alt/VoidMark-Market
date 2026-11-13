@@ -94,7 +94,11 @@ check('Ungrouped accounts resume lost data and ACKs after reload; unchanged floo
  selectClient('Main');assert(updates>0 and M.db.sharedPrices[65].at==m.lastSeen and M:ListBook('Mats')[65].target==150)
  local rx=M.db.shareReceived['bank-testrealm'];assert(rx.seq>seq)
  local bad=M.economyID..'\tD\t'..rx.epoch..'\t'..rx.seq..'\t'..(rx.seq+1)..'\tP,65,'..time()..',1,0;broken'
- local cursor=rx.seq;M:ReceiveSharing('VMMkt2',bad,'PARTY','Bank-TestRealm');assert(rx.seq==cursor)
+ -- 1.22.24: a bad row is skipped; the rest of the page applies and the transfer moves on.
+ local cursor=rx.seq;local skipped=M.db.syncSkippedRows or 0
+ M:ReceiveSharing('VMMkt2',bad,'PARTY','Bank-TestRealm');assert(rx.seq==cursor+1 and (M.db.syncSkippedRows or 0)==skipped+1)
+ rx.seq=cursor -- that page was made up by the test; the real sender hasn't produced it
+ bad=M.economyID..'\tD\t'..rx.epoch..'\t'..rx.seq..'\t'..(rx.seq+1)..'\tP,65,'..time()..',1,0;broken'
  M:ReceiveSharing('VMMkt2',bad:gsub(';broken',''),'PARTY','Stranger-TestRealm');assert(rx.seq==cursor)
  M:ReceiveSharing('VMMkt2',bad:gsub(';broken',''):gsub('Horde','Alliance'),'PARTY','Bank-TestRealm');assert(rx.seq==cursor)
  selectClient('Bank');assert(M:RemoveWatch(65));for i=1,25 do step() end

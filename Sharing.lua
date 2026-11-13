@@ -184,10 +184,16 @@ function M:PublishWatch(list,key,entry)
  self.db.shoppingEdits[index]={at=at,author=author}
  self:Journal('W'..index,line)
 end
+-- Times saved while a PC clock ran ahead are in the future. They used to make
+-- the row invalid, so the page was never confirmed and the transfer stuck
+-- (e.g. "sending 90%" forever). Accept them, pulled back to now.
+local FUTURE=20*365*86400
+local function past(v) local now=time();if type(v)=='number' and v>now then return now end;return v end
 local function decode(self,line)
  local f=fields(line,',')
  if f[1]=='P' and (#f==5 or #f==6) then
   local key,id,s,l,p=self:ParseKey(f[2]);local at,floor,fair=tonumber(f[3]),tonumber(f[4]),tonumber(f[5])
+  at=whole(at,1,time()+FUTURE) and past(at) or at
   local confidence=#f==6 and tonumber(f[6]) or nil
   if key and whole(at,1,time()+60) and whole(floor,1,1e12) and whole(fair,0,1e12)
     and (confidence==nil and #f==5 or whole(confidence,0,100)) then
@@ -195,9 +201,12 @@ local function decode(self,line)
   end
  elseif f[1]=='U' and #f==4 then
   local key=self:ParseKey(f[2]);local base,at=tonumber(f[3]),tonumber(f[4])
+  base=whole(base,1,time()+FUTURE) and past(base) or base;at=whole(at,1,time()+FUTURE) and past(at) or at
+  if base and at and at<base then at=base end
   if key and whole(base,1,time()+60) and whole(at,base,time()+60) then return {kind='U',key=key,base=base,at=at} end
  elseif f[1]=='W' and #f==6 then
   local list=dec(f[2]);local key,id=self:ParseKey(f[3]);local at,target=tonumber(f[4]),tonumber(f[5]);local author=dec(f[6])
+  at=whole(at,1,time()+FUTURE) and past(at) or at
   if key and validText(list,24) and validText(author,48) and whole(at,1,time()+300) and whole(target,-1,1e12) then
    return {kind='W',key=key,id=id,list=list,at=at,target=target,author=author}
   end
@@ -630,7 +639,9 @@ function M:ReceiveSharing(prefix,msg,ch,sender)
   if lo<rx.seq then ack();return end -- already have it
   local staged={}
   if f[7]~='' then for _,line in ipairs(fields(f[7],';')) do
-   local raw=unpackRow(line,base);local p=raw and decode(self,raw);if not p then return end;staged[#staged+1]=p
+   -- One unreadable row must not stall the whole transfer: skip it.
+   local raw=unpackRow(line,base);local p=raw and decode(self,raw)
+   if p then staged[#staged+1]=p else self.db.syncSkippedRows=(self.db.syncSkippedRows or 0)+1 end
   end end
   r.buf=r.buf or {}
   if lo>rx.seq then
@@ -656,7 +667,8 @@ function M:ReceiveSharing(prefix,msg,ch,sender)
   if lo~=rx.seq then ack();return end
   local staged={}
   if f[6]~='' then for _,line in ipairs(fields(f[6],';')) do
-   local p=decode(self,line);if not p then return end;staged[#staged+1]=p
+   local p=decode(self,line)
+   if p then staged[#staged+1]=p else self.db.syncSkippedRows=(self.db.syncSkippedRows or 0)+1 end
   end end
   for _,p in ipairs(staged) do if not apply(self,p) then r.status='Shopping list limit reached; transfer paused';self:RefreshUI();return end end
   r.lastContact=GetTime();r.offlineUntil=nil;rx.seq=hi;self.db.syncLastReceivedAt=time();ack()

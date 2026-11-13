@@ -61,6 +61,8 @@ function M:InitializeDatabase()
     self:PruneDatabase(function() db.historyFormat=2 end)
   end
   if self.InitializeCrafting then self:InitializeCrafting() end
+  -- Times saved while the PC clock was ahead: pull them back (background, every login).
+  if not self.persistenceBlocked then self:RepairFutureTimes() end
   -- Pending spend is persistent. Reload/close never changes an uncertain purchase to failed.
   for _,p in pairs(db.pending) do
     if type(p)=='table' then
@@ -111,4 +113,32 @@ function M:PruneDatabase(done)
       if debugprofilestop()-start>=self.budget then return false end
     end
   end,done)
+end
+
+-- Saved times in the future (PC clock was ahead for a while) make prices look
+-- newer than they are, stop sync pages from being accepted, and confuse
+-- "last seen" ages. Walk the saved data in the background and pull any
+-- 'at' / 'lastSeen' / '...At' time that's ahead of now back to now.
+-- '...Until' fields (guards that are meant to be in the future) are left alone.
+local function timeKey(k)
+  if type(k)~='string' then return false end
+  if k=='at' or k=='lastSeen' or k=='firstSeen' then return true end
+  return k:sub(-2)=='At' and not k:find('Until',1,true)
+end
+function M:RepairFutureTimes(done)
+  local now=time();local limit=now+300;local far=now+20*365*86400
+  local stack={self.db};local seen={};local fixed=0
+  self:AddJob('futuretimes',function(start)
+    while true do
+      local t=table.remove(stack);if t==nil then return true end
+      if not seen[t] then
+        seen[t]=true
+        for k,v in pairs(t) do
+          if type(v)=='table' then stack[#stack+1]=v
+          elseif type(v)=='number' and v>limit and v<=far and timeKey(k) then t[k]=now;fixed=fixed+1 end
+        end
+      end
+      if debugprofilestop()-start>=self.budget then return false end
+    end
+  end,function() self.db.futureTimesFixed=(self.db.futureTimesFixed or 0)+fixed;if done then done(fixed) end end)
 end

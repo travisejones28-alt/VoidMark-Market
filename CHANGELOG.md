@@ -1,3 +1,10 @@
+## 1.22.24
+- **Bank sync no longer gets stuck ("sending 90%").** Prices saved while the PC clock was ahead had times in the future. The receiving character refused the page holding them and never confirmed it, so the bank resent it forever and the main's prices went stale ("last seen 9h ago").
+  - Future times in synced pages are pulled back to now and accepted.
+  - One unreadable row is skipped; the rest of its page applies and the transfer moves on.
+  - At login, saved times that are ahead of now (prices, history, Flip Ledger, sync stamps) are pulled back to now in the background. Guards meant for the future ("...Until") are left alone.
+- 290 regressions.
+
 ## 1.23.3
 - **Full scan blocked for hours ("Next scan in 846m").** The last scan time was saved in the future, most likely while the PC clock was wrong (new PC). A future time is now ignored, so the 15-minute timer works again.
 - The empty Hits view explains what the sniper looks for and that 0 hits is normal.

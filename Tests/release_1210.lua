@@ -637,4 +637,37 @@ check('1.22.23 Sale at login: the saved listing gives the price even though this
  a=M:BuildSaleAlert('Pagan Belt of Intellect');assert(a.gross==1300,tostring(a.gross))
  M.db.ownedSnapshot=nil;M.saleClaimed={}
 end)
+
+check('1.22.24 Sync never sticks on a page with future times or a bad row (PC clock was ahead)',function()
+ reset();M:PairPeer('Bank');local peer='Bank-TestRealm';local epoch='8-88'
+ M:ReceiveSharing('VMMkt2','TestRealm|Horde\tH\t'..epoch,'WHISPER',peer)
+ local base=time()-8000000;local b=P.b62(base);local h='#'..P.hash(M.economyID)
+ local rx=M.db.shareReceived[M.db.syncPeer]
+ -- A price saved 9 hours "in the future".
+ local future=time()+9*3600
+ M:ReceiveSharing('VMMkt2',h..'\tE\t'..epoch..'\t0\t1\t'..b..'\t'..P.pack('P,9401,'..future..',650,0,0',base),'WHISPER',peer)
+ assert(rx.seq==1,'page accepted: '..rx.seq)
+ assert(M.db.sharedPrices[9401] and M.db.sharedPrices[9401].floor==650 and M.db.sharedPrices[9401].at<=time(),'time pulled back to now')
+ -- A page with one unreadable row still applies the rest and moves on.
+ M:ReceiveSharing('VMMkt2',h..'\tE\t'..epoch..'\t1\t3\t'..b..'\t'..P.pack('P,9402,'..time()..',700,0,0',base)..';garbage','WHISPER',peer)
+ assert(rx.seq==3 and M.db.sharedPrices[9402].floor==700,'advanced past the bad row: '..rx.seq)
+ assert(M.shareRun.reply:find('Q\t'..epoch..'\t3',1,true))
+ -- Old plain pages too.
+ M:ReceiveSharing('VMMkt2','TestRealm|Horde\tD\t'..epoch..'\t3\t4\tP,9403,'..future..',800,0','WHISPER',peer)
+ assert(rx.seq==4 and M.db.sharedPrices[9403].floor==800)
+end)
+
+check('1.22.24 Saved future times are pulled back at login; guards meant for the future are kept',function()
+ local now=time();local key=M:Key(99001)
+ M.db.market[key]={itemID=99001,marketKey=key,name='Test',lastSeen=now+50000,latest={floor=5,at=now+50000},history={{at=now+50000,floor=5}}}
+ M.db.flips={{id=1,name='X',at=now+40000,cost=1,qty=1,sold=1,soldAt=now+40000}}
+ M.db.quoteGuardUntil=now+100;M.db.syncLastReceivedAt=now+90000
+ local fixed;M:RepairFutureTimes(function(n) fixed=n end);jobs()
+ local m=M.db.market[key]
+ assert(m.lastSeen<=now and m.latest.at<=now and m.history[1].at<=now,'market times fixed')
+ assert(M.db.flips[1].at<=now and M.db.flips[1].soldAt<=now and M.db.syncLastReceivedAt<=now)
+ assert(M.db.quoteGuardUntil==now+100,'Until guards untouched')
+ assert(fixed>=6,'fixed '..tostring(fixed))
+ M.db.market[key]=nil;M.db.flips={};M.db.quoteGuardUntil=nil
+end)
 end

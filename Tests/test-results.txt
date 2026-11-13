@@ -176,7 +176,7 @@ PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
 PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
 PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
-BENCH scan: 88 frames (1.5s at 60fps, 2.9s at 30fps), worst frame 12.5ms, cpu 0.82s | after:prune=3 after:share-scan=19 done=1 model=50 processing=15
+BENCH scan: 97 frames (1.6s at 60fps, 3.2s at 30fps), worst frame 13.5ms, cpu 0.97s | after:share-scan=20 done=1 model=57 processing=19
 PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.13 history stores only the fields it needs; latest keeps the full snapshot
 PASS 1.9.13 history saved by older versions is shrunk once at login without losing prices
@@ -274,6 +274,8 @@ PASS 1.22.22 Sweep: one matcher for item identity (names and keys)
 PASS 1.22.22 Sweep: a scan keeps one price per suffix; tooltip and Selling use the right one
 PASS 1.22.22 Sweep: what you paid, post history, Listings names and old buys all follow the exact suffix
 PASS 1.22.23 Sale at login: the saved listing gives the price even though this session has no listings loaded
+PASS 1.22.24 Sync never sticks on a page with future times or a bad row (PC clock was ahead)
+PASS 1.22.24 Saved future times are pulled back at login; guards meant for the future are kept
 PASS 1.23.0 Sniper flags a mispost under 50% of its own average with a real gain
 PASS 1.23.0 Sniper never trusts the all-suffixes estimate
 PASS 1.23.0 Sniper reads every page and saves nothing to prices or history
@@ -289,4 +291,4 @@ PASS 1.23.1 Sniper status stays on the Shopping line; the top scan line is untou
 PASS 1.23.2 Snipe settings are dropdowns on the Hits view: pick a line, the setting changes
 PASS 1.23.3 A scan time saved in the future (wrong PC clock) no longer blocks full scans
 PASS 1.23.3 Empty Hits view says what the sniper looks for
-ALL 288 TESTS PASSED
+ALL 290 TESTS PASSED
