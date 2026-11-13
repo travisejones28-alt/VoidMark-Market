@@ -679,4 +679,37 @@ check('1.22.25 Buy page says what its search is waiting for',function()
  q.active=nil;q.waiting={};M.ThrottleReady=function() return false end;assert(M:SearchWaitText():find('accept a search',1,true))
  q.active,q.waiting,M.ThrottleReady=oldA,oldW,oldT
 end)
+
+check('1.22.26 A full scan the server is slow to answer no longer blocks your searches',function()
+ local q=M.queue;q.waiting={};q.dedupe={};q.active=nil;q.lateReplicate=nil;q.nextSend=0
+ local oldOpen,oldSend,oldReady,oldCount=M.ahOpen,M.SendAHRequest,M.ThrottleReady,C_AuctionHouse.GetNumReplicateItems
+ M.ahOpen=true;M.ThrottleReady=function() return true end
+ local sent={};M.SendAHRequest=function(_,r) sent[#sent+1]=r.id end
+ local ok,err=pcall(function()
+  local got,failed
+  M:QueueRequest({id='replicate',kind='replicate',priority=5,diagnostic={events={},eventCount=0,replicateEvents=0,legacyEvents=0},done=function(n) got=n end,fail=function(e) failed=e end})
+  M:PumpQueue();assert(q.active and q.active.kind=='replicate')
+  local rep=q.active;rep.diagnostic.sentAt=time()
+  -- You open an item 3s later: still waiting for the scan.
+  advance(3);M:QueueRequest({id='search:x',kind='search',priority=90});M:PumpQueue();assert(q.active==rep)
+  -- After 10s the scan listens in the background and your search goes out.
+  advance(8);M:PumpQueue();assert(q.lateReplicate==rep and rep.background,'scan moved to the background')
+  q.nextSend=0;M:PumpQueue();assert(q.active and q.active.id=='search:x' and sent[#sent]=='search:x','search sent: '..tostring(sent[#sent]))
+  -- The server answers the scan later: it completes normally.
+  C_AuctionHouse.GetNumReplicateItems=function() return 1234 end;M.scanState.running=true
+  M:ObserveFullScanEvent('REPLICATE_ITEM_LIST_UPDATE')
+  assert(got==1234 and q.lateReplicate==nil and not failed,'scan completed: '..tostring(got))
+  assert(q.active and q.active.id=='search:x','your search untouched')
+  -- No answer at all: it times out at 180s like before and keeps listening late.
+  q.active=nil;q.dedupe={};got=nil
+  M:QueueRequest({id='replicate',kind='replicate',priority=5,diagnostic={events={},eventCount=0,replicateEvents=0,legacyEvents=0},done=function(n) got=n end,fail=function(e) failed=e end})
+  q.nextSend=0;M:PumpQueue();local rep2=q.active
+  M:QueueRequest({id='search:y',kind='search',priority=90});advance(11);M:PumpQueue()
+  assert(q.lateReplicate==rep2 and rep2.background)
+  advance(175);q.active=nil;M:PumpQueue();assert(failed and failed:find('180s',1,true),'timed out: '..tostring(failed))
+  assert(q.lateReplicate==rep2 and not rep2.background,'still listening for a late answer')
+ end)
+ M.scanState.running=false;M.ahOpen,M.SendAHRequest,M.ThrottleReady,C_AuctionHouse.GetNumReplicateItems=oldOpen,oldSend,oldReady,oldCount
+ q.waiting={};q.dedupe={};q.active=nil;q.lateReplicate=nil;assert(ok,err)
+end)
 end

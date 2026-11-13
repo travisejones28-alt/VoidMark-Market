@@ -1,3 +1,7 @@
+## 1.22.26
+- **A full scan the server doesn't answer no longer blocks everything for 3 minutes.** Forever sometimes never answers a full scan ("no replicate response after 180s"). Until now Market held every search and price check behind it for those 3 minutes. After 10 seconds without an answer, the scan now keeps listening in the background and your searches go right through. If the server answers later, the scan completes normally. If it never does, it reports the same 180s timeout as before.
+- 292 regressions.
+
 ## 1.22.25
 - **The automatic bank scan waits while you shop.** A full scan holds the AH until the server answers, so a buy page opened just as it started sat on "Searching..." for 20+ seconds. The scan no longer starts while a buy page is open, or within 2 minutes of shopping, selling or checking listings.
 - **Buy pages say what they're waiting for**, with a seconds count: "Waiting for the full scan to start (12s)", "Waiting for a search-term page", "Waiting for your auctions to load", "Waiting for the AH to answer (4s, try 2)" or "Waiting for the AH to accept a search".

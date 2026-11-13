@@ -79,9 +79,26 @@ function M:PumpQueue()
   local r=q.active
   -- Keep the buy page's "waiting for ... (Ns)" counting.
   if self.shopBuy and self.shopBuy.searching and GetTime()>=(self.shopWaitTick or 0) then self.shopWaitTick=GetTime()+1;self:RefreshUI() end
+  -- A full scan the server is slow to answer keeps listening in the background
+  -- (see below); time it out the same way it would have as the active request.
+  local late=q.lateReplicate
+  if late and late.background then
+    local elapsed=GetTime()-late.sent
+    if elapsed>=180 then
+      late.background=nil; q.dedupe[late.id]=nil
+      if not late.timedOut then late.timedOut=true; q.stats.timeouts=q.stats.timeouts+1 end
+      if late.fail then late.fail(self:FullScanTimeoutReason(late)) end
+    elseif elapsed>=late.timeout and not late.slowNoted then late.slowNoted=true; self:FullScanSlow(late) end
+  end
   if r and r.kind=='replicate' then
     local elapsed=GetTime()-r.sent
-    if elapsed>=180 then
+    -- Don't hold your searches hostage: after 10s with no answer, keep
+    -- listening for the scan in the background and let other requests run.
+    if elapsed>=10 and #q.waiting>0 then
+      r.background=true; q.lateReplicate=r; q.active=nil
+      if elapsed>=r.timeout then r.slowNoted=true end
+      self:RefreshUI(); r=nil
+    elseif elapsed>=180 then
       if not r.timedOut then r.timedOut=true; q.stats.timeouts=q.stats.timeouts+1 end
       q.lateReplicate=r -- keep correlation until AH close, cached analysis or a new full scan
       self:FinishRequest(r,false,self:FullScanTimeoutReason(r)); return
@@ -89,6 +106,8 @@ function M:PumpQueue()
       r.timedOut=true; q.stats.timeouts=q.stats.timeouts+1
       self:FullScanSlow(r)
     end
+  end
+  if r and r.kind=='replicate' then
   elseif r and GetTime()-r.at>90 then self:FinishRequest(r,false,'Request total deadline exceeded'); return
   elseif r and GetTime()-r.sent>(r.refreshed and not r.allowCached and not r.more and 5 or r.timeout) then
     q.stats.timeouts=q.stats.timeouts+1

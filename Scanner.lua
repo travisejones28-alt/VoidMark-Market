@@ -97,6 +97,9 @@ function M:ObserveFullScanEvent(event)
   if event~='REPLICATE_ITEM_LIST_UPDATE' or not r or not n or n==0 then return end
   d.responseAt=e.at; d.responseSeconds=e.elapsed; d.responseRows=n; d.phase='received'; d.error=nil
   if q.active==r then self:FinishRequest(r,true,n)
+  elseif q.lateReplicate==r and r.background then
+    -- Answered while listening in the background: a normal, on-time result.
+    q.lateReplicate=nil; q.dedupe[r.id]=nil; r.background=nil; if r.done then r.done(n) end
   elseif q.lateReplicate==r and not self.scanState.running then
     q.lateReplicate=nil; d.recoveredLate=true; if r.done then r.done(n) end
   end
