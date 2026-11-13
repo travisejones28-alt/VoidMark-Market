@@ -853,10 +853,26 @@ M:RegisterHandler('AUCTION_HOUSE_SHOW',function(self)
 end)
 
 -- Mail: buys, and items moved between your characters -------------------------
+-- Only gear (weapons and armor: boots, belts, cloaks...). Stackables like
+-- leather and cloth aren't tracked through the mail.
+function M:IsGearItem(name,link,itemID)
+ local instant=(C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+ if not instant then return false end
+ local id=tonumber(itemID) or (type(link)=='string' and tonumber(link:match('item:(%d+)')))
+ if not id and type(name)=='string' and self.UniqueMarketByName then
+  local key=self:UniqueMarketByName(name);local _,kid=self:ParseKey(key);id=kid
+ end
+ local probe=id or link or name
+ if not probe then return false end
+ local ok,_,_,_,equipLoc,_,classID=pcall(instant,probe)
+ if not ok then return false end
+ return (classID==2 or classID==4) and type(equipLoc)=='string' and equipLoc~='' and equipLoc~='INVTYPE_NON_EQUIP_IGNORE' and equipLoc~='INVTYPE_BAG'
+end
 -- "Auction won" invoice: record the buy unless Market already recorded it
 -- (Buy Now). Catches buys made in the normal AH UI or that never confirmed.
-function M:RecordMailBuy(name,qty,cost,at)
+function M:RecordMailBuy(name,qty,cost,at,itemID)
  if self.persistenceBlocked or type(name)~='string' or name=='' or not self:Finite(cost,1,1e14) then return nil end
+ if not self:IsGearItem(name,nil,itemID) then return nil end
  qty=tonumber(qty) or 1;if qty<1 then qty=1 end
  local now=tonumber(at) or time()
  for _,f in ipairs(self:FlipBook()) do
@@ -877,7 +893,8 @@ function M:CatchUpMailBuys()
  local added=0
  for _,e in ipairs(self.db.ledger) do
   if type(e)=='table' and e.kind=='mail won' and not e.flipRecorded and self:Finite(e.gross,1,1e14) then
-   local _,new=self:RecordMailBuy(e.name,e.quantity,e.gross,e.at);e.flipRecorded=true
+   local _,kid=self:ParseKey(e.marketKey)
+   local _,new=self:RecordMailBuy(e.name,e.quantity,e.gross,e.at,kid);e.flipRecorded=true
    if new then added=added+1 end
   end
  end
@@ -891,7 +908,11 @@ function M:CaptureOutgoingMail(recipient)
  if type(recipient)~='string' or recipient=='' or not GetSendMailItem then return end
  local items={}
  for i=1,(ATTACHMENTS_MAX_SEND or 12) do
-  local ok,name,_,_,count=pcall(GetSendMailItem,i)
+  local ok,name,itemID,_,count=pcall(GetSendMailItem,i)
+  if ok and type(name)=='string' and name~='' then
+   local link=GetSendMailItemLink and select(2,pcall(GetSendMailItemLink,i)) or nil
+   if not self:IsGearItem(name,type(link)=='string' and link or nil,itemID) then name=nil end
+  end
   if ok and type(name)=='string' and name~='' then
    local link=GetSendMailItemLink and select(2,pcall(GetSendMailItemLink,i)) or nil
    items[#items+1]={name=name,link=type(link)=='string' and link or nil,count=tonumber(count) or 1}
@@ -917,8 +938,9 @@ function M:RecordMailedOut(recipient,items)
 end
 -- Receiving mail from your synced partner: the item arrives with what the
 -- partner paid (from its synced buys), so selling it here shows real profit.
-function M:RecordMailedIn(sender,name,link,count)
+function M:RecordMailedIn(sender,name,link,count,itemID)
  if self.persistenceBlocked or type(name)~='string' or name=='' then return nil end
+ if not self:IsGearItem(name,link,itemID) then return nil end
  count=tonumber(count) or 1
  local b=self:PartnerBuyFor(link,nil,name);if not b or not b.cost then return nil end
  local unit=b.cost/math.max(1,b.qty or 1)

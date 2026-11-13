@@ -721,6 +721,7 @@ check('1.23.7 Sale banner shows the flip as a percentage of what you paid',funct
 end)
 
 check('1.23.8 Buys from "Auction won" mail; items mailed between your characters keep their price',function()
+ local oldGear=M.IsGearItem;M.IsGearItem=function(_,n) return not (n=='Silk Cloth' or n=='Heavy Leather') end
  M.db.flips={};M.db.partnerBuys=nil;local oldPeer=M.db.syncPeer;M.db.syncPeer='voidmark soulreaver-camwow'
  -- Bought with Market: the won mail matches it, no double.
  local f=M:RecordFlipBuy({name='Pagan Wraps of Intellect',quantity=1,cost=430})
@@ -742,10 +743,16 @@ check('1.23.8 Buys from "Auction won" mail; items mailed between your characters
  assert(M:HeldFlip('Pagan Wraps of Intellect')==r and M:FlipNumbers(r).status:find('from Voidmark Soulreaver',1,true))
  assert(M:FlipTotals('all').spent==0,'that gold was spent on the other character')
  M:RecordFlipSale('Pagan Wraps of Intellect',1,1000,50);assert(M:FlipNumbers(r).profit==520,'profit on the bank: '..tostring(M:FlipNumbers(r).profit))
+ -- Stackables (leather, cloth) aren't tracked through the mail.
+ local c=#M:FlipBook();assert(M:RecordMailBuy('Silk Cloth',20,2000)==nil and #M:FlipBook()==c)
+ M.db.partnerBuys={x={name='Heavy Leather',qty=5,cost=500,at=time(),char='Voidmark Soulreaver'}}
+ assert(M:RecordMailedIn('Voidmark Soulreaver','Heavy Leather',nil,5)==nil)
+ M.IsGearItem=oldGear
  M.db.flips={};M.db.partnerBuys=nil;M.db.ledger={};M.db.syncPeer=oldPeer
 end)
 
 check('1.23.8 Mailbox: won invoice and a mail from your main are read into the Flip Ledger once',function()
+ local oldGear=M.IsGearItem;M.IsGearItem=function() return true end
  M.db.flips={};M.db.mailSeen={};M.db.ledger={};local oldPeer=M.db.syncPeer;M.db.syncPeer='voidmark soulreaver-camwow'
  M.db.partnerBuys={['Voidmark Soulreaver-CAMWOW:9']={name='Greenweave Gloves of Healing',qty=1,cost=600,at=time(),char='Voidmark Soulreaver-CAMWOW'}}
  local saved={GetInboxNumItems,GetInboxHeaderInfo,GetInboxInvoiceInfo,GetInboxItem,GetInboxItemLink}
@@ -761,6 +768,23 @@ check('1.23.8 Mailbox: won invoice and a mail from your main are read into the F
   assert(#names==2 and names[1]=='Greenweave Gloves of Healing=600' and names[2]=="Outrunner's Cuffs of Strength=400",table.concat(names,', '))
  end)
  GetInboxNumItems,GetInboxHeaderInfo,GetInboxInvoiceInfo,GetInboxItem,GetInboxItemLink=saved[1],saved[2],saved[3],saved[4],saved[5]
+ M.IsGearItem=oldGear
  M.mailOpen=nil;M.db.flips={};M.db.partnerBuys=nil;M.db.ledger={};M.db.syncPeer=oldPeer;assert(ok,err)
+end)
+
+check('1.23.9 Gear check: weapons and armor yes, trade goods and bags no',function()
+ local old=C_Item;C_Item={GetItemInfoInstant=function(x)
+  local id=tonumber(x) or (type(x)=='string' and tonumber(x:match('item:(%d+)')))
+  if id==7406 then return id,'Armor','Cloth','INVTYPE_WAIST',0,4,1 end
+  if id==4304 then return id,'Trade Goods','Leather','',0,7,6 end
+  if id==4500 then return id,'Container','Bag','INVTYPE_BAG',0,1,0 end
+  if id==2000 then return id,'Weapon','Swords','INVTYPE_WEAPON',0,2,7 end
+ end}
+ local ok,err=pcall(function()
+  assert(M:IsGearItem('Pagan Belt of Intellect',nil,7406) and M:IsGearItem(nil,'|Hitem:2000::|h[x]|h'))
+  assert(not M:IsGearItem('Thick Leather',nil,4304) and not M:IsGearItem('Bag',nil,4500))
+  assert(not M:IsGearItem('Unknown Thing'),'unknown items are not tracked')
+ end)
+ C_Item=old;assert(ok,err)
 end)
 end

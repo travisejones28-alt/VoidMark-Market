@@ -176,7 +176,7 @@ PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
 PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
 PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
-BENCH scan: 120 frames (2.0s at 60fps, 4.0s at 30fps), worst frame 13.8ms, cpu 1.27s | after:share-scan=20 done=1 model=70 processing=29
+BENCH scan: 101 frames (1.7s at 60fps, 3.4s at 30fps), worst frame 12.5ms, cpu 1.00s | after:share-scan=22 done=1 model=61 processing=17
 PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.13 history stores only the fields it needs; latest keeps the full snapshot
 PASS 1.9.13 history saved by older versions is shrunk once at login without losing prices
@@ -281,6 +281,7 @@ PASS 1.22.26 A full scan the server is slow to answer no longer blocks your sear
 PASS 1.23.7 Sale banner shows the flip as a percentage of what you paid
 PASS 1.23.8 Buys from "Auction won" mail; items mailed between your characters keep their price
 PASS 1.23.8 Mailbox: won invoice and a mail from your main are read into the Flip Ledger once
+PASS 1.23.9 Gear check: weapons and armor yes, trade goods and bags no
 PASS 1.23.0 Sniper flags a mispost under 50% of its own average with a real gain
 PASS 1.23.0 Sniper never trusts the all-suffixes estimate
 PASS 1.23.0 Sniper reads every page and saves nothing to prices or history
@@ -296,4 +297,4 @@ PASS 1.23.1 Sniper status stays on the Shopping line; the top scan line is untou
 PASS 1.23.2 Snipe settings are dropdowns on the Hits view: pick a line, the setting changes
 PASS 1.23.3 A scan time saved in the future (wrong PC clock) no longer blocks full scans
 PASS 1.23.3 Empty Hits view says what the sniper looks for
-ALL 295 TESTS PASSED
+ALL 296 TESTS PASSED

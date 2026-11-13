@@ -1,3 +1,7 @@
+## 1.23.9
+- Mail tracking (won mail, mailing between your characters) is only for **gear**: weapons and armor like boots, belts, cloaks. Stackables like leather and cloth aren't tracked through the mail.
+- 296 regressions.
+
 ## 1.23.8 — mail tracking
 - **"Auction won" mail records the buy.** Anything you buy, in Market or the normal AH window, lands in the Flip Ledger when its mail shows up. Market's own Buy Now is matched, not doubled. Won mail Market saw before this update is added once at login.
 - **Mailing items between your characters.** Mail a flip to your bank and your main's Flip Ledger marks it "Mailed to Voidmark Bank" (no longer held there). When the bank opens that mail, it gets the buy with what your main paid, shown as "(from Voidmark Soulreaver)". When the bank sells it, the profit is real. Its cost isn't counted as gold the bank spent.

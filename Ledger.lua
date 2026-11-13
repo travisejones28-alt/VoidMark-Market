@@ -120,13 +120,13 @@ function M:ObserveMail()
         -- Items mailed by your other character: they arrive with what it paid.
         if hasItem and self:IsMyCharacter(sender) and GetInboxItem and self.RecordMailedIn then
           for a=1,(ATTACHMENTS_MAX_RECEIVE or 16) do
-            local okI,iname,_,_,count=pcall(GetInboxItem,index,a)
+            local okI,iname,iid,_,count=pcall(GetInboxItem,index,a)
             if okI and type(iname)=='string' and iname~='' then
               local link=GetInboxItemLink and select(2,pcall(GetInboxItemLink,index,a)) or nil
               local fp=table.concat({self.characterID,'from',tostring(sender),tostring(subject),iname,tostring(count),a},'|')
               occurrence[fp]=(occurrence[fp] or 0)+1;local rk=occurrence[fp]
               if rk>(self.db.mailSeen[fp] or 0) then
-                self:RecordMailedIn(sender,iname,type(link)=='string' and link or nil,count)
+                self:RecordMailedIn(sender,iname,type(link)=='string' and link or nil,count,iid)
                 self:RememberMail(fp,rk)
               end
             end
