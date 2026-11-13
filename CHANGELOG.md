@@ -1,3 +1,8 @@
+## 1.23.3
+- **Full scan blocked for hours ("Next scan in 846m").** The last scan time was saved in the future, most likely while the PC clock was wrong (new PC). A future time is now ignored, so the 15-minute timer works again.
+- The empty Hits view explains what the sniper looks for and that 0 hits is normal.
+- 288 regressions.
+
 ## 1.23.2 — sniper settings without slash commands
 - On the **Hits** view the bottom bar has three buttons instead of Flip Ledger / Export Results:
   - **Flag: 50% or less** — click, pick 30 / 40 / 50 / 60 / 70%.

@@ -1,6 +1,6 @@
 local addonName, M = ...
 _G.VoidMarkMarket = M
-M.name, M.version = addonName or 'VoidMarkMarket', '1.23.2'
+M.name, M.version = addonName or 'VoidMarkMarket', '1.23.3'
 M.eventHandlers, M.runtimeLog, M.jobs = {}, {}, {}
 M.ahOpen = false
 M.scanState = {running=false, phase='idle', status='No scan yet', progress=0}
@@ -60,6 +60,10 @@ function M:GetBuildSnapshot()
 end
 function M:CanUseAuctionHouse() return self.ahOpen and type(C_AuctionHouse)=='table' end
 function M:GetSecondsUntilFreshScanAllowed()
+  -- A timestamp in the future means the PC clock was wrong when it was saved
+  -- (new PC / BIOS clock). Forget it instead of blocking scans for hours.
+  local last=tonumber(self.db.lastFreshScanRequestAt)
+  if last and last>time()+60 then self.db.lastFreshScanRequestAt=nil end
   return math.max(0,900-(time()-(self.db.lastFreshScanRequestAt or 0)))
 end
 function M:SetScanStatus(s,p)

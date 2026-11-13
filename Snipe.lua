@@ -198,10 +198,14 @@ function M:ShowSnipeHits()
  if self.StopTermSearch then self:StopTermSearch() end
  self.snipeView=true;self.shoppingListMode=false;self.shopFilters=nil;self.shopOnlyKey=nil;self.shopOnlyTerm=nil
  self.selectedRow=nil;self.shopScroll=0;self.shopSort={field='price',dir=1}
- self.shoppingSearchStatus='No misposts found yet. Turn on Snipe and keep the Auction House open.'
+ self.shoppingSearchStatus=self:SnipeEmptyText()
  -- The Shopping tab is the 'browse' view.
  if self.SetView and self.view~='browse' then pcall(self.SetView,self,'browse') end
  self:RefreshUI()
+end
+function M:SnipeEmptyText()
+ return ('Nothing yet. The sniper checks every item on the AH and shows one here when it is listed at %d%% or less of what it normally sells for, '
+  ..'with %s or more profit after the AH cut. Misposts are rare: 0 hits is normal. Leave it running.'):format(self:SnipePercent(),self:Coins(self:SnipeMinGain()))
 end
 function M:SnipeStatus()
  local s=state(self)

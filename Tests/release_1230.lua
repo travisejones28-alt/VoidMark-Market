@@ -156,6 +156,15 @@ check('1.23.2 Snipe settings are dropdowns on the Hits view: pick a line, the se
   M:ShopSearch('Linen');M:RenderUI();assert(not sc.snipePct.shown and sc.flipLedger.shown and sc.exportResults.shown)
   reset()
  end)
+check('1.23.3 A scan time saved in the future (wrong PC clock) no longer blocks full scans',function()
+  M.db.lastFreshScanRequestAt=time()+50000;assert(M:GetSecondsUntilFreshScanAllowed()==0 and M.db.lastFreshScanRequestAt==nil)
+  M.db.lastFreshScanRequestAt=time()-60;assert(M:GetSecondsUntilFreshScanAllowed()==840)
+ end)
+ check('1.23.3 Empty Hits view says what the sniper looks for',function()
+  reset();M:SetView('browse');M:ShowSnipeHits();M:RenderUI()
+  assert(M.shopScreen.empty:GetText():find('50%% or less') and M.shopScreen.empty:GetText():find('0 hits is normal'))
+  M.snipeView=false;reset()
+ end)
  A.IsThrottledMessageSystemReady,A.GetBrowseResults,A.HasFullBrowseResults,A.RequestMoreBrowseResults,A.SendBrowseQuery,A.GetItemKeyInfo=unpack(saved)
  M.db.dailyLows,M.db.dailyLowsBase=oldLows,oldBase
 end

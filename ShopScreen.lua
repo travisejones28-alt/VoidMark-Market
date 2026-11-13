@@ -568,6 +568,7 @@ function M:RenderShopScreen()
  local empty=''
  if #source==0 then
   local f=self.db.settings.filter or ''
+  if self.snipeView and self.SnipeEmptyText then self.shoppingSearchStatus=self:SnipeEmptyText() end
   empty=self.shoppingSearchStatus or (self.shoppingListMode and (self.shopOnlyKey~=nil and 'No price for this item yet. Open the Auction House and click it again.'
     or 'This list is empty. Add an item, or type a search term like "of the Monkey" and click Add to List.'))
    or (f~='' and ('No saved prices match "'..f..'".'..(self.ahOpen and ' Press Search to check the Auction House.' or ' Open the Auction House to search it live.')))
