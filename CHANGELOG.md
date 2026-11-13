@@ -1,3 +1,8 @@
+## 1.23.8 — mail tracking
+- **"Auction won" mail records the buy.** Anything you buy, in Market or the normal AH window, lands in the Flip Ledger when its mail shows up. Market's own Buy Now is matched, not doubled. Won mail Market saw before this update is added once at login.
+- **Mailing items between your characters.** Mail a flip to your bank and your main's Flip Ledger marks it "Mailed to Voidmark Bank" (no longer held there). When the bank opens that mail, it gets the buy with what your main paid, shown as "(from Voidmark Soulreaver)". When the bank sells it, the profit is real. Its cost isn't counted as gold the bank spent.
+- 295 regressions.
+
 ## 1.23.7
 - **Sale banners show the flip as a percentage** of what you paid: paid 2s 50c, profit 7s → "+7s flip  +280%". Losses show the same way ("-47%"). The chat line too.
 - 293 regressions.

@@ -47,11 +47,14 @@ local function nameOf(link,name)
 end
 -- Open (not fully sold) buys of an item, oldest first: certain matches, then
 -- buys saved without their suffix (see ItemMatcher in Tooltips.lua).
+-- Units of a buy still with you: bought, minus sold, minus mailed to another character.
+local function openQty(f) return (f.qty or 1)-(f.sold or 0)-(f.mailedOut or 0) end
+M.FlipOpenQty=function(_,f) return openQty(f) end
 local function openFlips(self,name,key,link)
  local match=self:ItemMatcher({name=name,key=key,link=link})
  local strong,weak={},{}
  for _,f in ipairs(self:FlipBook()) do
-  if f.cost and (f.sold or 0)<(f.qty or 1) then
+  if f.cost and openQty(f)>0 then
    local s=match(f.name,f.key)
    if s==2 then strong[#strong+1]=f elseif s==1 then weak[#weak+1]=f end
   end
@@ -106,7 +109,7 @@ function M:RecordFlipSale(name,qty,gross,fee,key)
  local left=qty
  for _,f in ipairs(openFlips(self,name,key)) do
   if left<=0 then break end
-  local take=math.min((f.qty or 1)-(f.sold or 0),left)
+  local take=math.min(openQty(f),left)
   f.sold=(f.sold or 0)+take;f.gross=(f.gross or 0)+gross*take/qty;f.fee=(f.fee or 0)+fee*take/qty
   f.soldAt=time();left=left-take
  end
@@ -260,13 +263,18 @@ function M:FlipNumbers(f)
  local profit=(sold>0 and soldCost) and math.floor(net-soldCost-lost+0.5) or nil
  local days=(sold>0 and f.cost and f.soldAt and f.at) and math.max(0,(f.soldAt-f.at)/DAY) or nil
  local status
+ local mailed=f.mailedOut or 0
  if f.cost==nil then status='Sold (no buy record)'
  elseif sold>=qty then status='Sold'
+ elseif mailed>0 and sold+mailed>=qty then status='Mailed to '..tostring(f.mailedTo or 'another character')..(sold>0 and (' (sold '..sold..')') or '')
  elseif sold>0 then status='Sold '..sold..'/'..qty
  elseif f.listPrice then status='Listed'
+ elseif f.waitingMail then status='In the mailbox'
  else status='Holding' end
+ if mailed>0 and sold+mailed<qty then status=status..' ('..mailed..' mailed)' end
  if (f.expired or 0)>0 and sold<qty then status=status..' (expired x'..f.expired..')' end
- return {net=math.floor(net+0.5),profit=profit,status=status,open=f.cost and qty-sold or 0,days=days,lost=lost,
+ if f.fromChar and sold<qty and mailed==0 then status=status..' (from '..f.fromChar..')' end
+ return {net=math.floor(net+0.5),profit=profit,status=status,open=f.cost and math.max(0,qty-sold-mailed) or 0,days=days,lost=lost,
   roi=(profit and soldCost and soldCost>0) and profit/soldCost or nil}
 end
 local function inPeriod(f,period)
@@ -282,7 +290,7 @@ function M:FlipTotals(period)
  for _,f in ipairs(self:FlipBook()) do
   if inPeriod(f,period) then
    local n=self:FlipNumbers(f)
-   if f.cost then t.spent=t.spent+f.cost end
+   if f.cost and not f.fromChar then t.spent=t.spent+f.cost end
    t.net=t.net+n.net;t.lost=t.lost+n.lost
    if n.profit then t.profit=t.profit+n.profit;t.sold=t.sold+(f.sold or 0) end
    if n.open>0 then
@@ -843,3 +851,94 @@ end
 M:RegisterHandler('AUCTION_HOUSE_SHOW',function(self)
  if C_Timer and C_Timer.After then C_Timer.After(3,function() pcall(self.RepairFlipNames,self) end) else pcall(self.RepairFlipNames,self) end
 end)
+
+-- Mail: buys, and items moved between your characters -------------------------
+-- "Auction won" invoice: record the buy unless Market already recorded it
+-- (Buy Now). Catches buys made in the normal AH UI or that never confirmed.
+function M:RecordMailBuy(name,qty,cost,at)
+ if self.persistenceBlocked or type(name)~='string' or name=='' or not self:Finite(cost,1,1e14) then return nil end
+ qty=tonumber(qty) or 1;if qty<1 then qty=1 end
+ local now=tonumber(at) or time()
+ for _,f in ipairs(self:FlipBook()) do
+  if f.cost and not f.mailMatched and math.abs(f.cost-cost)<=1 and (f.qty or 1)==qty and math.abs(now-(f.at or 0))<=7*86400
+   and self:NameScore(f.name,name)>0 then
+   f.mailMatched=true;f.waitingMail=nil;if self:NameScore(f.name,name)==1 and #name>#f.name then f.name=name end
+   return f,false
+  end
+ end
+ local f=self:RecordFlipBuy({name=name,quantity=qty,cost=cost,source='Mail',at=at})
+ if f then f.mailMatched=true end
+ return f,true
+end
+-- Once: "Auction won" mail Market saw before 1.23.8 (kept in the raw ledger)
+-- becomes Flip Ledger buys, without doubling ones already there.
+function M:CatchUpMailBuys()
+ if self.persistenceBlocked or self.db.mailBuysCaughtUp or type(self.db.ledger)~='table' then return 0 end
+ local added=0
+ for _,e in ipairs(self.db.ledger) do
+  if type(e)=='table' and e.kind=='mail won' and not e.flipRecorded and self:Finite(e.gross,1,1e14) then
+   local _,new=self:RecordMailBuy(e.name,e.quantity,e.gross,e.at);e.flipRecorded=true
+   if new then added=added+1 end
+  end
+ end
+ self.db.mailBuysCaughtUp=true
+ return added
+end
+M:RegisterHandler('PLAYER_ENTERING_WORLD',function(self) if self.db then pcall(self.CatchUpMailBuys,self) end end)
+-- Sending mail: note what's attached; when it goes out, the matching buys
+-- are marked "Mailed to <name>" here and stop counting as held.
+function M:CaptureOutgoingMail(recipient)
+ if type(recipient)~='string' or recipient=='' or not GetSendMailItem then return end
+ local items={}
+ for i=1,(ATTACHMENTS_MAX_SEND or 12) do
+  local ok,name,_,_,count=pcall(GetSendMailItem,i)
+  if ok and type(name)=='string' and name~='' then
+   local link=GetSendMailItemLink and select(2,pcall(GetSendMailItemLink,i)) or nil
+   items[#items+1]={name=name,link=type(link)=='string' and link or nil,count=tonumber(count) or 1}
+  end
+ end
+ self.outgoingMail=#items>0 and {to=recipient,items=items,at=GetTime and GetTime() or 0} or nil
+end
+function M:RecordMailedOut(recipient,items)
+ if self.persistenceBlocked or type(items)~='table' then return 0 end
+ local who=tostring(recipient):gsub('%-.*$','')
+ local moved=0
+ for _,it in ipairs(items) do
+  local left=it.count or 1
+  for _,f in ipairs(openFlips(self,it.name,nil,it.link)) do
+   if left<=0 then break end
+   local take=math.min(openQty(f),left)
+   f.mailedOut=(f.mailedOut or 0)+take;f.mailedTo=who;f.mailedAt=time()
+   left=left-take;moved=moved+take
+  end
+ end
+ if moved>0 then self:RefreshUI() end
+ return moved
+end
+-- Receiving mail from your synced partner: the item arrives with what the
+-- partner paid (from its synced buys), so selling it here shows real profit.
+function M:RecordMailedIn(sender,name,link,count)
+ if self.persistenceBlocked or type(name)~='string' or name=='' then return nil end
+ count=tonumber(count) or 1
+ local b=self:PartnerBuyFor(link,nil,name);if not b or not b.cost then return nil end
+ local unit=b.cost/math.max(1,b.qty or 1)
+ local f=self:RecordFlipBuy({name=b.name or name,quantity=count,cost=math.floor(unit*count+0.5),source='Mail',itemLink=link,marketKey=b.key})
+ if f then f.fromChar=tostring(sender):gsub('%-.*$','');f.at=b.at or f.at;f.mailMatched=true end
+ return f
+end
+-- Is this sender one of your characters (the synced partner)?
+function M:IsMyCharacter(sender)
+ if type(sender)~='string' or sender=='' then return false end
+ local peer=type(self.db.syncPeer)=='string' and self.db.syncPeer:lower() or nil
+ local s=sender:lower()
+ if peer and (peer==s or peer:match('^([^%-]+)')==s:match('^([^%-]+)')) then return true end
+ return false
+end
+if hooksecurefunc and type(SendMail)=='function' then
+ hooksecurefunc('SendMail',function(recipient) pcall(M.CaptureOutgoingMail,M,recipient) end)
+end
+M:RegisterHandler('MAIL_SEND_SUCCESS',function(self)
+ local m=self.outgoingMail;self.outgoingMail=nil
+ if m and (GetTime and GetTime() or 0)-m.at<60 then self:RecordMailedOut(m.to,m.items) end
+end)
+M:RegisterHandler('MAIL_FAILED',function(self) self.outgoingMail=nil end)

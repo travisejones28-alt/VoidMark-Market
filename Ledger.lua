@@ -111,10 +111,27 @@ function M:ObserveMail()
             e.invoiceVerified=false; e.evidence='Observed invoice; payout disagrees with invoice amounts, financial booking blocked'
           end
           if kind=='seller' and self.RecordFlipSale then self:RecordFlipSale(name,tonumber(qty),e.gross,tonumber(fee) or 0) end
+          -- "Auction won": record the buy (Market's own Buy Now is matched, not doubled).
+          if kind=='buyer' and self.RecordMailBuy then local cost=(tonumber(bid) or 0)>0 and tonumber(bid) or tonumber(buyout);self:RecordMailBuy(name,tonumber(qty),cost,e.at);e.flipRecorded=true end
           self:RememberMail(fingerprint,rank)
         end
       else
-        local _,_,sender,subject,money=GetInboxHeaderInfo(index)
+        local _,_,sender,subject,money,_,_,hasItem=GetInboxHeaderInfo(index)
+        -- Items mailed by your other character: they arrive with what it paid.
+        if hasItem and self:IsMyCharacter(sender) and GetInboxItem and self.RecordMailedIn then
+          for a=1,(ATTACHMENTS_MAX_RECEIVE or 16) do
+            local okI,iname,_,_,count=pcall(GetInboxItem,index,a)
+            if okI and type(iname)=='string' and iname~='' then
+              local link=GetInboxItemLink and select(2,pcall(GetInboxItemLink,index,a)) or nil
+              local fp=table.concat({self.characterID,'from',tostring(sender),tostring(subject),iname,tostring(count),a},'|')
+              occurrence[fp]=(occurrence[fp] or 0)+1;local rk=occurrence[fp]
+              if rk>(self.db.mailSeen[fp] or 0) then
+                self:RecordMailedIn(sender,iname,type(link)=='string' and link or nil,count)
+                self:RememberMail(fp,rk)
+              end
+            end
+          end
+        end
         local outcome,itemName=self:MailOutcome(subject)
         if outcome and sender==(_G.AUCTION_HOUSE_MAIL_SENDER or _G.AUCTION_HOUSE or 'Auction House') then
           local fingerprint=self.characterID..'|'..outcome..'|'..subject

@@ -719,4 +719,48 @@ check('1.23.7 Sale banner shows the flip as a percentage of what you paid',funct
  local t=M:SaleToast(a);assert(t.profit:GetText():find('+280%',1,true),t.profit:GetText())
  assert(M:SaleAlertText(a):find('(+280%)',1,true))
 end)
+
+check('1.23.8 Buys from "Auction won" mail; items mailed between your characters keep their price',function()
+ M.db.flips={};M.db.partnerBuys=nil;local oldPeer=M.db.syncPeer;M.db.syncPeer='voidmark soulreaver-camwow'
+ -- Bought with Market: the won mail matches it, no double.
+ local f=M:RecordFlipBuy({name='Pagan Wraps of Intellect',quantity=1,cost=430})
+ local g,new=M:RecordMailBuy('Pagan Wraps of Intellect',1,430);assert(g==f and new==false and #M:FlipBook()==1,'matched, not doubled')
+ -- Bought in the normal AH window: the won mail records it.
+ local h,new2=M:RecordMailBuy('Twilight Cuffs of the Physician',1,2200);assert(new2 and h.cost==2200 and h.source=='Mail')
+ -- Old won mail from before this update: caught up once.
+ M.db.mailBuysCaughtUp=nil;M.db.ledger={{kind='mail won',name='Shimmering Boots of the Sorcerer',quantity=1,gross=550,at=time()-86400},{kind='mail won',name='Pagan Wraps of Intellect',quantity=1,gross=999,at=time()}}
+ assert(M:CatchUpMailBuys()==2 and M:CatchUpMailBuys()==0,'once')
+ -- Mailing the wraps to the bank: no longer held here.
+ assert(M:RecordMailedOut('Voidmark Bank',{{name='Pagan Wraps of Intellect',count=1}})==1)
+ local n=M:FlipNumbers(f);assert(n.open==0 and n.status=='Mailed to Voidmark Bank',n.status)
+ assert(M:HeldFlip('Pagan Wraps of Intellect')~=f,'not for sale here any more')
+ -- On the bank: the mail from your main arrives with what main paid.
+ M.db.flips={};M.db.partnerBuys={['Voidmark Soulreaver-CAMWOW:5']={name='Pagan Wraps of Intellect',qty=1,cost=430,at=time()-3600,char='Voidmark Soulreaver-CAMWOW'}}
+ assert(M:IsMyCharacter('Voidmark Soulreaver-CAMWOW') and not M:IsMyCharacter('Stranger'))
+ local r=M:RecordMailedIn('Voidmark Soulreaver-CAMWOW','Pagan Wraps of Intellect',nil,1)
+ assert(r and r.cost==430 and r.fromChar=='Voidmark Soulreaver','received with the price main paid')
+ assert(M:HeldFlip('Pagan Wraps of Intellect')==r and M:FlipNumbers(r).status:find('from Voidmark Soulreaver',1,true))
+ assert(M:FlipTotals('all').spent==0,'that gold was spent on the other character')
+ M:RecordFlipSale('Pagan Wraps of Intellect',1,1000,50);assert(M:FlipNumbers(r).profit==520,'profit on the bank: '..tostring(M:FlipNumbers(r).profit))
+ M.db.flips={};M.db.partnerBuys=nil;M.db.ledger={};M.db.syncPeer=oldPeer
+end)
+
+check('1.23.8 Mailbox: won invoice and a mail from your main are read into the Flip Ledger once',function()
+ M.db.flips={};M.db.mailSeen={};M.db.ledger={};local oldPeer=M.db.syncPeer;M.db.syncPeer='voidmark soulreaver-camwow'
+ M.db.partnerBuys={['Voidmark Soulreaver-CAMWOW:9']={name='Greenweave Gloves of Healing',qty=1,cost=600,at=time(),char='Voidmark Soulreaver-CAMWOW'}}
+ local saved={GetInboxNumItems,GetInboxHeaderInfo,GetInboxInvoiceInfo,GetInboxItem,GetInboxItemLink}
+ GetInboxNumItems=function() return 2 end
+ GetInboxInvoiceInfo=function(i) if i==1 then return 'buyer','Outrunner\'s Cuffs of Strength','Seller',400,0,0,0,0,0,0,1 end end
+ GetInboxHeaderInfo=function(i) if i==1 then return nil,nil,'Auction House','Auction won: Outrunner\'s Cuffs of Strength',0,0,30,true else return nil,nil,'Voidmark Soulreaver','stuff',0,0,30,true end end
+ GetInboxItem=function(i,a) if i==2 and a==1 then return 'Greenweave Gloves of Healing',2970,'',1 end end
+ GetInboxItemLink=function() return nil end
+ local ok,err=pcall(function()
+  M.mailOpen=true;M:ObserveMail();jobs();M:ObserveMail();jobs()
+  local names={};for _,f in ipairs(M:FlipBook()) do names[#names+1]=f.name..'='..tostring(f.cost) end
+  table.sort(names)
+  assert(#names==2 and names[1]=='Greenweave Gloves of Healing=600' and names[2]=="Outrunner's Cuffs of Strength=400",table.concat(names,', '))
+ end)
+ GetInboxNumItems,GetInboxHeaderInfo,GetInboxInvoiceInfo,GetInboxItem,GetInboxItemLink=saved[1],saved[2],saved[3],saved[4],saved[5]
+ M.mailOpen=nil;M.db.flips={};M.db.partnerBuys=nil;M.db.ledger={};M.db.syncPeer=oldPeer;assert(ok,err)
+end)
 end
