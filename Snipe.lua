@@ -206,10 +206,9 @@ end
 function M:SnipeStatus()
  local s=state(self)
  local bits={(s.on and '|cff40ff40Sniper ON|r' or 'Sniper off')}
- if s.round then bits[#bits+1]='reading page '..(s.round.pages+1)
- elseif s.lastRound then bits[#bits+1]=('last pass %d items in %ds'):format(s.lastRound.items,math.floor(s.lastRound.seconds+0.5)) end
+ if s.round then bits[#bits+1]='page '..(s.round.pages+1)
+ elseif s.lastRound then bits[#bits+1]=('pass: %d items, %ds'):format(s.lastRound.items,math.floor(s.lastRound.seconds+0.5)) end
  bits[#bits+1]=self:SnipeHitCount()..' live hit'..(self:SnipeHitCount()==1 and '' or 's')
- bits[#bits+1]=('flags %d%% of average or less, +%s or more'):format(self:SnipePercent(),self:Coins(self:SnipeMinGain()))
  if s.lastError then bits[#bits+1]='|cffff8060'..s.lastError..'|r' end
  return table.concat(bits,'  |  ')
 end
@@ -245,4 +244,57 @@ function M:SnipeCommand(arg)
   if not c then self:Print('Use an amount like 50s, 1g or 2g50s');return end
   self.db.settings.snipeMinGain=c;self:Print('Sniper minimum gain: '..self:Coins(c));self:RefreshUI();return end
  self:Print('/vmm snipe [on|off|hits|sound] | /vmm snipe pct 40 | /vmm snipe min 1g')
+end
+
+-- Snipe settings as dropdowns (1.23.2) ---------------------------------------
+-- Shown on the Hits view's bottom bar in place of Flip Ledger / Export Results.
+M.SNIPE_PCT_CHOICES={30,40,50,60,70}
+M.SNIPE_MIN_CHOICES={1000,2500,5000,10000,20000,50000} -- 10s 25s 50s 1g 2g 5g
+local DIM='|cff8f8f8f'
+-- A button that opens a small list above it; picking a line calls set(value).
+function M:SnipeDropdown(parent,x,y,w,title,choices,text,get,set)
+ local b=CreateFrame('Button',nil,parent,'UIPanelButtonTemplate');b:SetPoint('TOPLEFT',x,y);b:SetSize(w,24)
+ local menu=self.panel(parent,0,0,w,#choices*22+10);menu:ClearAllPoints();menu:SetPoint('BOTTOMLEFT',b,'TOPLEFT',0,2)
+ if menu.SetFrameStrata then menu:SetFrameStrata('DIALOG') end;menu:Hide()
+ menu.lines={}
+ for i,v in ipairs(choices) do
+  local l=CreateFrame('Button',nil,menu);l:SetPoint('TOPLEFT',5,-5-(i-1)*22);l:SetSize(w-10,22)
+  l:SetHighlightTexture('Interface\\QuestFrame\\UI-QuestTitleHighlight')
+  l.text=l:CreateFontString(nil,'OVERLAY','GameFontHighlightSmall');l.text:SetPoint('LEFT',8,0);l.text:SetText(text(v))
+  l.value=v
+  l:SetScript('OnClick',function() menu:Hide();set(v);self:RefreshUI() end)
+  menu.lines[i]=l
+ end
+ b.menu=menu;b.title=title;b.get=get;b.fmt=text
+ b:SetScript('OnClick',function() if menu:IsShown() then menu:Hide() else menu:Show() end end)
+ b:SetScript('OnHide',function() menu:Hide() end)
+ return b
+end
+function M:InitSnipeControls(s)
+ s.snipePct=self:SnipeDropdown(s,600,-524,128,'Flag at',self.SNIPE_PCT_CHOICES,
+  function(v) return v..'% of normal or less' end,
+  function() return self:SnipePercent() end,
+  function(v) self.db.settings.snipePercent=v end)
+ s.snipeMin=self:SnipeDropdown(s,732,-524,140,'Min profit',self.SNIPE_MIN_CHOICES,
+  function(v) return self:Coins(v)..' profit or more' end,
+  function() return self:SnipeMinGain() end,
+  function(v) self.db.settings.snipeMinGain=v end)
+ s.snipeSound=CreateFrame('Button',nil,s,'UIPanelButtonTemplate');s.snipeSound:SetPoint('TOPLEFT',876,-524);s.snipeSound:SetSize(128,24)
+ s.snipeSound:SetScript('OnClick',function() self.db.settings.snipeSound=self.db.settings.snipeSound==false and true or false;self:RefreshUI() end)
+end
+function M:RenderSnipeControls(s,buying)
+ if not s.snipePct then return end
+ local on=self.snipeView and not buying
+ for _,b in ipairs({s.snipePct,s.snipeMin,s.snipeSound}) do b:SetShown(on and true or false) end
+ if s.flipLedger then s.flipLedger:SetShown(not on and not buying) end
+ if s.exportResults then s.exportResults:SetShown(not on and not buying) end
+ if s.status and s.status.SetWidth then s.status:SetWidth(on and 290 or 430) end
+ if not on then return end
+ s.snipePct:SetText('Flag: '..self:SnipePercent()..'% or less')
+ s.snipeMin:SetText('Min profit: '..self:Coins(self:SnipeMinGain()))
+ s.snipeSound:SetText('Sound: '..(self.db.settings.snipeSound==false and 'Off' or 'On'))
+ for _,b in ipairs({s.snipePct,s.snipeMin}) do
+  local cur=b.get()
+  for _,l in ipairs(b.menu.lines) do l.text:SetText((l.value==cur and '|cff40ff40> ' or '  ')..b.fmt(l.value)..(l.value==cur and '|r' or '')) end
+ end
 end

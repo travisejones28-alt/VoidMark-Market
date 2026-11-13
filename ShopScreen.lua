@@ -457,6 +457,7 @@ function M:InitializeShopScreen(f)
  s.status=label(s,'',302,-530,430,'GameFontHighlightSmall')
  s.flipLedger=button(s,'Flip Ledger',742,-524,126,function() self:ShowFlipLedger() end)
  s.exportResults=button(s,'Export Results',874,-524,130,function() self:ShowShopExport() end)
+ if self.InitSnipeControls then self:InitSnipeControls(s) end
  self.shopLeft='lists'
  self:InitializeShopBuyView(s)
 end
@@ -528,6 +529,7 @@ function M:RenderShopScreen()
  local buying=self.shopBuy~=nil
  s.results:SetShown(not buying);s.exportResults:SetShown(not buying);s.status:SetShown(not buying)
  if s.flipLedger then s.flipLedger:SetShown(not buying) end
+ if self.RenderSnipeControls then self:RenderSnipeControls(s,buying) end
  if buying then s.buyView:Show();return self:RenderShopBuy() end
  s.buyView:Hide()
  local lo,hi=self:ShopLevelRange()

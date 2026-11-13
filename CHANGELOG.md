@@ -1,3 +1,11 @@
+## 1.23.2 — sniper settings without slash commands
+- On the **Hits** view the bottom bar has three buttons instead of Flip Ledger / Export Results:
+  - **Flag: 50% or less** — click, pick 30 / 40 / 50 / 60 / 70%.
+  - **Min profit: 50s** — click, pick 10s / 25s / 50s / 1g / 2g / 5g.
+  - **Sound: On/Off** — click to switch.
+- Any other search brings Flip Ledger / Export Results back. Slash commands still work but aren't needed.
+- 286 regressions.
+
 ## 1.23.1 — sniper false alarms
 - **Far fewer false hits.** 1.23.0 compared listings only with the 30-day average. Forever prices are still falling, so whole markets (850 Fel Leather "at 23%") looked like misposts. The sniper now uses the **lower** of the 30-day average and the newest full scan (yours or Bank's, synced), and that scan must be under 6 hours old. No recent scan = the item never fires.
 - The chime plays at most once every 15 seconds.

@@ -142,6 +142,20 @@ check('1.23.1 Falling prices are not misposts: the recent scan price caps the av
   reset();M:ShowSnipeHits();assert(M:ListSearchStatus()==nil or not tostring(M:ListSearchStatus()):find('Sniper'))
   M.snipeView=false
  end)
+check('1.23.2 Snipe settings are dropdowns on the Hits view: pick a line, the setting changes',function()
+  reset();M:SetView('browse');M:ShowSnipeHits();M:RenderUI();local sc=M.shopScreen
+  assert(sc.snipePct.shown and sc.snipeMin.shown and sc.snipeSound.shown and not sc.flipLedger.shown and not sc.exportResults.shown)
+  assert(sc.snipePct:GetText()=='Flag: 50% or less' and sc.snipeMin:GetText():find('Min profit'))
+  sc.snipePct.scripts.OnClick();assert(sc.snipePct.menu.shown)
+  for _,l in ipairs(sc.snipePct.menu.lines) do if l.value==40 then l.scripts.OnClick() end end
+  assert(M:SnipePercent()==40 and not sc.snipePct.menu.shown)
+  for _,l in ipairs(sc.snipeMin.menu.lines) do if l.value==10000 then l.scripts.OnClick() end end
+  assert(M:SnipeMinGain()==10000)
+  sc.snipeSound.scripts.OnClick();M:RenderUI();assert(sc.snipeSound:GetText()=='Sound: Off')
+  sc.snipeSound.scripts.OnClick();M:RenderUI();assert(sc.snipeSound:GetText()=='Sound: On')
+  M:ShopSearch('Linen');M:RenderUI();assert(not sc.snipePct.shown and sc.flipLedger.shown and sc.exportResults.shown)
+  reset()
+ end)
  A.IsThrottledMessageSystemReady,A.GetBrowseResults,A.HasFullBrowseResults,A.RequestMoreBrowseResults,A.SendBrowseQuery,A.GetItemKeyInfo=unpack(saved)
  M.db.dailyLows,M.db.dailyLowsBase=oldLows,oldBase
 end
