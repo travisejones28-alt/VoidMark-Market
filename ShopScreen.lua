@@ -349,6 +349,9 @@ function M:InitializeShopScreen(f)
  s.searchButton=button(s,'Search',332,-4,96,function() self:ShopSearchClicked() end)
  s.moreButton=button(s,'More...',432,-4,90,function() self:ShowShopMore() end)
  s.addButton=button(s,'Add to List',526,-4,110,function() self:ShopAddSelected() end)
+ -- Mispost sniper (Snipe.lua): on/off, and the hits list.
+ s.snipeButton=button(s,'Snipe',800,-4,96,function() if self.ToggleSnipe then self:ToggleSnipe();if self.snipe and self.snipe.on then self:ShowSnipeHits() end end end)
+ s.snipeHits=button(s,'Hits',900,-4,104,function() if self.ShowSnipeHits then self:ShowSnipeHits() end end)
  -- Level range for every Shopping search (blank = no limit).
  label(s,'Level:',652,-10,44,'GameFontNormal')
  s.minLevel=edit(s,700,-5,34);label(s,'-',740,-10,10,'GameFontNormal');s.maxLevel=edit(s,754,-5,34)
@@ -513,6 +516,11 @@ function M:RenderShopScreen()
  local typed=self.shopSearch and self.shopSearch:GetText();typed=type(typed)=='string' and not typed:match('^%s*$')
  local canAdd=self.shopExpanded~=nil and (self.selectedRow~=nil or self.shopBuy~=nil or typed or (not self.shoppingListMode and #(self.browseRows or {})==1))
  s.addButton:SetEnabled(canAdd and true or false)
+ if s.snipeButton and self.SnipeHitCount then
+  local on=self.snipe and self.snipe.on
+  s.snipeButton:SetText(on and 'Stop Snipe' or 'Snipe');s.snipeButton:SetEnabled((on or self.ahOpen) and true or false)
+  local n=self:SnipeHitCount();s.snipeHits:SetText(n>0 and ('|cff40ff40Hits ('..n..')|r') or 'Hits')
+ end
  -- Buy view replaces the results (Auctionator-style)
  local buying=self.shopBuy~=nil
  s.results:SetShown(not buying);s.exportResults:SetShown(not buying);s.status:SetShown(not buying)

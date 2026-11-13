@@ -1,3 +1,14 @@
+## 1.23.0 — mispost sniper
+- **Snipe** (Shopping tab, top right, or `/vmm snipe`). While the AH is open it re-reads the whole Auction House again and again (one lowest price per item, the quick browse read, not the 15-minute full scan) and flags anything listed far under its own 30-day price: a misposted or fat-fingered listing.
+  - A hit needs **both**: price at **50% of average or less**, and **50s or more** gain after the 5% AH cut. Change them with `/vmm snipe pct 40` and `/vmm snipe min 1g`.
+  - Only items with real history for that exact suffix count. The all-suffixes estimate and brand-new items never fire, so a cheap suffix of an expensive item isn't a "mispost".
+  - New hits chime, print in chat and show under **Hits**. Click one for the normal buy page (live listings, Buy Now, ledger, risk limits). Nothing is ever bought for you.
+  - A hit that's no longer that cheap (someone bought it) is marked GONE and can alert again if it's reposted cheap.
+  - The sniper pauses while you're on a buy page or a full scan is processing, and stops when the AH closes.
+  - It saves nothing: misposts never become the market price, a daily low, or a synced price.
+- `/vmm snipe sound` turns the chime off/on. `/vmm snipe hits` opens the list.
+- 281 regressions.
+
 ## 1.22.23
 - **Sale banners at login show the price.** Each session starts with an empty list of your auctions, and the banner only looked at the list saved from last time when there was no list at all. So right after logging in it never used the saved list ("price shows when the mail arrives"). It now checks this session's list, then the saved one.
 - A listing already shown as SOLD can match its sale banner (it sold while you were online but the message came later).

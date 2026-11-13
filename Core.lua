@@ -1,6 +1,6 @@
 local addonName, M = ...
 _G.VoidMarkMarket = M
-M.name, M.version = addonName or 'VoidMarkMarket', '1.22.23'
+M.name, M.version = addonName or 'VoidMarkMarket', '1.23.0'
 M.eventHandlers, M.runtimeLog, M.jobs = {}, {}, {}
 M.ahOpen = false
 M.scanState = {running=false, phase='idle', status='No scan yet', progress=0}
@@ -207,7 +207,7 @@ M.eventFrame:SetScript('OnUpdate',function(_,elapsed)
   local function mark(name) if p then local now=debugprofilestop();M:PerfAdd(name,now-t);t=now end end
   if next(M.jobs) then M:RunJobs();mark('jobs') end; tick=tick+elapsed
   if tick<0.1 then return end; tick=0
-  M:PumpQueue(); M:ExecutionTick();mark('queue'); M:PumpSharing();mark('sync')
+  M:PumpQueue(); M:ExecutionTick();if M.SnipeTick then M:SnipeTick() end;mark('queue'); M:PumpSharing();mark('sync')
   if M.liveBrowse and M.liveBrowse.received and not M.liveBrowse.expired and GetTime()-M.liveBrowse.received>10 then
     M.liveBrowse.expired=true;M:RefreshUI()
   end
@@ -230,6 +230,7 @@ SlashCmdList.VOIDMARKMARKET=function(msg)
     if v and M.scanSpeeds[v] then M.db.settings.scanSpeed=v end
     M:Print('Scan speed: '..(M.db.settings.scanSpeed or 'fast')..' ('..(M.scanSpeeds[M.db.settings.scanSpeed or 'fast'])..' ms per frame while scanning). Options: fast, normal, smooth')
   elseif msg=='version' then M:Print('Version '..M.version..' | sync partner: '..tostring(M.db.syncPeer or 'not paired'))
+  elseif msg=='snipe' or msg:match('^snipe%s') then M:SnipeCommand(raw:match('^%S+%s+(.+)$'))
   elseif msg=='scan' then M:RequestFreshScan()
   elseif msg=='cached' then M:AnalyzeCachedSnapshot()
   elseif msg=='diag' then M:SetView('diagnostics')
