@@ -1,3 +1,10 @@
+## 1.23.11
+- **Selling price checks start right away.** Clicking an item to sell no longer waits behind a sniper page, a background price check or a search-term page already in flight. Those go back in line and your price check goes first, like buy pages since 1.22.15.
+- The sniper doesn't start a new round for 15 seconds after you search, click an item to sell or check listings, or while a price check is running. Its extra pages now come after anything you click.
+- The Selling info line says what the price check is waiting for, e.g. "Checking live price...  Waiting for the AH to answer (2s)".
+- With 1.23.10, a price check that gets no "results updated" reads the results after 3 seconds instead of timing out.
+- 298 regressions.
+
 ## 1.23.10
 - **Buy pages no longer time out on items you already looked at.** Forever sometimes refreshes a search of an item already searched this session without sending "results updated". The buy page (e.g. from Listings → See listings / buy after an undercut check) then waited, retried and failed with "Request timed out". It now reads the complete results after 3 seconds, like price checks already did. Buying stays safe: an item auction is bought by its auction ID (a gone auction just fails), and commodities get a fresh quote before you confirm.
 - 297 regressions.

@@ -152,12 +152,16 @@ end
 -- request already in flight (a search-term page, your auctions, a price check).
 -- Put that request back in line and send the buy search now.
 local BACKGROUND={browse=true,browsemore=true,owned=true}
+-- 1.23.11: also for the Selling price check (priority 60): a click on an item
+-- never waits behind a sniper page, your auctions or a background price check.
 function M:PreemptForBuy(r)
   local q=self.queue
-  if not self.shopBuy or r.reading then return false end
+  if r.reading then return false end
   if not (BACKGROUND[r.kind] or (r.kind=='search' and r.allowCached)) then return false end
   local buy=false
-  for _,w in ipairs(q.waiting) do if w.kind=='search' and not w.allowCached and w.priority>=90 then buy=true;break end end
+  for _,w in ipairs(q.waiting) do
+   if w.kind=='search' and not w.allowCached and w.priority>=60 and w.priority>(r.priority or 0) then buy=true;break end
+  end
   if not buy then return false end
   q.active=nil; self:CancelJob('results')
   r.preempted=true; r.resend=nil; r.more=nil; r.refreshed=nil; r.polled=nil; r.at=GetTime(); r.attempt=0

@@ -107,6 +107,8 @@ function M:SnipeTick()
  if GetTime()<(s.nextRound or 0) then return end
  -- Stand aside while you buy or a full scan is being processed.
  if self.shopBuy or (self.scanState and self.scanState.running) then return end
+ -- ...and for 15s after you search, open an item to sell, or check listings.
+ if GetTime()-(self.lastUserAHAction or -1e9)<15 or (self.postQuote and not self.postQuote.at) then return end
  local round={pages=0,read=0,items=0,seen={},pending={},started=GetTime()};s.round=round
  local function fail(why)
   if s.round~=round then return end
@@ -155,7 +157,7 @@ function M:SnipeTick()
   local A=C_AuctionHouse
   local more=A.HasFullBrowseResults and A.RequestMoreBrowseResults and not A.HasFullBrowseResults()
   if not (more and round.pages<MAX_PAGES and s.on and self:SnipeCanRun()
-   and self:QueueRequest({id='snipe:more',kind='browsemore',priority=65,done=done,fail=fail})) then round.complete=true end
+   and self:QueueRequest({id='snipe:more',kind='browsemore',priority=25,done=done,fail=fail})) then round.complete=true end
   read()
   if round.complete and #round.pending==0 and not self.jobs.snipe then self:SnipeRoundDone(round) end
  end

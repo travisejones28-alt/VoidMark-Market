@@ -295,7 +295,7 @@ function M:RenderSellScreen()
  local info
  if not r then info='Click an item on the left. Its live price is checked automatically.'
  elseif not self.ahOpen then info='Open the Auction House to check prices and post.'
- elseif q and not q.at then info='Checking live price...'
+ elseif q and not q.at then local w=self.SearchWaitText and self:SearchWaitText();info='Checking live price...'..(w and ('  '..w) or '')
  elseif q and q.fallback then info='Live price did not answer - using your last scan price. Click Refresh to try again.'
  elseif q then info=q.floor and ('Lowest other: '..money(self,q.floor)..(q.atMinimum and (q.minWhy=='paid' and ' | held at what you paid + AH cut' or ' | held at your minimum') or (' | your price undercuts by '..money(self,self.db.settings.sellUndercut or 1)))) or 'No other listings - your price sets the market.'
  else info='Click Refresh to check the live price.' end

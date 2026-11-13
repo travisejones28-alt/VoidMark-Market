@@ -803,4 +803,26 @@ check('1.23.10 Buy page reads results when Forever sends no "results updated" (i
  M.ahOpen,M.SendAHRequest,M.ThrottleReady,M.ReadSearch,A.HasFullItemSearchResults,M.IsCommodity=saved[1],saved[2],saved[3],saved[4],saved[5],saved[6]
  q.waiting={};q.dedupe={};q.active=nil;assert(ok,err)
 end)
+
+check('1.23.11 Selling price check jumps a sniper page in flight; the sniper waits after you click',function()
+ local q=M.queue;q.waiting={};q.dedupe={};q.active=nil;q.lateReplicate=nil;q.nextSend=0
+ local saved={M.ahOpen,M.SendAHRequest,M.ThrottleReady};M.ahOpen=true;M.ThrottleReady=function() return true end
+ local sent={};M.SendAHRequest=function(_,r) sent[#sent+1]=r.id end
+ local ok,err=pcall(function()
+  M.shopBuy=nil
+  M:QueueRequest({id='snipe:more',kind='browsemore',priority=25});M:PumpQueue();assert(q.active.id=='snipe:more')
+  M:QueueRequest({id='search:sell',kind='search',priority=60});q.nextSend=0;M:PumpQueue()
+  assert(q.active.id=='search:sell' and sent[#sent]=='search:sell','price check sent now')
+  assert(q.waiting[1] and q.waiting[1].id=='snipe:more','sniper page back in line')
+  -- Your auctions (85) are not bumped by a price check (60).
+  q.active=nil;q.waiting={};q.dedupe={}
+  M:QueueRequest({id='owned',kind='owned',priority=85});q.nextSend=0;M:PumpQueue()
+  M:QueueRequest({id='search:sell2',kind='search',priority=60});q.nextSend=0;M:PumpQueue();assert(q.active.id=='owned')
+  -- The sniper doesn't start a round right after you click something.
+  M.snipe={on=true};M.lastUserAHAction=GetTime();local can=M.SnipeCanRun;M.SnipeCanRun=function() return true end
+  M:SnipeTick();assert(M.snipe.round==nil,'sniper waits');M.SnipeCanRun=can;M.snipe=nil;M.lastUserAHAction=nil
+ end)
+ M.ahOpen,M.SendAHRequest,M.ThrottleReady=saved[1],saved[2],saved[3]
+ q.waiting={};q.dedupe={};q.active=nil;assert(ok,err)
+end)
 end
