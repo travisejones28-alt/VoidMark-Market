@@ -108,7 +108,8 @@ function M:SaleAlertText(a,from)
  if not a.gross then return who..'Sold '..item..' (price shows when the mail arrives)' end
  local text=who..'Sold '..item..' for '..self:Coins(a.gross)..' - you get '..self:Coins(a.net)
  if a.profit then
-  text=text..(a.profit>=0 and (' | flipped for |cff40ff40+'..self:Coins(a.profit)..'|r') or (' | |cffff6060loss '..self:Coins(-a.profit)..'|r'))
+  local pct=self:FlipPercentText(a.profit,a.paid)
+  text=text..(a.profit>=0 and (' | flipped for |cff40ff40+'..self:Coins(a.profit)..(pct and (' ('..pct..')') or '')..'|r') or (' | |cffff6060loss '..self:Coins(-a.profit)..(pct and (' ('..pct..')') or '')..'|r'))
    ..' (paid '..self:Coins(a.paid)..')'
  end
  return text
@@ -247,7 +248,8 @@ function M:SaleToast(a,from)
  else detail='Price shows when the sale mail arrives' end
  t.detail:SetText(detail)
  if flip then
-  t.profit:SetText((a.profit>=0 and '+' or '-')..self:Coins(math.abs(a.profit))..(a.profit>=0 and ' flip' or ' loss'))
+  local pct=self:FlipPercentText(a.profit,a.paid)
+  t.profit:SetText((a.profit>=0 and '+' or '-')..self:Coins(math.abs(a.profit))..(a.profit>=0 and ' flip' or ' loss')..(pct and ('  '..pct) or ''))
   t.profit:SetTextColor(unpack(a.profit>=0 and VOID.gain or VOID.loss));t.profit:Show();t:SetHeight(78)
  else t.profit:SetText('');t.profit:Hide();t:SetHeight(58) end
  if t.SetBackdropBorderColor then t:SetBackdropBorderColor(unpack(flip and VOID.bright or VOID.purple)) end
@@ -337,4 +339,11 @@ function M:ReceiveSaleAlert(f,sender)
  local who=type(sender)=='string' and sender:match('^([^%-]+)') or 'Partner'
  self:ShowSaleAlert(a,who)
  return true
+end
+
+-- Profit as a percentage of what you paid: paid 2s 50c, profit 7s = +280%.
+function M:FlipPercentText(profit,paid)
+ if not (self:Finite(profit,-1e12,1e12) and self:Finite(paid,1,1e12)) then return nil end
+ local x=profit*100/paid;local p=x>=0 and math.floor(x+0.5) or -math.floor(-x+0.5)
+ return (p>=0 and '+' or '')..p..'%'
 end

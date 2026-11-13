@@ -195,11 +195,11 @@ check('1.22.7 Purple sale banner: label, item, numbers, green/red profit, stacki
  local t1=M:SaleToast({name='Twilight Cuffs of the Physician',qty=1,gross=3500,net=3325,paid=2200,profit=1125},'Voidmark Bank')
  assert(t1:IsShown() and t1.label:GetText()=='VOIDMARK BANK SOLD' and t1.item:GetText()=='Twilight Cuffs of the Physician')
  assert(t1.detail:GetText():find(M:Coins(3500),1,true) and t1.detail:GetText():find('paid',1,true))
- assert(t1.profit:GetText()=='+'..M:Coins(1125)..' flip' and t1:GetHeight()==78)
+ assert(t1.profit:GetText()=='+'..M:Coins(1125)..' flip  +51%' and t1:GetHeight()==78,t1.profit:GetText())
  local t2=M:SaleToast({name="Elder's Sash of the Physician",qty=1,gross=4000,net=3800})
  assert(t2~=t1 and t2.label:GetText()=='SOLD' and t2.profit:GetText()=='' and t2:GetHeight()==58,'no profit line without a buy')
  local t3=M:SaleToast({name='Bad Flip',qty=1,gross=500,net=475,paid=900,profit=-425})
- assert(t3.profit:GetText()=='-'..M:Coins(425)..' loss')
+ assert(t3.profit:GetText()=='-'..M:Coins(425)..' loss  -47%',t3.profit:GetText())
  local t4=M:SaleToast({name='Unknown',qty=2})
  assert(t4.detail:GetText():find('mail',1,true) and t4.item:GetText()=='Unknown x2')
  -- A fifth reuses the oldest banner (at most 4 on screen).
@@ -711,5 +711,12 @@ check('1.22.26 A full scan the server is slow to answer no longer blocks your se
  end)
  M.scanState.running=false;M.ahOpen,M.SendAHRequest,M.ThrottleReady,C_AuctionHouse.GetNumReplicateItems=oldOpen,oldSend,oldReady,oldCount
  q.waiting={};q.dedupe={};q.active=nil;q.lateReplicate=nil;assert(ok,err)
+end)
+
+check('1.23.7 Sale banner shows the flip as a percentage of what you paid',function()
+ assert(M:FlipPercentText(700,250)=='+280%' and M:FlipPercentText(-100,400)=='-25%' and M:FlipPercentText(5,0)==nil)
+ local a={name='Ritual Bands of Magic',qty=1,gross=1000,net=950,paid=250,profit=700}
+ local t=M:SaleToast(a);assert(t.profit:GetText():find('+280%',1,true),t.profit:GetText())
+ assert(M:SaleAlertText(a):find('(+280%)',1,true))
 end)
 end

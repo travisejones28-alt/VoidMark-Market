@@ -1,3 +1,7 @@
+## 1.23.7
+- **Sale banners show the flip as a percentage** of what you paid: paid 2s 50c, profit 7s → "+7s flip  +280%". Losses show the same way ("-47%"). The chat line too.
+- 293 regressions.
+
 ## 1.23.6
 - Version numbers: 1.22.24–1.22.26 were released while 1.23.x (sniper) was already out; they are renumbered 1.23.4–1.23.6.
 - **A full scan the server doesn't answer no longer blocks everything for 3 minutes.** Forever sometimes never answers a full scan ("no replicate response after 180s"). Until now Market held every search and price check behind it for those 3 minutes. After 10 seconds without an answer, the scan now keeps listening in the background and your searches go right through. If the server answers later, the scan completes normally. If it never does, it reports the same 180s timeout as before.
