@@ -858,4 +858,22 @@ check('1.23.12 Listings: a stack of Rosecap shows its real price each (not divid
  end)
  A.GetOwnedAuctions,A.GetItemKeyInfo=saved[1],saved[2];M.ownedRows=nil;M.db.keyNames=nil;assert(ok,err)
 end)
+
+check('1.23.13 Level box narrows shopping-list results, together with a term\'s own "lvl 15+"',function()
+ M.db.settings.shopMinLevel=30;M.db.settings.shopMaxLevel=40
+ local spec=select(3,M:ParseShopTerm('cloth: intellect lvl 15+'))
+ local lo,hi=M:EffectiveLevelRange(spec);assert(lo==30 and hi==40,tostring(lo)..'-'..tostring(hi))
+ local oldInfo=GetItemInfo;GetItemInfo=function(id) return 'x',nil,2,20,(id==1 and 16 or 33) end
+ local oldRows,oldMode=M.ShoppingResultRows,M.shoppingListMode
+ M.ShoppingResultRows=function() return {{itemID=1,term='cloth: intellect lvl 15+',name='Ritual Gloves of Intellect',floor=1320},
+   {itemID=2,term='cloth: intellect lvl 15+',name='Big Robe of Intellect',floor=5000},{itemID=1,name='Exact list item',floor=10}} end
+ M.shoppingListMode=true
+ local ok,err=pcall(function()
+  local names={};for _,r in ipairs(M:ShopVisibleRows()) do names[r.name]=true end
+  assert(not names['Ritual Gloves of Intellect'],'level 16 hidden by 30-40')
+  assert(names['Big Robe of Intellect'] and names['Exact list item'],'level 33 and exact items kept')
+ end)
+ GetItemInfo=oldInfo;M.ShoppingResultRows,M.shoppingListMode=oldRows,oldMode
+ M.db.settings.shopMinLevel=0;M.db.settings.shopMaxLevel=0;assert(ok,err)
+end)
 end

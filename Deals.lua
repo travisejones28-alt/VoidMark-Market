@@ -117,16 +117,24 @@ function M:SetShopLevelRange(lo,hi)
  self.db.settings.shopMaxLevel=(hi and hi>=1 and hi<=80) and math.floor(hi) or 0
  self:RefreshUI()
 end
-function M:ApplyLevelQuery(q,spec)
+-- The Level box and a term's own "lvl ..." both apply (the stricter of each
+-- end wins). A term's range used to replace the box: "lvl 15+" ignored 30-40.
+function M:EffectiveLevelRange(spec)
  local lo,hi=self:ShopLevelRange()
- if spec and (spec.minLevel or spec.maxLevel) then lo,hi=spec.minLevel,spec.maxLevel end
+ if spec then
+  if spec.minLevel and (not lo or spec.minLevel>lo) then lo=spec.minLevel end
+  if spec.maxLevel and (not hi or spec.maxLevel<hi) then hi=spec.maxLevel end
+ end
+ return lo,hi
+end
+function M:ApplyLevelQuery(q,spec)
+ local lo,hi=self:EffectiveLevelRange(spec)
  q.minLevel=lo;q.maxLevel=hi;return q
 end
 -- The AH query already limits level; this double-checks when the item is
 -- cached. Items the client doesn't know yet are kept.
 function M:LevelAllowed(itemID,spec)
- local lo,hi=self:ShopLevelRange()
- if spec and (spec.minLevel or spec.maxLevel) then lo,hi=spec.minLevel,spec.maxLevel end
+ local lo,hi=self:EffectiveLevelRange(spec)
  if not lo and not hi then return true end
  if not GetItemInfo then return true end
  local ok,_,_,_,_,req=pcall(GetItemInfo,itemID)

@@ -253,7 +253,10 @@ function M:ShopVisibleRows()
   end
   -- The Level box filters every search result, saved prices included (it
   -- used to apply only to live AH searches). Your own list items always show.
-  if keep and not self.shoppingListMode and not self.snipeView and r.itemID and self.LevelAllowed and not self:LevelAllowed(r.itemID) then keep=false end
+  -- Shopping-list results from search terms follow it too (changing the box
+  -- filters what's already on screen); exact items you added always show.
+  if keep and not self.snipeView and r.itemID and self.LevelAllowed and (not self.shoppingListMode or r.term)
+   and not self:LevelAllowed(r.itemID) then keep=false end
   if keep then out[#out+1]=r end
  end
  local s=self.shopSort or {field='price',dir=1};local key=SORT[s.field] or SORT.price

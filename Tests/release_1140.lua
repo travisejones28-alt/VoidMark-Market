@@ -195,12 +195,12 @@ check('1.14.2 Term options: per-term max price and level, armor slot, category-o
   {itemKey={itemID=902,itemSuffix=0,itemLevel=0},minPrice=100,totalQuantity=1}} end -- leather
  local ok,err=pcall(function()
   M.db.settings.flipMaxBuy=200 -- global max is overridden by the term's own max
-  M.db.settings.shopMinLevel=40;M.db.settings.shopMaxLevel=50 -- boxes would exclude level 30
+  M.db.settings.shopMinLevel=30;M.db.settings.shopMaxLevel=40 -- 1.23.13: box and term both apply
   M:SetList('Flips');assert(M:AddShopTerm('Flips','mail head: max 75s lvl 20-35'))
   M:OpenShoppingList('Flips');M.queue.nextSend=0;M:PumpQueue();emit('AUCTION_HOUSE_BROWSE_RESULTS_UPDATED')
   assert(sent.searchString=='' and sent.itemClassFilters[1].classID==4 and sent.itemClassFilters[1].subClassID==3
    and sent.itemClassFilters[1].inventoryType==1,'category query')
-  assert(sent.minLevel==20 and sent.maxLevel==35,'term level used')
+  assert(sent.minLevel==30 and sent.maxLevel==35,'box 30-40 and term 20-35 = 30-35: '..tostring(sent.minLevel)..'-'..tostring(sent.maxLevel))
   local rows=M:ShoppingResultRows();assert(#rows==1 and rows[1].floor==7000,'only the mail helm under 75s: '..#rows)
  end)
  A.GetBrowseResults,A.SendBrowseQuery,GetItemInfoInstant,GetItemInfo=origGet,origSend,origInst,origInfo
