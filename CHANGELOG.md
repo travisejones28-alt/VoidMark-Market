@@ -1,13 +1,14 @@
-## 1.22.26
+## 1.23.6
+- Version numbers: 1.22.24–1.22.26 were released while 1.23.x (sniper) was already out; they are renumbered 1.23.4–1.23.6.
 - **A full scan the server doesn't answer no longer blocks everything for 3 minutes.** Forever sometimes never answers a full scan ("no replicate response after 180s"). Until now Market held every search and price check behind it for those 3 minutes. After 10 seconds without an answer, the scan now keeps listening in the background and your searches go right through. If the server answers later, the scan completes normally. If it never does, it reports the same 180s timeout as before.
 - 292 regressions.
 
-## 1.22.25
+## 1.23.5
 - **The automatic bank scan waits while you shop.** A full scan holds the AH until the server answers, so a buy page opened just as it started sat on "Searching..." for 20+ seconds. The scan no longer starts while a buy page is open, or within 2 minutes of shopping, selling or checking listings.
 - **Buy pages say what they're waiting for**, with a seconds count: "Waiting for the full scan to start (12s)", "Waiting for a search-term page", "Waiting for your auctions to load", "Waiting for the AH to answer (4s, try 2)" or "Waiting for the AH to accept a search".
 - 291 regressions.
 
-## 1.22.24
+## 1.23.4
 - **Bank sync no longer gets stuck ("sending 90%").** Prices saved while the PC clock was ahead had times in the future. The receiving character refused the page holding them and never confirmed it, so the bank resent it forever and the main's prices went stale ("last seen 9h ago").
   - Future times in synced pages are pulled back to now and accepted.
   - One unreadable row is skipped; the rest of its page applies and the transfer moves on.
