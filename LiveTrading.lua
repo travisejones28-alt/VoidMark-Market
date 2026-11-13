@@ -150,6 +150,7 @@ function M:GetPostPrice()
 end
 -- Selecting a bag item fills quantity and starts the live price check.
 function M:SelectSellRow(row,check)
+ self.lastUserAHAction=GetTime and GetTime() or 0
  if not row then return end
  local changed=self.selectedRow~=row
  self.selectedRow=row

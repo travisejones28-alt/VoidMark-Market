@@ -41,6 +41,11 @@ check('Automatic bank scan requires AH and cooldown and bounds failed retries',f
  advance(10);M:AutomaticBankScan(GetTime());assert(n==1)
  advance(301);M.db.settings.autoBankScan=false;M:AutomaticBankScan(GetTime());assert(n==1)
  advance(6);M.db.settings.autoBankScan=true;M:AutomaticBankScan(GetTime());assert(n==2)
+ -- 1.22.25: never while a buy page is open, or within 2 minutes of shopping/selling.
+ advance(301);M.shopBuy={};M:AutomaticBankScan(GetTime());assert(n==2,'not while buying')
+ M.shopBuy=nil;M.lastUserAHAction=GetTime();advance(6);M:AutomaticBankScan(GetTime());assert(n==2,'not right after shopping')
+ advance(120);M:AutomaticBankScan(GetTime());assert(n==3,'resumes after 2 minutes')
+ M.lastUserAHAction=nil
  UnitName,NameUtil,UnitNameUnmodified,M.RequestFreshScan,InCombatLockdown=old,nu,un,request,combat
  reset()
 end)

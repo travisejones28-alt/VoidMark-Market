@@ -670,4 +670,13 @@ check('1.22.24 Saved future times are pulled back at login; guards meant for the
  assert(fixed>=6,'fixed '..tostring(fixed))
  M.db.market[key]=nil;M.db.flips={};M.db.quoteGuardUntil=nil
 end)
+
+check('1.22.25 Buy page says what its search is waiting for',function()
+ local q=M.queue;local oldA,oldW,oldT=q.active,q.waiting,M.ThrottleReady
+ q.active={kind='replicate',sent=GetTime()-12};assert(M:SearchWaitText():find('full scan',1,true))
+ q.active={kind='browse',sent=GetTime()};assert(M:SearchWaitText():find('search%-term page'))
+ q.active={kind='search',sent=GetTime()-4,attempt=2};assert(M:SearchWaitText():find('AH to answer (4s, try 2)',1,true))
+ q.active=nil;q.waiting={};M.ThrottleReady=function() return false end;assert(M:SearchWaitText():find('accept a search',1,true))
+ q.active,q.waiting,M.ThrottleReady=oldA,oldW,oldT
+end)
 end

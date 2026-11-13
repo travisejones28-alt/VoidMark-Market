@@ -77,6 +77,8 @@ end
 function M:PumpQueue()
   local q=self.queue; if not self:CanUseAuctionHouse() then return end
   local r=q.active
+  -- Keep the buy page's "waiting for ... (Ns)" counting.
+  if self.shopBuy and self.shopBuy.searching and GetTime()>=(self.shopWaitTick or 0) then self.shopWaitTick=GetTime()+1;self:RefreshUI() end
   if r and r.kind=='replicate' then
     local elapsed=GetTime()-r.sent
     if elapsed>=180 then
@@ -261,3 +263,22 @@ M:RegisterHandler('AUCTION_HOUSE_CLOSED',function(self)
   if self:ScanSurvivesClose() then self:SetScanStatus('Saving scan results (Auction House closed is fine)',0.9); return end
   self.scanToken=(self.scanToken or 0)+1; self:CancelJob('scan'); self:CancelJob('model'); self:CancelJob('scan-finish')
 end)
+
+-- What a search on screen is waiting for, so "Searching..." is never a mystery.
+function M:SearchWaitText()
+ local q=self.queue;if not q then return nil end
+ local now=GetTime();local a=q.active
+ local function secs(t) return math.max(0,math.floor(now-(t or now))) end
+ if a then
+  if a.kind=='replicate' then return 'Waiting for the full scan to start ('..secs(a.sent)..'s)...' end
+  if a.kind=='browse' or a.kind=='browsemore' then return 'Waiting for a search-term page ('..secs(a.sent)..'s)...' end
+  if a.kind=='owned' then return 'Waiting for your auctions to load ('..secs(a.sent)..'s)...' end
+  if a.kind=='search' then
+   if a.reading then return 'Reading listings...' end
+   return 'Waiting for the AH to answer ('..secs(a.sent)..'s'..((a.attempt or 1)>1 and (', try '..a.attempt) or '')..')...'
+  end
+ end
+ if self.ThrottleReady and not self:ThrottleReady() then return 'Waiting for the AH to accept a search...' end
+ if q.waiting and #q.waiting>0 then return 'Starting search...' end
+ return nil
+end

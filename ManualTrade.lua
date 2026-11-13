@@ -25,6 +25,7 @@ function M:ReviewRegularPurchase()
  end)
 end
 function M:LiveNameSearch(text)
+ self.lastUserAHAction=GetTime and GetTime() or 0
  text=(text or ''):match('^%s*(.-)%s*$')
  if #text<2 or not self.ahOpen then self:Print('Open the AH and enter at least two characters');return end
  if not C_AuctionHouse.GetBrowseResults then self:Print('Live browse unavailable');return end

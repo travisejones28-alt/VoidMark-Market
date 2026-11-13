@@ -701,6 +701,9 @@ function M:AutomaticBankScan(now)
   (unitCharacter('player') or ''):lower()~='voidmark bank' or not self:CanUseAuctionHouse() or
   self.scanState.running or self:GetSecondsUntilFreshScanAllowed()>0 or
   (InCombatLockdown and InCombatLockdown()) or now<(self.autoScanNext or 0) then return end
+ -- A full scan holds the AH until the server answers; never start one while
+ -- you're shopping, selling or checking listings (wait 2 minutes after).
+ if self.shopBuy or now-(self.lastUserAHAction or -1e9)<120 then return end
  if not C_AuctionHouse or type(C_AuctionHouse.ReplicateItems)~='function' then return end
  self.autoScanNext=now+300
  self:RequestFreshScan()

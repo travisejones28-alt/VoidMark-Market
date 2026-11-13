@@ -46,7 +46,7 @@ function M:ShopBuyRefresh()
  local b=self.shopBuy;if not b then return end
  if not self.ahOpen then b.searching=false;b.status='Open the Auction House to see live listings.';self:RefreshUI();return end
  b.token=b.token+1;local token=b.token
- b.searching=true;b.status=nil
+ b.searching=true;b.status=nil;b.searchStarted=GetTime();self.lastUserAHAction=GetTime()
  self:Search(b.market,90,function(result)
   if self.shopBuy~=b or b.token~=token then return end
   b.searching=false;b.commodity=result.commodity;b.rows=result.rows;b.at=GetTime();b.max=0
@@ -118,7 +118,7 @@ function M:ShopBuyCheck(b)
  if mine and (x.state=='invalid' or x.state=='failed' or x.state=='unknown' or x.state=='stale') and x.message then lines[#lines+1]=red(x.message) end
  if self.persistenceBlocked then lines[#lines+1]=red('Read-only: database is newer than this addon.');return false,lines end
  if not self.ahOpen then lines[#lines+1]='Open the Auction House.';return false,lines end
- if b.searching then lines[#lines+1]=gold('Searching the Auction House...');return false,lines end
+ if b.searching then lines[#lines+1]=gold(self:SearchWaitText() or 'Searching the Auction House...');return false,lines end
  if b.status then lines[#lines+1]=b.status;return false,lines end
  if self:HasUnresolvedPurchase() then lines[#lines+1]=gold('Buying...');return false,lines end
  -- Unconfirmed earlier buy: a reminder only; buying goes on (its gold stays reserved).
@@ -319,7 +319,7 @@ function M:RenderShopBuy()
    r.c[3]:SetText(tostring(o.quantity))
   end
  end
- v.empty:SetText(#rows==0 and (b.searching and 'Searching...' or (b.status or '')) or '')
+ v.empty:SetText(#rows==0 and (b.searching and (self:SearchWaitText() or 'Searching...') or (b.status or '')) or '')
  v.empty:SetShown(#rows==0)
  local ok,lines=self:ShopBuyCheck(b)
  v.buyNow:SetEnabled(ok and true or false)

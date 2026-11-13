@@ -1,3 +1,8 @@
+## 1.22.25
+- **The automatic bank scan waits while you shop.** A full scan holds the AH until the server answers, so a buy page opened just as it started sat on "Searching..." for 20+ seconds. The scan no longer starts while a buy page is open, or within 2 minutes of shopping, selling or checking listings.
+- **Buy pages say what they're waiting for**, with a seconds count: "Waiting for the full scan to start (12s)", "Waiting for a search-term page", "Waiting for your auctions to load", "Waiting for the AH to answer (4s, try 2)" or "Waiting for the AH to accept a search".
+- 291 regressions.
+
 ## 1.22.24
 - **Bank sync no longer gets stuck ("sending 90%").** Prices saved while the PC clock was ahead had times in the future. The receiving character refused the page holding them and never confirmed it, so the bank resent it forever and the main's prices went stale ("last seen 9h ago").
   - Future times in synced pages are pulled back to now and accepted.

@@ -299,6 +299,7 @@ end
 -- Runs each term through the AH queue one after another; results are merged
 -- by item (lowest price wins) into self.termRows, shown with the list.
 function M:SearchShopTerms(list,onlyTerm)
+ self.lastUserAHAction=GetTime and GetTime() or 0
  local terms=self:ShopTerms(list)
  if onlyTerm then terms={onlyTerm} end
  if #terms==0 or not self.ahOpen or not self:CanUseAuctionHouse() then return false end
