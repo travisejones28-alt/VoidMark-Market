@@ -72,6 +72,28 @@ function M:RequestOwnedAuctionsDiagnostic()
   self:QueueRequest({id='owned',kind='owned',priority=85,done=function() M:CaptureOwnedAuctions() end,
     fail=function(e) M:Log('OWNED',e); M:Print(e) end})
 end
+-- Price each for one of your listings. Forever is not consistent: a stack of
+-- Rosecap gave buyoutAmount per item, a stack of 15 Silk Cloth gave the whole
+-- stack's price (alert said 4g 32s for 28s 80c). For a stack, pick whichever
+-- reading (as-is or divided by the quantity) is closer to a price we know:
+-- your last post of it, else the market floor. Only fall back to the
+-- commodity flag when there is nothing to compare with.
+function M:OwnedUnitPrice(info,key,qty,m,keepIfUnknown)
+  local buyout=tonumber(info.buyoutAmount) or 0
+  if qty<=1 or buyout<=0 then return buyout end
+  local divided=buyout/qty
+  local ref
+  local hist=type(self.db.postHistory)=='table' and self.db.postHistory[key]
+  if type(hist)=='table' and hist[1] and self:Finite(hist[1].unit,1,1e12) then ref=hist[1].unit end
+  if not ref and m and m.latest and self:Finite(m.latest.floor,1,1e12) then ref=m.latest.floor end
+  if not ref and m and self:Finite(m.fairValue,1,1e12) then ref=m.fairValue end
+  if ref then
+    local function off(v) return math.abs(math.log(v/ref)) end
+    return off(divided)<off(buyout) and divided or buyout
+  end
+  if keepIfUnknown then return buyout end
+  return self:IsCommodity(info.itemKey)==true and buyout or divided
+end
 function M:CaptureOwnedAuctions()
   local A=C_AuctionHouse; local rows={}; local n=0
   local all
@@ -90,12 +112,9 @@ function M:CaptureOwnedAuctions()
         -- dividing by the quantity again made 3 Rosecap at 15s 89c look like
         -- 5s 29c ("LOWEST" while undercut). Gear: the buyout is for the auction.
         local unit=tonumber(info.unitPrice)
-        if not unit then
-          local buyout=tonumber(info.buyoutAmount) or 0
-          unit=self:IsCommodity(info.itemKey)==true and buyout or buyout/math.max(1,qty)
-        end
+        if not unit then unit=self:OwnedUnitPrice(info,key,qty,m) end
         rows[#rows+1]={auctionID=info.auctionID,itemKey=info.itemKey,itemID=info.itemKey.itemID,marketKey=key,name=self:OwnedAuctionName(key,m,info),quantity=qty,
-          unit=unit,timeLeft=info.timeLeftSeconds or info.timeLeft,status=info.status,action='INSPECT',deposit=info.depositAmount,
+          unit=unit,unitChecked=true,timeLeft=info.timeLeftSeconds or info.timeLeft,status=info.status,action='INSPECT',deposit=info.depositAmount,
           floor=m and m.latest and m.latest.meaningfulFloor,reason='Snapshot comparison only; refresh item before deciding'}
       end
       if debugprofilestop()-start>=4 then return false end
@@ -105,7 +124,7 @@ function M:CaptureOwnedAuctions()
     if not self.persistenceBlocked then
       -- Kept across reloads/logins so sale alerts know your listing prices.
       local snap={}
-      for i=1,math.min(#rows,300) do local o=rows[i];snap[i]={auctionID=o.auctionID,name=o.name,unit=o.unit,quantity=o.quantity,marketKey=o.marketKey,status=o.status} end
+      for i=1,math.min(#rows,300) do local o=rows[i];snap[i]={auctionID=o.auctionID,name=o.name,unit=o.unit,unitChecked=true,quantity=o.quantity,marketKey=o.marketKey,status=o.status} end
       self.db.ownedSnapshot={at=time(),rows=snap}
     end; self:RefreshInventory(); self:RefreshUI() end)
 end

@@ -35,6 +35,16 @@ local function claimListing(self,name,auctionID)
    if not (id and seen[id]) then if id then seen[id]=true end;rows[#rows+1]=o end
   end
  end
+ -- Saved before 1.23.22, a stack's price could be the whole stack's: fix it
+ -- the same way Listings now reads it (closest to a price we know).
+ for _,o in ipairs(rows) do
+  local q=tonumber(o.quantity) or 1
+  if q>1 and not o.unitChecked and self:Finite(o.unit,1,1e12) and self.OwnedUnitPrice then
+   o.unit=self:OwnedUnitPrice({buyoutAmount=o.unit,itemKey=o.itemKey},o.marketKey,q,o.marketKey and self.db.market[o.marketKey],true)
+   if o.unit<1 then o.unit=1 end
+   o.unitChecked=true
+  end
+ end
  self.saleClaimed=self.saleClaimed or {}
  -- The AH notification can name the exact auction: use it when it does.
  if auctionID then

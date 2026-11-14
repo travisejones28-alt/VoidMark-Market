@@ -117,4 +117,24 @@ check('1.23.21 Chain buy (commodities): same quantity again after the guard; can
   M:RenderUI();assert(M.execution.state=='invalid' and not M.shopBuy.chainNext)
  end,restoreAH,restoreP,function() C_Timer=oldTimer end)
 end)
+check('1.23.22 Listings/sale alert: stack price read right whether Forever gives it per item or for the stack',function()
+ local A=C_AuctionHouse;local saved={A.GetOwnedAuctions,A.GetItemKeyInfo}
+ local rose=M:Key(2452,0,0,0);local silk=M:Key(4306,0,0,0)
+ M.db.market[rose]={name='Rosecap',latest={floor=1500}};M.db.market[silk]={name='Silk Cloth',latest={floor=190}}
+ A.GetOwnedAuctions=function() return {
+  {auctionID=1,itemKey={itemID=2452,itemSuffix=0,itemLevel=0,battlePetSpeciesID=0},quantity=3,buyoutAmount=1589,status=0},
+  {auctionID=2,itemKey={itemID=4306,itemSuffix=0,itemLevel=0,battlePetSpeciesID=0},quantity=15,buyoutAmount=2880,status=0}} end
+ A.GetItemKeyInfo=function(k) return {isCommodity=true,itemName=k.itemID==2452 and 'Rosecap' or 'Silk Cloth'} end
+ local ok,err=pcall(function()
+  M:CaptureOwnedAuctions();jobs()
+  local by={};for _,o in ipairs(M.ownedRows) do by[o.auctionID]=o end
+  assert(by[1].unit==1589,'Rosecap each: '..tostring(by[1].unit))
+  assert(by[2].unit==192,'Silk each: '..tostring(by[2].unit))
+  M.saleClaimed={}
+  local a=M:BuildSaleAlert('Silk Cloth',2)
+  assert(a.qty==15 and a.gross==2880,'sold 15 Silk for '..tostring(a.gross))
+ end)
+ A.GetOwnedAuctions,A.GetItemKeyInfo=saved[1],saved[2];M.ownedRows=nil;M.db.keyNames=nil
+ M.db.market[rose]=nil;M.db.market[silk]=nil;M.db.ownedSnapshot=nil;assert(ok,err)
+end)
 end

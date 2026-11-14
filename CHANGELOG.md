@@ -1,3 +1,7 @@
+## 1.23.22
+- Sale alerts and Listings read stack prices right. Forever sometimes gives your listing's price per item (Rosecap) and sometimes for the whole stack (Silk Cloth x15 showed "Sold 4g 32s" for 28s 80c). Market now picks the reading closest to your last post of the item, or the market price. Saved listings from before are fixed the same way.
+- 316 regressions.
+
 ## 1.23.21
 - **Clear Filters** button on Shopping (bottom, next to Price). One click empties the Level box, the Price box and More... options, then searches again. It lights up only when a filter is on. "No auctions found" now says when a filter is on.
 - **Chain buy** checkbox in the buy view (like Auctionator). Your first buy sets the most you'll pay per unit. After each buy, the next one is lined up and its confirmation shown, so each buy is one click (or Enter). For items it picks the next cheapest listing; for commodities it buys the same quantity again. It stops when the next price is above that cap, a limit is hit, or you cancel.
