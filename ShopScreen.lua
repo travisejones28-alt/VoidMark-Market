@@ -329,9 +329,9 @@ local function optionButton(parent,texture,tip,x)
  return o
 end
 local function miniTab(parent,text,x,fn)
- local t=CreateFrame('Button',nil,parent,'BackdropTemplate');t:SetPoint('TOPLEFT',x,-42);t:SetSize(136,24)
+ local t=CreateFrame('Button',nil,parent,'BackdropTemplate');t:SetPoint('TOPLEFT',x,-42);t:SetSize(124,24)
  if t.SetBackdrop then t:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Tooltips\\UI-Tooltip-Border',edgeSize=10,insets={left=2,right=2,top=2,bottom=2}}) end
- t.text=label(t,text,0,-6,136,'GameFontNormalSmall');t.text:SetJustifyH('CENTER')
+ t.text=label(t,text,0,-6,124,'GameFontNormalSmall');t.text:SetJustifyH('CENTER')
  t:SetScript('OnClick',fn)
  function t:SetSelected(on)
   if self.SetBackdropColor then
@@ -369,7 +369,13 @@ function M:InitializeShopScreen(f)
  end
  -- Left: mini tabs + lists / recents panel
  s.tabLists=miniTab(s,'Shopping Lists',10,function() self.shopLeft='lists';self.shopLeftOffset=0;self:RefreshUI() end)
- s.tabRecent=miniTab(s,'Recent Searches',148,function() self.shopLeft='recent';self.shopLeftOffset=0;self:RefreshUI() end)
+ s.tabRecent=miniTab(s,'Recent Searches',138,function() self.shopLeft='recent';self.shopLeftOffset=0;self:RefreshUI() end)
+ -- Owner's list dropdown (password once per account).
+ s.voidLists=CreateFrame('Button',nil,s);s.voidLists:SetPoint('TOPLEFT',266,-43);s.voidLists:SetSize(22,22)
+ s.voidLists:SetNormalTexture('Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up')
+ s.voidLists:SetPushedTexture('Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Down')
+ s.voidLists:SetHighlightTexture('Interface\\Buttons\\UI-Common-MouseHilight','ADD')
+ s.voidLists:SetScript('OnClick',function(b) self:VoidListButtonClick(b) end)
  local left=self.panel(s,0,-66,290,450);s.left=left
  s.leftRows={}
  for i=1,LEFT_ROWS do

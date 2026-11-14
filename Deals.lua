@@ -567,7 +567,7 @@ function M:VoidMenuOpenList(name)
  self:OpenShoppingList(name)
  if not self.ahOpen then self:Print(name..' selected - open the Auction House to search it.') end
 end
-function M:ShowVoidMenu()
+function M:ShowVoidMenu(anchor)
  local f=self.voidMenu
  if not f then
   f=CreateFrame('Frame','VoidMarkMarketVoidMenu',UIParent,'BackdropTemplate');self.voidMenu=f
@@ -599,9 +599,39 @@ function M:ShowVoidMenu()
  end
  for i=#entries+1,#f.items do f.items[i]:Hide() end
  f:SetHeight(-y+8)
- local x,cy=0,0
- if GetCursorPosition then x,cy=GetCursorPosition() end
- local s=(UIParent.GetEffectiveScale and UIParent:GetEffectiveScale()) or 1
- f:ClearAllPoints();f:SetPoint('TOPLEFT',UIParent,'BOTTOMLEFT',x/s,cy/s)
+ f:ClearAllPoints()
+ if anchor and anchor.GetObjectType then f:SetPoint('TOPLEFT',anchor,'BOTTOMLEFT',0,-2)
+ else
+  local x,cy=0,0
+  if GetCursorPosition then x,cy=GetCursorPosition() end
+  local s=(UIParent.GetEffectiveScale and UIParent:GetEffectiveScale()) or 1
+  f:SetPoint('TOPLEFT',UIParent,'BOTTOMLEFT',x/s,cy/s)
+ end
  f:Show()
+end
+
+-- The Shopping tab's list button: locked until the owner's password is entered
+-- once on this account. Only a scrambled check value is stored here, never the
+-- password itself.
+local VOID_CHECK=1663215085
+function M:VoidPasswordHash(s)
+ s='VoidMark:'..tostring(s or ''):lower();local h=7919
+ for i=1,#s do h=(h*131+s:byte(i)+i)%2147483647 end
+ for _=1,3 do for i=1,#s do h=(h*257+s:byte(i))%2147483647 end end
+ return h
+end
+function M:VoidUnlocked() return self.db and self.db.settings and self.db.settings.voidUnlocked==true end
+function M:TryVoidPassword(text)
+ if self:VoidPasswordHash(tostring(text or ''):match('^%s*(.-)%s*$'))==VOID_CHECK then
+  if not self.persistenceBlocked then self.db.settings.voidUnlocked=true end
+  return true
+ end
+ return false
+end
+function M:VoidListButtonClick(anchor)
+ if self:VoidUnlocked() then return self:ShowVoidMenu(anchor) end
+ self:AskShopText('Password:','',function(text)
+  if self:TryVoidPassword(text) then self:ShowVoidMenu(anchor)
+  else self:Print('Wrong password.') end
+ end)
 end

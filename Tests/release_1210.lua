@@ -924,4 +924,18 @@ check('1.23.15 /vmm void opens a dropdown of your lists and the hidden lists',fu
  end)
  M.OpenShoppingList=oldOpen;M:UnlockSecretList('rings',true);if M.voidMenu then M.voidMenu:Hide() end;assert(ok,err)
 end)
+
+check('1.23.16 Shopping tab list button: password once, then the dropdown',function()
+ M.db.settings.voidUnlocked=nil
+ local asked;local oldAsk,oldShow=M.AskShopText,M.ShowVoidMenu;local shown=0
+ M.AskShopText=function(_,p,d,accept) asked=accept end;M.ShowVoidMenu=function() shown=shown+1 end
+ local ok,err=pcall(function()
+  assert(M.shopScreen.voidLists,'button on the Shopping tab')
+  M:VoidListButtonClick();asked('wrong');assert(shown==0 and not M:VoidUnlocked(),'wrong password')
+  M:VoidListButtonClick();asked('  Travis ');assert(shown==1 and M:VoidUnlocked(),'right password (any case)')
+  asked=nil;M:VoidListButtonClick();assert(asked==nil and shown==2,'not asked again')
+  assert(M:VoidPasswordHash('travis')==1663215085)
+ end)
+ M.AskShopText,M.ShowVoidMenu=oldAsk,oldShow;M.db.settings.voidUnlocked=nil;assert(ok,err)
+end)
 end
