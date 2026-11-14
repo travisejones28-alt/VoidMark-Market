@@ -1,3 +1,7 @@
+## 1.23.17
+- Owner list menu: switch between lists; the one being searched is marked.
+- 306 regressions.
+
 ## 1.23.16
 - Shopping tab: small list button next to Recent Searches (owner only, password-locked). The two mini tabs are a little narrower to fit it.
 - 305 regressions.

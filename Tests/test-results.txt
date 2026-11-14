@@ -176,7 +176,7 @@ PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
 PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
 PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
-BENCH scan: 80 frames (1.3s at 60fps, 2.7s at 30fps), worst frame 12.1ms, cpu 0.79s | after:share-scan=17 done=1 model=48 processing=14
+BENCH scan: 82 frames (1.4s at 60fps, 2.7s at 30fps), worst frame 12.1ms, cpu 0.82s | after:share-scan=17 done=1 model=49 processing=15
 PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.13 history stores only the fields it needs; latest keeps the full snapshot
 PASS 1.9.13 history saved by older versions is shrunk once at login without losing prices
@@ -291,6 +291,7 @@ PASS 1.23.14 Ring, neck and trinket terms: "ring: sorcerer max 1g50s lvl 40-49"
 PASS 1.23.14 Secret rings list: hidden until /vmm void rings, removable with /vmm void rings off
 PASS 1.23.15 /vmm void opens a dropdown of your lists and the hidden lists
 PASS 1.23.16 Shopping tab list button: password once, then the dropdown
+PASS 1.23.17 Password unlocks Gear flips and Rings 40-49; the menu ticks the one being searched and switches
 PASS 1.23.0 Sniper flags a mispost under 50% of its own average with a real gain
 PASS 1.23.0 Sniper never trusts the all-suffixes estimate
 PASS 1.23.0 Sniper reads every page and saves nothing to prices or history
@@ -306,4 +307,4 @@ PASS 1.23.1 Sniper status stays on the Shopping line; the top scan line is untou
 PASS 1.23.2 Snipe settings are dropdowns on the Hits view: pick a line, the setting changes
 PASS 1.23.3 A scan time saved in the future (wrong PC clock) no longer blocks full scans
 PASS 1.23.3 Empty Hits view says what the sniper looks for
-ALL 305 TESTS PASSED
+ALL 306 TESTS PASSED

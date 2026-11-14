@@ -524,7 +524,9 @@ end
 -- Hidden lists: built in, never shown until unlocked with their command
 -- (not listed in /vmm help). Unlocking adds them as a normal shopping list.
 M.SECRET_LISTS={
- rings={name='Rings 40-49',terms={
+ -- Your first list (Azmork's gear suffixes), greens only so it searches fast.
+ gear={name='Gear flips',order=1,terms=M.FLIP_STARTER},
+ rings={order=2,name='Rings 40-49',terms={
   'ring: sorcerer max 1g50s lvl 40-49','ring: bandit max 1g50s lvl 40-49',
   'ring: beast max 1g50s lvl 40-49','ring: physician max 1g50s lvl 40-49'}},
 }
@@ -544,21 +546,32 @@ end
 
 -- /vmm void: a small dropdown at your cursor with every shopping list (click
 -- = open it on Shopping and search it) and the hidden lists to unlock or hide.
+-- Your lists, the one being searched ticked; click another to switch to it and
+-- search it.
 function M:VoidMenuEntries()
- local out={{header='SHOPPING LISTS'}}
- local names={}
- for name in pairs(self.db.shoppingLists or {}) do if name~='Shopping' then names[#names+1]=name end end
- table.sort(names);table.insert(names,1,'Shopping')
- for _,name in ipairs(names) do
+ local out={{header='SEARCH WHICH LIST?'}}
+ local active=self.activeList or (self.db and self.db.activeList) or 'Shopping'
+ local function entry(name)
   local n=#(self.ShopTerms and self:ShopTerms(name) or {})
-  out[#out+1]={text=name..(n>0 and ('  |cff8f8f8f('..n..' terms)|r') or ''),fn=function() self:VoidMenuOpenList(name) end}
+  local on=self.shoppingListMode and active==name
+  out[#out+1]={name=name,active=on,
+   text=(on and '|cff40ff40> |r' or '   ')..name..(n>0 and ('  |cff8f8f8f('..n..' terms)|r') or ''),
+   fn=function() self:VoidMenuOpenList(name) end}
  end
- out[#out+1]={header='HIDDEN LISTS'}
- local ids={};for id in pairs(self.SECRET_LISTS) do ids[#ids+1]=id end;table.sort(ids)
- for _,id in ipairs(ids) do
-  local s=self.SECRET_LISTS[id]
-  if self.db.shoppingLists[s.name] then out[#out+1]={text='|cff8f8f8fHide|r '..s.name,fn=function() self:UnlockSecretList(id,true) end}
-  else out[#out+1]={text='|cffc8a0ffUnlock|r '..s.name,fn=function() self:UnlockSecretList(id);self:VoidMenuOpenList(s.name) end} end
+ local ids={};for id in pairs(self.SECRET_LISTS) do ids[#ids+1]=id end
+ table.sort(ids,function(a,b) return (self.SECRET_LISTS[a].order or 9)<(self.SECRET_LISTS[b].order or 9) end)
+ local secret={}
+ for _,id in ipairs(ids) do local s=self.SECRET_LISTS[id];secret[s.name]=true;if self.db.shoppingLists[s.name] then entry(s.name) end end
+ local names={}
+ for name in pairs(self.db.shoppingLists or {}) do if name~='Shopping' and not secret[name] then names[#names+1]=name end end
+ table.sort(names);table.insert(names,1,'Shopping')
+ for _,name in ipairs(names) do entry(name) end
+ local hidden={}
+ for _,id in ipairs(ids) do local s=self.SECRET_LISTS[id];if not self.db.shoppingLists[s.name] then hidden[#hidden+1]=id end end
+ if #hidden>0 then
+  out[#out+1]={header='HIDDEN LISTS'}
+  for _,id in ipairs(hidden) do local s=self.SECRET_LISTS[id]
+   out[#out+1]={text='|cffc8a0ffUnlock|r '..s.name,fn=function() self:UnlockSecretList(id);self:VoidMenuOpenList(s.name) end} end
  end
  return out
 end
@@ -631,7 +644,9 @@ end
 function M:VoidListButtonClick(anchor)
  if self:VoidUnlocked() then return self:ShowVoidMenu(anchor) end
  self:AskShopText('Password:','',function(text)
-  if self:TryVoidPassword(text) then self:ShowVoidMenu(anchor)
+  if self:TryVoidPassword(text) then
+   for id in pairs(self.SECRET_LISTS) do self:UnlockSecretList(id) end
+   self:ShowVoidMenu(anchor)
   else self:Print('Wrong password.') end
  end)
 end

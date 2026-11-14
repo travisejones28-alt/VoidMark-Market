@@ -914,13 +914,13 @@ check('1.23.15 /vmm void opens a dropdown of your lists and the hidden lists',fu
   local e=M:VoidMenuEntries();local texts={}
   for _,x in ipairs(e) do texts[#texts+1]=x.header or x.text end
   local all=table.concat(texts,' | ')
-  assert(all:find('Shopping',1,true) and all:find('Unlock|r Rings 40-49',1,true),all)
+  assert(all:find('Shopping',1,true) and all:find('Unlock|r Rings 40-49',1,true) and all:find('Unlock|r Gear flips',1,true),all)
   -- Unlock from the menu: list appears and opens.
   for i,x in ipairs(e) do if x.text and x.text:find('Unlock',1,true) then f:Hide();x.fn() end end
   assert(M.db.shoppingLists['Rings 40-49'] and opened=='Rings 40-49')
   M:ShowVoidMenu();e=M:VoidMenuEntries();all=''
   for _,x in ipairs(e) do all=all..(x.header or x.text)..' | ' end
-  assert(all:find('Rings 40-49',1,true) and all:find('Hide|r Rings 40-49',1,true),all)
+  assert(all:find('Rings 40-49',1,true) and not all:find('Unlock|r Rings',1,true),all)
  end)
  M.OpenShoppingList=oldOpen;M:UnlockSecretList('rings',true);if M.voidMenu then M.voidMenu:Hide() end;assert(ok,err)
 end)
@@ -937,5 +937,21 @@ check('1.23.16 Shopping tab list button: password once, then the dropdown',funct
   assert(M:VoidPasswordHash('travis')==1663215085)
  end)
  M.AskShopText,M.ShowVoidMenu=oldAsk,oldShow;M.db.settings.voidUnlocked=nil;assert(ok,err)
+end)
+
+check('1.23.17 Password unlocks Gear flips and Rings 40-49; the menu ticks the one being searched and switches',function()
+ M.db.settings.voidUnlocked=nil
+ local asked;local oldAsk,oldOpen=M.AskShopText,M.OpenShoppingList
+ M.AskShopText=function(_,p,d,accept) asked=accept end
+ M.OpenShoppingList=function(_,n) M.activeList=n;M.shoppingListMode=true end
+ local ok,err=pcall(function()
+  M:VoidListButtonClick();asked('travis')
+  assert(#M:ShopTerms('Gear flips')==12 and #M:ShopTerms('Rings 40-49')==4,'both lists made')
+  local e=M:VoidMenuEntries();assert(e[2].name=='Gear flips' and e[3].name=='Rings 40-49','gear first, rings second')
+  e[3].fn();e=M:VoidMenuEntries();assert(e[3].active and not e[2].active,'rings ticked')
+  e[2].fn();e=M:VoidMenuEntries();assert(e[2].active and not e[3].active,'switched to gear')
+ end)
+ M.AskShopText,M.OpenShoppingList=oldAsk,oldOpen;M.db.settings.voidUnlocked=nil
+ M:UnlockSecretList('gear',true);M:UnlockSecretList('rings',true);M.shoppingListMode=nil;M.activeList='Shopping';assert(ok,err)
 end)
 end
