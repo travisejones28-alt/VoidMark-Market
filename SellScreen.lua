@@ -183,6 +183,9 @@ function M:InitializeSellScreen(f)
   local r=CreateFrame('Button',nil,l);r:SetPoint('TOPLEFT',6,-28-(i-1)*25);r:SetSize(680,24)
   r:SetHighlightTexture('Interface\\QuestFrame\\UI-QuestTitleHighlight')
   r.c={label(r,'',8,-6,210,'GameFontHighlight'),label(r,'',224,-6,130,'GameFontHighlight'),label(r,'',364,-6,200,'GameFontHighlight'),label(r,'',574,-6,90,'GameFontHighlight')}
+  -- One line per cell: long text is cut with "..." instead of wrapping over the next row.
+  for _,c in ipairs(r.c) do if c.SetWordWrap then c:SetWordWrap(false) end;if c.SetMaxLines then c:SetMaxLines(1) end end
+  r.c[4]:SetWidth(120)
   r:SetScript('OnClick',function(b) if self.sellMode=='current' then self:PickListing(b.entry) end end)
   -- Double-click a cheap listing (someone mis-posted) to buy it.
   r:SetScript('OnDoubleClick',function(b) if self.sellMode=='current' and b.entry and not b.entry.own then self:SellOpenBuy(b.entry) end end)
@@ -205,14 +208,18 @@ function M:InitializeSellScreen(f)
 end
 
 local function money(self,v) return self:Coins(v) end
--- A listing well under the others (someone mis-posted): under 60% of the
--- middle price of the other listings.
+-- A listing well under the next ones up (someone mis-posted): under 60% of
+-- the middle of the next 5 listings above it. Comparing with all listings
+-- flagged normal prices when expensive ones sat further down the list.
 function M:SellRowCheap(e,list)
  if not e or e.own or not self:Finite(e.unit,1,1e12) then return false end
- local units={}
- for _,o in ipairs(list or {}) do if o~=e and not o.own and self:Finite(o.unit,1,1e12) then units[#units+1]=o.unit end end
- if #units<2 then return false end
- table.sort(units);local mid=units[math.floor((#units+1)/2)]
+ local above={}
+ for _,o in ipairs(list or {}) do
+  if o~=e and not o.own and self:Finite(o.unit,1,1e12) and o.unit>=e.unit then above[#above+1]=o.unit end
+ end
+ if #above<2 then return false end
+ table.sort(above)
+ local n=math.min(5,#above);local mid=above[math.floor((n+1)/2)]
  return e.unit<mid*0.6
 end
 -- Selling: open the buy view for this item (the Buy button, or double-click
@@ -339,7 +346,7 @@ function M:RenderSellScreen()
   local e=list[(self.sellListPage-1)*13+i];row.entry=e;row:SetShown(e~=nil)
   if e then
    local cells
-   if mode=='current' then cells={money(self,e.unit),tostring(e.quantity),money(self,e.unit*e.quantity),e.own and '|cff72e7aaYes|r' or (self:SellRowCheap(e,list) and '|cffffd200No - cheap, double-click to buy|r' or 'No')}
+   if mode=='current' then cells={money(self,e.unit),tostring(e.quantity),money(self,e.unit*e.quantity),e.own and '|cff72e7aaYes|r' or (self:SellRowCheap(e,list) and '|cffffd200CHEAP - buy|r' or 'No')}
    elseif mode=='history' then cells={date('%b %d %H:%M',e.at or 0),money(self,e.unit),tostring(e.quantity or '--'),''}
    else cells={date('%b %d %H:%M',e.at or 0),money(self,e.unit),tostring(e.quantity or '--'),e.duration and (({2,8,24})[e.duration]..'h') or ''} end
    for j=1,4 do row.c[j]:SetText(cells[j]) end

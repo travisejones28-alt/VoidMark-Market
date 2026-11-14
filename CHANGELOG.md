@@ -1,3 +1,6 @@
+## 1.23.26
+- Selling price list: "cheap" now compares a listing with the next few listings above it, not all of them. Wool Cloth at 1s 40c next to 1s 42c is no longer flagged just because pricier stacks sit further down. The label is now a short "CHEAP - buy" on one line (it wrapped over the rows below).
+
 ## 1.23.25
 - Selling: when the AH refuses an item, the game's own reason now shows too (the red error text you'd get dropping it in Blizzard's Sell tab).
 

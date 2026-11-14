@@ -146,6 +146,9 @@ check('1.23.23 Selling: a mis-posted cheap listing is marked; double-click opens
   M:SetView('selling');M.selectedRow=sel
   local list={{unit=105,quantity=2},{unit=249,quantity=7},{unit=250,quantity=45},{unit=251,quantity=41}}
   assert(M:SellRowCheap(list[1],list) and not M:SellRowCheap(list[2],list),'1s 5c among 2s 50c is cheap')
+  -- Wool Cloth: 1s 40c next to 1s 42c-1s 50c is normal even with pricey listings further down.
+  local wool={{unit=140},{unit=142},{unit=143},{unit=148},{unit=149},{unit=150},{unit=163},{unit=400},{unit=500},{unit=600},{unit=700},{unit=800}}
+  for i=1,3 do assert(not M:SellRowCheap(wool[i],wool),'Wool row '..i..' is not cheap') end
   M:SellOpenBuy(list[1]);answer(true,key)
   assert(M.shopBuy and M.shopBuy.fromSelling==sel,'buy view from Selling')
   assert(M.shopBuy.quantity==2,'just the cheap ones: '..tostring(M.shopBuy.quantity))
