@@ -50,7 +50,7 @@ function M:LiveNameSearch(text)
    end
   end
   local more=self.BrowseNeedsMore and self:BrowseNeedsMore(pages) and self:QueueBrowseMore('browse-name',done,fail)
-  self.shoppingSearchStatus=more and ('Searching the Auction House for '..text..'... page '..(pages+1)) or #out==0 and ('No auctions found for '..text..'. Try another name.') or nil
+  self.shoppingSearchStatus=more and ('Searching the Auction House for '..text..'... page '..(pages+1)) or #out==0 and ('No auctions found for '..text..'.'..((self.ShopFiltersActive and self:ShopFiltersActive()) and ' Filters are on ('..(self:LevelRangeText() or 'price')..') - click Clear Filters.' or ' Try another name.')) or nil
   self:CancelJob('browse');self.browseRows=out;if pages==1 then self.selectedRow=nil end;self.page=1;self:SortBrowseRows();self:RefreshUI()
  end
  self:QueueRequest({id='browse-name',kind='browse',query=q,priority=50,done=done,fail=fail})

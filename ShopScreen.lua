@@ -469,16 +469,18 @@ function M:InitializeShopScreen(f)
  res:SetScript('OnMouseWheel',function(_,d) self.shopScroll=math.max(0,(self.shopScroll or 0)-(d>0 and 3 or -3));self:RefreshUI() end)
  s.empty=label(res,'',14,-200,670,'GameFontHighlight');s.empty:SetJustifyH('CENTER')
  -- Price range for what's on screen (any list or search), in gold: "1.5", "50s", "1g20s".
- label(s,'Price:',302,-530,40,'GameFontNormalSmall')
- s.minPrice=edit(s,342,-525,48);label(s,'-',394,-530,8,'GameFontNormalSmall');s.maxPrice=edit(s,404,-525,48)
- label(s,'g',456,-530,10,'GameFontNormalSmall')
+ s.priceBits={label(s,'Price:',302,-530,40,'GameFontNormalSmall')}
+ s.minPrice=edit(s,342,-525,48);s.priceBits[2]=label(s,'-',394,-530,8,'GameFontNormalSmall');s.maxPrice=edit(s,404,-525,48)
+ s.priceBits[3]=label(s,'g',456,-530,10,'GameFontNormalSmall')
  local function savePrices() self:SetShopPriceRange(s.minPrice:GetText(),s.maxPrice:GetText()) end
  for _,e in ipairs({s.minPrice,s.maxPrice}) do
   if e.SetMaxLetters then e:SetMaxLetters(8) end
   e:SetScript('OnEnterPressed',function(b) b:ClearFocus();savePrices() end)
   e:SetScript('OnEditFocusLost',function() savePrices() end)
  end
- s.status=label(s,'',472,-530,262,'GameFontHighlightSmall')
+ -- One click removes every filter (Level, Price, More...) and re-searches.
+ s.clearFilters=button(s,'Clear Filters',470,-524,104,function() self:ClearShopFilters() end)
+ s.status=label(s,'',580,-530,156,'GameFontHighlightSmall')
  s.flipLedger=button(s,'Flip Ledger',742,-524,126,function() self:ShowFlipLedger() end)
  s.exportResults=button(s,'Export Results',874,-524,130,function() self:ShowShopExport() end)
  if self.InitSnipeControls then self:InitSnipeControls(s) end
@@ -552,6 +554,8 @@ function M:RenderShopScreen()
  -- Buy view replaces the results (Auctionator-style)
  local buying=self.shopBuy~=nil
  s.results:SetShown(not buying);s.exportResults:SetShown(not buying);s.status:SetShown(not buying)
+ -- Bottom filter row sits under the buy view; hide it there (it overlapped "Your gold").
+ for _,w in ipairs({s.minPrice,s.maxPrice,s.clearFilters,unpack(s.priceBits or {})}) do if w then w:SetShown(not buying) end end
  if s.flipLedger then s.flipLedger:SetShown(not buying) end
  if self.RenderSnipeControls then self:RenderSnipeControls(s,buying) end
  if buying then s.buyView:Show();return self:RenderShopBuy() end
@@ -621,6 +625,35 @@ function M:RenderShopScreen()
  end
  s.status:SetText(status or '')
  s.exportResults:SetEnabled(#source>0)
+ if s.clearFilters then
+  local on=self:ShopFiltersActive()
+  s.clearFilters:SetText(on and '|cffffd200Clear Filters|r' or 'Clear Filters');s.clearFilters:SetEnabled(on)
+ end
+end
+
+-- Any filter that can hide results: Level box, Price box, More... options.
+function M:ShopFiltersActive()
+ local lo,hi=self:ShopLevelRange();local plo,phi=self:ShopPriceRange()
+ return (lo or hi or plo or phi or self.shopFilters) and true or false
+end
+function M:ClearShopFilters()
+ if self.persistenceBlocked then return end
+ self.db.settings.shopMinLevel=0;self.db.settings.shopMaxLevel=0
+ self.db.settings.shopMinPrice=0;self.db.settings.shopMaxPrice=0
+ self.shopFilters=nil;self.shopScroll=0
+ local s=self.shopScreen
+ for _,k in ipairs({'minLevel','maxLevel','minPrice','maxPrice'}) do
+  local e=s and s[k];if e then if e.ClearFocus then e:ClearFocus() end;e:SetText('') end
+ end
+ -- The live search sent the level to the AH, so search again without it.
+ local text=(self.db.settings.filter or ''):match('^%s*(.-)%s*$')
+ if not self.shoppingListMode and #text>=2 and self.ahOpen and not self:ShopSearching() then
+  return self:ShopSearch(text)
+ end
+ if self.shoppingListMode and self.ahOpen and self.termSearch and self.activeList and self.SearchShopTerms and not self:ShopSearching() then
+  return self:SearchShopTerms(self.activeList,self.shopOnlyTerm)
+ end
+ self:RefreshUI()
 end
 
 -- What an empty list result means: searching, nothing matched (and what limits

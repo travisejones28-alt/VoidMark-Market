@@ -176,7 +176,7 @@ PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
 PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
 PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
-BENCH scan: 82 frames (1.4s at 60fps, 2.7s at 30fps), worst frame 12.1ms, cpu 0.81s | after:share-scan=17 done=1 model=49 processing=15
+BENCH scan: 86 frames (1.4s at 60fps, 2.9s at 30fps), worst frame 12.1ms, cpu 0.84s | after:share-scan=18 done=1 model=51 processing=16
 PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.13 history stores only the fields it needs; latest keeps the full snapshot
 PASS 1.9.13 history saved by older versions is shrunk once at login without losing prices
@@ -311,4 +311,9 @@ PASS 1.23.1 Sniper status stays on the Shopping line; the top scan line is untou
 PASS 1.23.2 Snipe settings are dropdowns on the Hits view: pick a line, the setting changes
 PASS 1.23.3 A scan time saved in the future (wrong PC clock) no longer blocks full scans
 PASS 1.23.3 Empty Hits view says what the sniper looks for
-ALL 310 TESTS PASSED
+PASS 1.23.21 Clear Filters empties Level, Price and More... and searches again
+PASS 1.23.21 Filter row hides under the buy view (no overlap with Your gold)
+PASS 1.23.21 Shopping buys are not capped by the quantity limit
+PASS 1.23.21 Chain buy (items): next cheapest listing is lined up after each buy, stops above the cap
+PASS 1.23.21 Chain buy (commodities): same quantity again after the guard; cancel stops it
+ALL 315 TESTS PASSED

@@ -65,9 +65,10 @@ function M:ShopBuyRefresh()
   table.sort(b.view,function(x,y) if x.unit==y.unit then return (x.index or 1e9)<(y.index or 1e9) end return x.unit<y.unit end)
   b.status=#b.rows==0 and (#b.view>0 and 'Only your own listing is up - nothing to buy.' or 'None available to buy right now.') or nil
   self:RefreshUI()
+  if b.chainNext then b.chainNext=nil;self:ShopBuyChainNext(b) end
  end,function(err)
   if self.shopBuy~=b or b.token~=token then return end
-  b.searching=false;b.status='Search failed: '..tostring(err)..'. Press Refresh.';self:RefreshUI()
+  b.searching=false;b.chainNext=nil;b.status='Search failed: '..tostring(err)..'. Press Refresh.';self:RefreshUI()
  end,function() return self.shopBuy==b and b.token==token end)
  self:RefreshUI()
 end
@@ -164,7 +165,7 @@ end
 local function popup(self,text,accept,cancel,timeout)
  if not StaticPopupDialogs or not StaticPopup_Show then self:Print('Confirmation dialog unavailable');return false end
  StaticPopupDialogs.VOIDMARKMARKET_SHOPBUY=StaticPopupDialogs.VOIDMARKMARKET_SHOPBUY or {
-  text='%s',button1=ACCEPT or 'Accept',button2=CANCEL or 'Cancel',whileDead=false,hideOnEscape=true,preferredIndex=3,
+  text='%s',button1=ACCEPT or 'Accept',button2=CANCEL or 'Cancel',whileDead=false,hideOnEscape=true,preferredIndex=3,enterClicksFirstButton=true,
   OnAccept=function(_,data) if data and data.accept then data.accept() end end,
   OnCancel=function(_,data) if data and data.cancel then data.cancel() end end}
  StaticPopupDialogs.VOIDMARKMARKET_SHOPBUY.timeout=timeout or 0
@@ -182,19 +183,24 @@ function M:ShopBuyNow()
  if b.commodity then
   if wide(minU,maxU) then
    popup(self,red('CAREFUL')..'\n\nThe price varies a lot between listings.\n\nUnit price: '..self:Coins(minU)..' - '..self:Coins(maxU),
-    function() if self.shopBuy==b then self:ShopBuyStart() end end)
+    function() if self.shopBuy==b then self:ShopBuyStart() end end,
+    function() if self.shopBuy==b then self:ShopBuyChainStop('Chain buy stopped.') end end)
    return
   end
   return self:ShopBuyStart()
  end
  local r=b.rows[b.pick or 1]
  popup(self,'Paying '..self:Coins(r.total)..' for '..(r.quantity>1 and (r.quantity..' x ') or '')..b.name..'?',
-  function() if self.shopBuy==b and b.rows and b.rows[b.pick or 1]==r then self:ShopBuyStart() end end)
+  function() if self.shopBuy==b and b.rows and b.rows[b.pick or 1]==r then self:ShopBuyStart() end end,
+  function() if self.shopBuy==b then self:ShopBuyChainStop('Chain buy stopped.') end end)
 end
 function M:ShopBuyStart()
  local b=self.shopBuy;if not b then return end
  local ok=self:ShopBuyCheck(b);if not ok then return end
- local unit,total,_,_,q=self:ShopBuyPrices(b)
+ local unit,total,_,maxU,q=self:ShopBuyPrices(b)
+ -- Chain buy: the first buy you start sets the highest price per unit the
+ -- chain will keep paying; buys the chain starts itself keep that cap.
+ if b.chainAuto then b.chainAuto=nil else b.chainMax=(b.commodity and maxU) or unit;b.chainCount=0 end
  local live={quantity=q,cost=total,received=GetTime(),at=time()}
  if not b.commodity then live.auctionID=b.rows[b.pick or 1].auctionID;live.itemLink=b.rows[b.pick or 1].itemLink end
  live.economics=self:Economics(b.market,total,q,'shopping')
@@ -217,11 +223,50 @@ function M:ShopBuyQuoted(x,unit,total,increased)
   function() if self.execution==x and (x.state=='quoted' or x.state=='quoting') then self:InvalidateQuote('Purchase cancelled') end end,
   x.quoteWindow or 15)
 end
+-- Chain buy (like Auctionator): after each purchase, the next one is lined
+-- up and its confirmation shown, so each buy is one click (or Enter). It
+-- stops when the next price is above the cap, a limit is hit, or you cancel.
+function M:ShopChainOn() return self.db.settings.shopChainBuy==true end
+function M:ShopBuyChainStop(why)
+ local b=self.shopBuy;if not b then return end
+ b.chainNext=nil;b.chainAuto=nil;b.chainStopped=why;self:RefreshUI()
+end
+function M:ShopBuyChainNext(b)
+ if self.shopBuy~=b or not self:ShopChainOn() or not b.chainMax then return end
+ if not (b.rows and #b.rows>0) then return self:ShopBuyChainStop('Chain buy done: nothing left to buy.') end
+ if not b.commodity then
+  local best=1
+  for i,r in ipairs(b.rows) do if r.unit<b.rows[best].unit then best=i end end
+  b.pick=best
+ elseif (b.quantity or 0)<1 then return self:ShopBuyChainStop('Chain buy stopped.')
+ elseif b.max and b.quantity>b.max then b.quantity=b.max end
+ local unit,total,_,maxU=self:ShopBuyPrices(b)
+ local cost=(b.commodity and maxU) or unit
+ if not total or not cost then return self:ShopBuyChainStop('Chain buy stopped: not enough left.') end
+ if cost>b.chainMax then
+  return self:ShopBuyChainStop('Chain buy stopped: next is '..self:Coins(cost)..' each (your cap '..self:Coins(b.chainMax)..').')
+ end
+ local guard=(self.db.quoteGuardUntil or 0)-time()
+ if b.commodity and guard>0 and C_Timer and C_Timer.After then
+  C_Timer.After(guard+0.2,function() self:ShopBuyChainNext(b) end);self:RefreshUI();return
+ end
+ local ok,lines=self:ShopBuyCheck(b)
+ if not ok then
+  local why=lines[#lines] and lines[#lines]:gsub('|c%x%x%x%x%x%x%x%x',''):gsub('|r','') or ''
+  return self:ShopBuyChainStop('Chain buy stopped. '..why)
+ end
+ b.chainAuto=true;b.chainStopped=nil
+ self:ShopBuyNow()
+end
 local function afterPurchase(self,ok)
  local x=self.execution;local b=x and x.shop
  if not b or b~=self.shopBuy then return end
  hidePopup()
- if ok then b.done='Bought '..x.live.quantity..' x '..b.name..' for '..self:Money(x.live.cost) end
+ if ok then
+  b.chainCount=(b.chainCount or 0)+1
+  b.done='Bought '..x.live.quantity..' x '..b.name..' for '..self:Money(x.live.cost)..((self:ShopChainOn() and b.chainCount>1) and (' ('..b.chainCount..' in this chain)') or '')
+  if self:ShopChainOn() and b.chainMax then b.chainNext=true end
+ else b.chainNext=nil end
  self:ShopBuyRefresh() -- keep the quantity so Buy Now can be pressed again
 end
 M:RegisterHandler('COMMODITY_PURCHASE_SUCCEEDED',function(self) local x=self.execution;if x.shop and x.state=='complete' then afterPurchase(self,true) end end)
@@ -261,10 +306,17 @@ function M:InitializeShopBuyView(s)
  label(v,'Unit price',14,-150,80,'GameFontNormal');v.unit=label(v,'',104,-150,170,'GameFontHighlight')
  label(v,'Total price',14,-182,80,'GameFontNormal');v.total=label(v,'',104,-182,170,'GameFontHighlight')
  v.buyNow=button(v,'Buy Now',14,-218,242,function() self:ShopBuyNow() end,28)
- v.status=label(v,'',14,-258,262,'GameFontHighlightSmall');v.status:SetJustifyV('TOP')
+ v.chain=CreateFrame('CheckButton',nil,v,'UICheckButtonTemplate');v.chain:SetPoint('TOPLEFT',10,-252);v.chain:SetSize(24,24)
+ v.chainText=label(v,'Chain buy (keep buying at this price or less)',38,-258,230,'GameFontHighlightSmall')
+ v.chain:SetScript('OnClick',function(c)
+  self.db.settings.shopChainBuy=c:GetChecked() and true or false
+  local b=self.shopBuy;if b and not self:ShopChainOn() then b.chainNext=nil;b.chainAuto=nil end
+  self:RefreshUI()
+ end)
+ v.status=label(v,'',14,-286,262,'GameFontHighlightSmall');v.status:SetJustifyV('TOP')
  -- Unknown purchase result: settle it here instead of the Ledger.
- v.gotIt=button(v,'I got it',14,-330,118,function() self:ShopSettleUnknown(true) end,24)
- v.didnt=button(v,"Didn't get it",138,-330,118,function() self:ShopSettleUnknown(false) end,24)
+ v.gotIt=button(v,'I got it',14,-400,118,function() self:ShopSettleUnknown(true) end,24)
+ v.didnt=button(v,"Didn't get it",138,-400,118,function() self:ShopSettleUnknown(false) end,24)
  v.gotIt:Hide();v.didnt:Hide()
  v.money=label(v,'',14,-470,262,'GameFontHighlightSmall')
  -- Listings (right)
@@ -341,6 +393,11 @@ function M:RenderShopBuy()
  v.empty:SetText(#view==0 and (b.searching and (self:SearchWaitText() or 'Searching...') or (b.status or '')) or '')
  v.empty:SetShown(#view==0)
  local ok,lines=self:ShopBuyCheck(b)
+ v.chain:SetChecked(self:ShopChainOn())
+ if self:ShopChainOn() then
+  if b.chainStopped then table.insert(lines,1,gold(b.chainStopped))
+  elseif b.chainMax then table.insert(lines,1,gold('Chain buy on: up to '..self:Coins(b.chainMax)..' each. Accept (or Enter) for each buy.')) end
+ end
  v.buyNow:SetEnabled(ok and true or false)
  v.refresh:SetEnabled(self.ahOpen and not b.searching and true or false)
  v.status:SetText(table.concat(lines,'\n\n'))

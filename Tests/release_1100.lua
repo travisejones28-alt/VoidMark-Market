@@ -131,8 +131,9 @@ check('1.10 Limits block Buy Now with a plain reason',function()
  local oldMoney=GetMoney
  run(function()
   M:ShopBuyOpen({marketKey=769,name='Chunk of Boar Meat'});answer(true,769)
+  -- 1.23.21: the quantity cap no longer blocks a Shopping buy (you pick the amount).
   M.db.settings.maxQuantity=20;M:ShopBuySetQuantity(50);M:RenderUI();local v=M.shopScreen.buyView
-  assert(not v.buyNow.enabled and v.status:GetText():find('quantity limit (20)',1,true))
+  assert(v.buyNow.enabled and not v.status:GetText():find('quantity limit',1,true))
   M.db.settings.maxQuantity=5000;GetMoney=function() return 100 end;M:RenderUI()
   assert(not v.buyNow.enabled and v.status:GetText():find('Not enough gold',1,true))
   local n=#log;M:ShopBuyNow();assert(#log==n)

@@ -38,10 +38,12 @@ function M:CheckRisk(m,e,exclude)
   check(e.cost<=s.maxTransaction,'Transaction spend limit')
   check(item+e.cost<=s.maxItemSpend,'Item exposure limit')
   check(total+e.cost<=s.maxExposure,'Portfolio exposure limit')
-  check(e.quantity<=s.maxQuantity,'Quantity limit')
   local gold=GetMoney and GetMoney()
   check(self:Finite(gold,0,1e14) and e.cost<=math.max(0,gold-reserved-(s.minGoldReserve or 0)),'Liquid gold reserve / pending reservations')
+  -- You pick the amount on a Shopping buy (herbs come in hundreds); the gold
+  -- limits above still apply. The quantity cap guards automatic flip buys.
   if e.kind=='shopping' then return #why==0,why end
+  check(e.quantity<=s.maxQuantity,'Quantity limit')
   check(e.net>=s.minProfit,'Minimum expected profit')
   check(e.roi>=s.minROI,'Minimum ROI')
   check(not m.analysisIncomplete,'Incomplete market analysis')

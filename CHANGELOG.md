@@ -1,3 +1,10 @@
+## 1.23.21
+- **Clear Filters** button on Shopping (bottom, next to Price). One click empties the Level box, the Price box and More... options, then searches again. It lights up only when a filter is on. "No auctions found" now says when a filter is on.
+- **Chain buy** checkbox in the buy view (like Auctionator). Your first buy sets the most you'll pay per unit. After each buy, the next one is lined up and its confirmation shown, so each buy is one click (or Enter). For items it picks the next cheapest listing; for commodities it buys the same quantity again. It stops when the next price is above that cap, a limit is hit, or you cancel.
+- Shopping buys are no longer blocked by the quantity limit (20). You choose the amount; the gold limits still apply. The cap still guards automatic flip buys.
+- The Price boxes no longer show through under "Your gold" in the buy view.
+- 315 regressions.
+
 ## 1.23.20
 - **Every sale was counted twice.** Forever shows a sale invoice first without the buyer's name, then with it, and Market booked both. On the bank that was 52 of 233 sales, which doubled Flip Ledger sales and revenue. Now Market waits up to 3 seconds for the name. If the mail is taken first, the sale is still booked, and its named copy is recognised instead of counted again.
 - At login, sales already counted twice are removed once from the ledger and the Flip Ledger (chat says how many).
