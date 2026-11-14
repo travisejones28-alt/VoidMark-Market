@@ -579,7 +579,7 @@ function M:RenderShopScreen()
   local f=self.db.settings.filter or ''
   if self.snipeView and self.SnipeEmptyText then self.shoppingSearchStatus=self:SnipeEmptyText() end
   empty=self.shoppingSearchStatus or (self.shoppingListMode and (self.shopOnlyKey~=nil and 'No price for this item yet. Open the Auction House and click it again.'
-    or 'This list is empty. Add an item, or type a search term like "of the Monkey" and click Add to List.'))
+    or self:ShopListEmptyText()))
    or (f~='' and ('No saved prices match "'..f..'".'..(self.ahOpen and ' Press Search to check the Auction House.' or ' Open the Auction House to search it live.')))
    or 'Type an item name and press Enter, or open a shopping list on the left.'
  end
@@ -602,4 +602,22 @@ function M:RenderShopScreen()
  end
  s.status:SetText(status or '')
  s.exportResults:SetEnabled(#source>0)
+end
+
+-- What an empty list result means: searching, nothing matched (and what limits
+-- it), or really no entries.
+function M:ShopListEmptyText()
+ local list=self.activeList or 'Shopping'
+ local terms=self.ShopTerms and self:ShopTerms(list) or {}
+ if #terms==0 and next(self:ListBook(list) or {})==nil then
+  return 'This list is empty. Add an item, or type a search term like "of the Monkey" and click Add to List.'
+ end
+ local run=self.termSearch
+ if run and not run.finished then return ('Searching %d of %d search terms...'):format(math.min(run.done+1,run.total),run.total) end
+ if not self.ahOpen then return 'Open the Auction House to search this list.' end
+ if not run then return 'Click the magnifier next to '..list..' to search it.' end
+ local msg='Nothing listed right now matches '..list..'\'s search terms (their price and level limits).'
+ local lo,hi=self:ShopLevelRange()
+ if lo or hi then msg=msg..' The Level box ('..(lo or 1)..'-'..(hi or 80)..') also applies - clear it to see every level the terms allow.' end
+ return msg
 end

@@ -330,8 +330,10 @@ function M:SearchShopTerms(list,onlyTerm)
    local inv=spec.slot and #spec.slot==1 and self:InventoryTypeFilter(spec.slot[1])
    classFilters[1]={classID=4,subClassID=armor,inventoryType=inv or nil}
   elseif not armor and spec.slot and #spec.slot==1 and JEWELRY[spec.slot[1]] then
-   -- "ring: sorcerer": only rings come back (far fewer pages than every "sorcerer" item).
-   classFilters[1]={classID=4,subClassID=0,inventoryType=self:InventoryTypeFilter(spec.slot[1])}
+   -- "ring: sorcerer": ask for Armor > Miscellaneous (rings, necks, trinkets);
+   -- only the asked-for slot is kept here. The slot itself isn't sent: if
+   -- Forever ignored it the search came back empty.
+   classFilters[1]={classID=4,subClassID=0}
   end
   local id='browse-term:'..term:lower();local pages=0
   local fail
@@ -577,6 +579,10 @@ function M:VoidMenuEntries()
 end
 function M:VoidMenuOpenList(name)
  if self.SetView and self.view~='shopping' then pcall(self.SetView,self,'shopping') end
+ -- These lists carry their own level ranges; a leftover Level box (e.g. 30-40
+ -- with rings 40-49 = level 40 only) would hide almost everything.
+ local lo,hi=self:ShopLevelRange()
+ if lo or hi then self:SetShopLevelRange(nil,nil);self:Print('Level box cleared - '..name..' uses its own levels.') end
  self:OpenShoppingList(name)
  if not self.ahOpen then self:Print(name..' selected - open the Auction House to search it.') end
 end

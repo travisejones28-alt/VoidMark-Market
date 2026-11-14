@@ -1,3 +1,9 @@
+## 1.23.18
+- **Ring terms come back.** The Level box and a term's own levels both apply, so 30-40 in the box with "lvl 40-49" left only level 40. Picking a list from the owner menu now clears the box (it says so in chat).
+- Ring/neck/trinket terms ask the AH for Armor > Miscellaneous and keep only the slot you asked for (sending the slot itself may be ignored by Forever).
+- An empty result no longer says "This list is empty" when the list has search terms. It says it's searching, that nothing listed matches (and that the Level box applies), or to open the AH.
+- 307 regressions.
+
 ## 1.23.17
 - Owner list menu: switch between lists; the one being searched is marked.
 - 306 regressions.

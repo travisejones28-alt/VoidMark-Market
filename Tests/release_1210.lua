@@ -891,7 +891,7 @@ check('1.23.14 Ring, neck and trinket terms: "ring: sorcerer max 1g50s lvl 40-49
   M:SetList('RingTest');assert(M:AddShopTerm('RingTest','ring: sorcerer max 1g50s lvl 40-49'))
   M:OpenShoppingList('RingTest');M.queue.nextSend=0;M:PumpQueue()
   assert(sent and sent.searchString=='sorcerer' and sent.itemClassFilters[1].classID==4 and sent.itemClassFilters[1].subClassID==0
-   and sent.itemClassFilters[1].inventoryType==11 and sent.minLevel==40 and sent.maxLevel==49,'rings query')
+   and sent.itemClassFilters[1].inventoryType==nil and sent.minLevel==40 and sent.maxLevel==49,'rings query')
  end)
  A.SendBrowseQuery,A.GetBrowseResults=oldSend,oldGet;M.ahOpen=oldOpen
  M.queue.waiting={};M.queue.dedupe={};M.queue.active=nil;M:DeleteShoppingList('RingTest');assert(ok,err)
@@ -953,5 +953,20 @@ check('1.23.17 Password unlocks Gear flips and Rings 40-49; the menu ticks the o
  end)
  M.AskShopText,M.OpenShoppingList=oldAsk,oldOpen;M.db.settings.voidUnlocked=nil
  M:UnlockSecretList('gear',true);M:UnlockSecretList('rings',true);M.shoppingListMode=nil;M.activeList='Shopping';assert(ok,err)
+end)
+
+check('1.23.18 Picking a list from the menu clears the Level box; empty results explain why',function()
+ M.db.settings.shopMinLevel=30;M.db.settings.shopMaxLevel=40
+ local oldOpen=M.OpenShoppingList;M.OpenShoppingList=function(_,n) M.activeList=n;M.shoppingListMode=true end
+ local ok,err=pcall(function()
+  M:UnlockSecretList('rings');M:VoidMenuOpenList('Rings 40-49')
+  local lo,hi=M:ShopLevelRange();assert(lo==nil and hi==nil,'box cleared')
+  M.ahOpen=true;M.termSearch={finished=true,done=4,total=4,found=0}
+  local t=M:ShopListEmptyText();assert(t:find('Nothing listed right now',1,true) and not t:find('list is empty',1,true),t)
+  M.db.settings.shopMinLevel=30;M.db.settings.shopMaxLevel=40;assert(M:ShopListEmptyText():find('Level box (30-40)',1,true))
+  M.termSearch={finished=false,done=1,total=4};assert(M:ShopListEmptyText():find('Searching 2 of 4',1,true))
+ end)
+ M.OpenShoppingList=oldOpen;M.termSearch=nil;M.ahOpen=nil;M.shoppingListMode=nil;M.activeList='Shopping'
+ M.db.settings.shopMinLevel=0;M.db.settings.shopMaxLevel=0;M:UnlockSecretList('rings',true);assert(ok,err)
 end)
 end
