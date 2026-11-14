@@ -1,3 +1,8 @@
+## 1.23.19
+- **Price box on Shopping** (bottom left, next to the result count): show only results from X to Y gold. Type gold ("1.5" = 1g 50s) or money ("50s", "1g20s"); leave a side empty for no limit. It filters what's on screen right away, for any list or search.
+- Owner list terms updated.
+- 308 regressions.
+
 ## 1.23.18
 - **Ring terms come back.** The Level box and a term's own levels both apply, so 30-40 in the box with "lvl 40-49" left only level 40. Picking a list from the owner menu now clears the box (it says so in chat).
 - Ring/neck/trinket terms ask the AH for Armor > Miscellaneous and keep only the slot you asked for (sending the slot itself may be ignored by Forever).

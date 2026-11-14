@@ -969,4 +969,22 @@ check('1.23.18 Picking a list from the menu clears the Level box; empty results 
  M.OpenShoppingList=oldOpen;M.termSearch=nil;M.ahOpen=nil;M.shoppingListMode=nil;M.activeList='Shopping'
  M.db.settings.shopMinLevel=0;M.db.settings.shopMaxLevel=0;M:UnlockSecretList('rings',true);assert(ok,err)
 end)
+
+check('1.23.19 Price box filters results by a gold range; ring terms have no price cap',function()
+ assert(M:ParseGoldText('1.5')==15000 and M:ParseGoldText('50s')==5000 and M:ParseGoldText('1g20s')==12000 and M:ParseGoldText('')==nil)
+ assert(M:GoldText(15000)=='1.5' and M:GoldText(20000)=='2')
+ local oldRows,oldMode=M.ShoppingResultRows,M.shoppingListMode
+ M.ShoppingResultRows=function() return {{name='a',floor=9000},{name='b',floor=15000},{name='c',floor=40000},{name='d',floor=nil}} end
+ M.shoppingListMode=true
+ local ok,err=pcall(function()
+  M:SetShopPriceRange('1','3');local n={};for _,r in ipairs(M:ShopVisibleRows()) do n[#n+1]=r.name end
+  assert(table.concat(n,',')=='b','1g-3g: '..table.concat(n,','))
+  M:SetShopPriceRange('','1');n={};for _,r in ipairs(M:ShopVisibleRows()) do n[#n+1]=r.name end
+  assert(table.concat(n,',')=='a','up to 1g')
+  M:SetShopPriceRange('','');assert(#M:ShopVisibleRows()==4,'no filter')
+  M:RefreshUI();assert(M.shopScreen.minPrice,'boxes on the Shopping tab')
+ end)
+ M.ShoppingResultRows,M.shoppingListMode=oldRows,oldMode;M:SetShopPriceRange('','');assert(ok,err)
+ for _,t in ipairs(M.SECRET_LISTS.rings.terms) do assert(not t:find('max',1,true),t) end
+end)
 end

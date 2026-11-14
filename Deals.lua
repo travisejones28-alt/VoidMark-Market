@@ -529,8 +529,8 @@ M.SECRET_LISTS={
  -- Your first list (Azmork's gear suffixes), greens only so it searches fast.
  gear={name='Gear flips',order=1,terms=M.FLIP_STARTER},
  rings={order=2,name='Rings 40-49',terms={
-  'ring: sorcerer max 1g50s lvl 40-49','ring: bandit max 1g50s lvl 40-49',
-  'ring: beast max 1g50s lvl 40-49','ring: physician max 1g50s lvl 40-49'}},
+  'ring: sorcerer lvl 40-49','ring: bandit lvl 40-49',
+  'ring: beast lvl 40-49','ring: physician lvl 40-49'}},
 }
 function M:UnlockSecretList(id,off)
  local s=self.SECRET_LISTS[tostring(id or ''):lower()]
@@ -540,6 +540,8 @@ function M:UnlockSecretList(id,off)
   self:Print(s.name..' hidden.');return true
  end
  if not self:ListBook(s.name,true) then self:Print('Too many shopping lists to add '..s.name);return false end
+ -- The built-in terms are the list (an update can change them).
+ local book=self:ShopTermBook(s.name,true);for i=#book,1,-1 do book[i]=nil end
  for _,term in ipairs(s.terms) do self:AddShopTerm(s.name,term) end
  self.shopExpanded=s.name
  self:Print(s.name..' unlocked: it is in Shopping Lists. Clear the Level box before searching it.')
@@ -656,3 +658,15 @@ function M:VoidListButtonClick(anchor)
   else self:Print('Wrong password.') end
  end)
 end
+
+-- Keep unlocked hidden lists in step with the built-in terms after updates.
+M:RegisterHandler('PLAYER_ENTERING_WORLD',function(self)
+ if not self.db or self.persistenceBlocked then return end
+ for _,s in pairs(self.SECRET_LISTS) do
+  if self.db.shoppingLists[s.name] then
+   local book=self:ShopTermBook(s.name,true);local same=#book==#s.terms
+   if same then for i,t in ipairs(s.terms) do if book[i]~=t then same=false end end end
+   if not same then for i=#book,1,-1 do book[i]=nil end;for _,t in ipairs(s.terms) do book[#book+1]=t end end
+  end
+ end
+end)

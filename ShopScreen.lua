@@ -257,6 +257,11 @@ function M:ShopVisibleRows()
   -- filters what's already on screen); exact items you added always show.
   if keep and not self.snipeView and r.itemID and self.LevelAllowed and (not self.shoppingListMode or r.term)
    and not self:LevelAllowed(r.itemID) then keep=false end
+  if keep then
+   local plo,phi=self:ShopPriceRange()
+   local p=tonumber(r.floor)
+   if (plo or phi) and not (p and p>0 and not (plo and p<plo) and not (phi and p>phi)) then keep=false end
+  end
   if keep then out[#out+1]=r end
  end
  local s=self.shopSort or {field='price',dir=1};local key=SORT[s.field] or SORT.price
@@ -463,7 +468,17 @@ function M:InitializeShopScreen(f)
  res:EnableMouseWheel(true)
  res:SetScript('OnMouseWheel',function(_,d) self.shopScroll=math.max(0,(self.shopScroll or 0)-(d>0 and 3 or -3));self:RefreshUI() end)
  s.empty=label(res,'',14,-200,670,'GameFontHighlight');s.empty:SetJustifyH('CENTER')
- s.status=label(s,'',302,-530,430,'GameFontHighlightSmall')
+ -- Price range for what's on screen (any list or search), in gold: "1.5", "50s", "1g20s".
+ label(s,'Price:',302,-530,40,'GameFontNormalSmall')
+ s.minPrice=edit(s,342,-525,48);label(s,'-',394,-530,8,'GameFontNormalSmall');s.maxPrice=edit(s,404,-525,48)
+ label(s,'g',456,-530,10,'GameFontNormalSmall')
+ local function savePrices() self:SetShopPriceRange(s.minPrice:GetText(),s.maxPrice:GetText()) end
+ for _,e in ipairs({s.minPrice,s.maxPrice}) do
+  if e.SetMaxLetters then e:SetMaxLetters(8) end
+  e:SetScript('OnEnterPressed',function(b) b:ClearFocus();savePrices() end)
+  e:SetScript('OnEditFocusLost',function() savePrices() end)
+ end
+ s.status=label(s,'',472,-530,262,'GameFontHighlightSmall')
  s.flipLedger=button(s,'Flip Ledger',742,-524,126,function() self:ShowFlipLedger() end)
  s.exportResults=button(s,'Export Results',874,-524,130,function() self:ShowShopExport() end)
  if self.InitSnipeControls then self:InitSnipeControls(s) end
@@ -545,6 +560,10 @@ function M:RenderShopScreen()
  for e,v in pairs({[s.minLevel]=lo,[s.maxLevel]=hi}) do
   if not (e.HasFocus and e:HasFocus()) then e:SetText(v and tostring(v) or '') end
  end
+ local plo,phi=self:ShopPriceRange()
+ for e,v in pairs({[s.minPrice]=plo,[s.maxPrice]=phi}) do
+  if not (e.HasFocus and e:HasFocus()) then e:SetText(v and self:GoldText(v) or '') end
+ end
  if self.shopSearch and not (self.shopSearch.HasFocus and self.shopSearch:HasFocus()) and not self.shoppingListMode then
   self.shopSearch:SetText(self.db.settings.filter or '')
  end
@@ -619,5 +638,32 @@ function M:ShopListEmptyText()
  local msg='Nothing listed right now matches '..list..'\'s search terms (their price and level limits).'
  local lo,hi=self:ShopLevelRange()
  if lo or hi then msg=msg..' The Level box ('..(lo or 1)..'-'..(hi or 80)..') also applies - clear it to see every level the terms allow.' end
+ local plo,phi=self:ShopPriceRange()
+ if plo or phi then msg=msg..' The Price box also applies.' end
  return msg
+end
+
+-- Price box: gold numbers ("1.5" = 1g 50s) or money text ("50s", "1g20s").
+function M:ParseGoldText(t)
+ t=tostring(t or ''):gsub('%s','')
+ if t=='' then return nil end
+ local n=tonumber(t);if n then return n>0 and math.floor(n*10000+0.5) or nil end
+ return self:ParseMoneyText(t)
+end
+function M:GoldText(c)
+ local g=c/10000
+ if g==math.floor(g) then return tostring(g) end
+ return (('%.4f'):format(g):gsub('0+$',''):gsub('%.$',''))
+end
+function M:ShopPriceRange()
+ local lo,hi=tonumber(self.db.settings.shopMinPrice),tonumber(self.db.settings.shopMaxPrice)
+ lo=lo and lo>0 and lo or nil;hi=hi and hi>0 and hi or nil
+ if lo and hi and lo>hi then lo,hi=hi,lo end
+ return lo,hi
+end
+function M:SetShopPriceRange(a,b)
+ if self.persistenceBlocked then return end
+ self.db.settings.shopMinPrice=self:ParseGoldText(a) or 0
+ self.db.settings.shopMaxPrice=self:ParseGoldText(b) or 0
+ self.shopScroll=0;self:RefreshUI()
 end
