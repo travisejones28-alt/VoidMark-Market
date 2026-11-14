@@ -1,3 +1,7 @@
+## 1.23.23
+- Selling: buy from the price list. A listing far under the others (someone mis-posted) says "cheap, double-click to buy". Double-click a listing to open Buy with it lined up (stackables: the quantity at that price or less; gear: that listing). There's also a Buy button next to Refresh. Back returns to Selling.
+- 317 regressions.
+
 ## 1.23.22
 - Sale alerts and Listings read stack prices right. Forever sometimes gives your listing's price per item (Rosecap) and sometimes for the whole stack (Silk Cloth x15 showed "Sold 4g 32s" for 28s 80c). Market now picks the reading closest to your last post of the item, or the market price. Saved listings from before are fixed the same way.
 - 316 regressions.

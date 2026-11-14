@@ -14,7 +14,7 @@ local function edit(parent,x,y,w,text)
 end
 function M:SetView(view)
   if view=='flips' then view='browse' end -- Flips tab removed in 1.12.0
-  if self.view~=view and self.shopBuy and self.shopBuy.fromListings and self.ShopBuyClose then self:ShopBuyClose() end
+  if self.view~=view and self.shopBuy and (self.shopBuy.fromListings or self.shopBuy.fromSelling) and self.ShopBuyClose then self:ShopBuyClose() end
   if self.view~=view and view~='shopping' then self.selectedRow=nil end
   self.view=view; self.page=1; if self.window then self.window:Show() end
   if self.RememberAuctionView then self:RememberAuctionView(view) end
@@ -337,7 +337,10 @@ function M:RenderUI()
    self.toolbar:Hide();self.shoppingSidebar:Hide();self.browseAction:Hide();self.emptyMessage:Hide()
    self.tableFrame:Hide();self.detail:Hide()
    for _,b in ipairs({self.ownedRefresh,self.cancelOwned,self.checkUndercuts,self.cancelNextUndercut}) do b:Hide() end
-   if view=='selling' then return self:RenderSellScreen() end
+   if view=='selling' then
+    if self.shopBuy and self.shopBuy.fromSelling then return self:RenderShopScreen() end
+    return self:RenderSellScreen()
+   end
    if view=='my auctions' then
     if self.shopBuy and self.shopBuy.fromListings then return self:RenderShopScreen() end
     return self:RenderCancelScreen()

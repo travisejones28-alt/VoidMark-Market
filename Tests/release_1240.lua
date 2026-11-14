@@ -137,4 +137,21 @@ check('1.23.22 Listings/sale alert: stack price read right whether Forever gives
  A.GetOwnedAuctions,A.GetItemKeyInfo=saved[1],saved[2];M.ownedRows=nil;M.db.keyNames=nil
  M.db.market[rose]=nil;M.db.market[silk]=nil;M.db.ownedSnapshot=nil;assert(ok,err)
 end)
+check('1.23.23 Selling: a mis-posted cheap listing is marked; double-click opens Buy with it lined up; Back returns',function()
+ reset();local rows={{unitPrice=105,quantity=2,numOwnerItems=0},{unitPrice=249,quantity=7,numOwnerItems=0},{unitPrice=250,quantity=45,numOwnerItems=0}}
+ local log,restoreAH=fakeAH(true,rows)
+ run(function()
+  local key=M:Key(12037,0,0,0)
+  local sel={marketKey=key,name='Mystery Meat',itemID=12037}
+  M:SetView('selling');M.selectedRow=sel
+  local list={{unit=105,quantity=2},{unit=249,quantity=7},{unit=250,quantity=45},{unit=251,quantity=41}}
+  assert(M:SellRowCheap(list[1],list) and not M:SellRowCheap(list[2],list),'1s 5c among 2s 50c is cheap')
+  M:SellOpenBuy(list[1]);answer(true,key)
+  assert(M.shopBuy and M.shopBuy.fromSelling==sel,'buy view from Selling')
+  assert(M.shopBuy.quantity==2,'just the cheap ones: '..tostring(M.shopBuy.quantity))
+  M:RenderUI();assert(M.shopScreen.buyView:IsShown(),'buy view shows on the Selling tab')
+  M:ShopBuyClose();assert(M.selectedRow==sel);M:RenderUI()
+  assert(M.sellScreen:IsShown() and not M.shopScreen:IsShown(),'Back returns to Selling')
+ end,restoreAH)
+end)
 end

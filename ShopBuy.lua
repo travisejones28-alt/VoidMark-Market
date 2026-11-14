@@ -40,6 +40,7 @@ function M:ShopBuyClose()
  if x and x.shop==b and (x.state=='quoting' or x.state=='quoted') then self:InvalidateQuote('Buy view closed') end
  b.token=b.token+1;self.shopBuy=nil
  if b.fromListings then self.selectedRow=b.fromListings end
+ if b.fromSelling then self.selectedRow=b.fromSelling end
  self:RefreshUI()
 end
 function M:ShopBuyRefresh()
@@ -64,6 +65,16 @@ function M:ShopBuyRefresh()
   end
   table.sort(b.view,function(x,y) if x.unit==y.unit then return (x.index or 1e9)<(y.index or 1e9) end return x.unit<y.unit end)
   b.status=#b.rows==0 and (#b.view>0 and 'Only your own listing is up - nothing to buy.' or 'None available to buy right now.') or nil
+  -- Opened by double-clicking a listing on Selling: line that price up.
+  if b.wantUnit and b.rows and #b.rows>0 then
+   local want=b.wantUnit;b.wantUnit=nil
+   if b.commodity then
+    local n=0;for _,r in ipairs(b.rows) do if r.unit<=want then n=n+(r.quantity or 0) end end
+    if n>0 then self:ShopBuySetQuantity(n) end
+   else
+    for i,r in ipairs(b.rows) do if r.unit==want then b.pick=i;break end end
+   end
+  end
   self:RefreshUI()
   if b.chainNext then b.chainNext=nil;self:ShopBuyChainNext(b) end
  end,function(err)

@@ -184,6 +184,8 @@ function M:InitializeSellScreen(f)
   r:SetHighlightTexture('Interface\\QuestFrame\\UI-QuestTitleHighlight')
   r.c={label(r,'',8,-6,210,'GameFontHighlight'),label(r,'',224,-6,130,'GameFontHighlight'),label(r,'',364,-6,200,'GameFontHighlight'),label(r,'',574,-6,90,'GameFontHighlight')}
   r:SetScript('OnClick',function(b) if self.sellMode=='current' then self:PickListing(b.entry) end end)
+  -- Double-click a cheap listing (someone mis-posted) to buy it.
+  r:SetScript('OnDoubleClick',function(b) if self.sellMode=='current' and b.entry and not b.entry.own then self:SellOpenBuy(b.entry) end end)
   s.rows[i]=r
  end
  l:EnableMouseWheel(true)
@@ -194,6 +196,7 @@ function M:InitializeSellScreen(f)
  for i,m in ipairs({{'current','Current prices'},{'history','Price history'},{'mine','Your history'}}) do
   s.modes[m[1]]=button(s,m[2],312+(i-1)*150,-522,144,function() self.sellMode=m[1];self.sellListPage=1;self:RefreshUI() end,26)
  end
+ s.buy=button(s,'Buy',762,-522,116,function() self:SellOpenBuy() end,26)
  button(s,'Refresh',884,-522,120,function()
   self:RefreshInventory()
   if self.selectedRow and self.ahOpen then self.postQuote=nil;self:CheckPost(self.selectedRow) end
@@ -202,6 +205,28 @@ function M:InitializeSellScreen(f)
 end
 
 local function money(self,v) return self:Coins(v) end
+-- A listing well under the others (someone mis-posted): under 60% of the
+-- middle price of the other listings.
+function M:SellRowCheap(e,list)
+ if not e or e.own or not self:Finite(e.unit,1,1e12) then return false end
+ local units={}
+ for _,o in ipairs(list or {}) do if o~=e and not o.own and self:Finite(o.unit,1,1e12) then units[#units+1]=o.unit end end
+ if #units<2 then return false end
+ table.sort(units);local mid=units[math.floor((#units+1)/2)]
+ return e.unit<mid*0.6
+end
+-- Selling: open the buy view for this item (the Buy button, or double-click
+-- a listing to line that price up). Back returns to Selling.
+function M:SellOpenBuy(entry)
+ local sel=self.selectedRow
+ if not sel or sel.marketKey==nil then self:Print('Pick an item first');return end
+ if not self.ahOpen then self:Print('Open the Auction House first');return end
+ self:ShopBuyOpen({marketKey=sel.marketKey,name=sel.name})
+ local b=self.shopBuy
+ if b then b.fromSelling=sel;b.wantUnit=entry and entry.unit or nil end
+ self.selectedRow=sel
+ self:RefreshUI()
+end
 function M:UpdateSellSummary()
  local s=self.sellScreen;if not s then return end
  local n=tonumber(self.postQty:GetText());local unit=self:GetPostPrice()
@@ -313,7 +338,7 @@ function M:RenderSellScreen()
   local e=list[(self.sellListPage-1)*13+i];row.entry=e;row:SetShown(e~=nil)
   if e then
    local cells
-   if mode=='current' then cells={money(self,e.unit),tostring(e.quantity),money(self,e.unit*e.quantity),e.own and '|cff72e7aaYes|r' or 'No'}
+   if mode=='current' then cells={money(self,e.unit),tostring(e.quantity),money(self,e.unit*e.quantity),e.own and '|cff72e7aaYes|r' or (self:SellRowCheap(e,list) and '|cffffd200No - cheap, double-click to buy|r' or 'No')}
    elseif mode=='history' then cells={date('%b %d %H:%M',e.at or 0),money(self,e.unit),tostring(e.quantity or '--'),''}
    else cells={date('%b %d %H:%M',e.at or 0),money(self,e.unit),tostring(e.quantity or '--'),e.duration and (({2,8,24})[e.duration]..'h') or ''} end
    for j=1,4 do row.c[j]:SetText(cells[j]) end
