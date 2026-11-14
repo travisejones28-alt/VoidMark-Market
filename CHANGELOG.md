@@ -1,3 +1,8 @@
+## 1.23.14
+- **Ring, neck and trinket search terms.** "ring: sorcerer max 1g50s lvl 40-49" asks the AH for rings only (Armor > Miscellaneous > Finger), so results come back fast. "neck:"/"necklace:"/"amulet:" and "trinket:" work the same way.
+- A hidden built-in list for the owner.
+- 303 regressions.
+
 ## 1.23.13
 - **The Level box filters shopping-list results.** A term's own range ("cloth: intellect lvl 15+") used to replace the box, so with 30-40 in the box you still got level 15-19 gear. Now both apply: the stricter end of each wins (15+ with 30-40 = 30-40).
 - Changing the box filters the shopping-list results already on screen right away. Exact items you added to the list always show.

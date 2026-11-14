@@ -16,13 +16,19 @@ local ARMOR={cloth=1,leather=2,mail=3,plate=4}
 local SLOT={head={'INVTYPE_HEAD'},shoulder={'INVTYPE_SHOULDER'},shoulders={'INVTYPE_SHOULDER'},
  chest={'INVTYPE_CHEST','INVTYPE_ROBE'},waist={'INVTYPE_WAIST'},belt={'INVTYPE_WAIST'},legs={'INVTYPE_LEGS'},
  feet={'INVTYPE_FEET'},boots={'INVTYPE_FEET'},wrist={'INVTYPE_WRIST'},bracers={'INVTYPE_WRIST'},
- hands={'INVTYPE_HAND'},gloves={'INVTYPE_HAND'},back={'INVTYPE_CLOAK'},cloak={'INVTYPE_CLOAK'}}
+ hands={'INVTYPE_HAND'},gloves={'INVTYPE_HAND'},back={'INVTYPE_CLOAK'},cloak={'INVTYPE_CLOAK'},
+ ring={'INVTYPE_FINGER'},rings={'INVTYPE_FINGER'},finger={'INVTYPE_FINGER'},
+ neck={'INVTYPE_NECK'},necklace={'INVTYPE_NECK'},amulet={'INVTYPE_NECK'},trinket={'INVTYPE_TRINKET'}}
+-- Jewelry is Armor > Miscellaneous on the AH.
+local JEWELRY={INVTYPE_FINGER=true,INVTYPE_NECK=true,INVTYPE_TRINKET=true}
 local INVTYPE_ENUM={INVTYPE_HEAD=1,INVTYPE_SHOULDER=3,INVTYPE_CHEST=5,INVTYPE_WAIST=6,INVTYPE_LEGS=7,
- INVTYPE_FEET=8,INVTYPE_WRIST=9,INVTYPE_HAND=10,INVTYPE_CLOAK=16,INVTYPE_ROBE=20}
+ INVTYPE_FEET=8,INVTYPE_WRIST=9,INVTYPE_HAND=10,INVTYPE_CLOAK=16,INVTYPE_ROBE=20,
+ INVTYPE_NECK=2,INVTYPE_FINGER=11,INVTYPE_TRINKET=12}
 -- Blizzard's own enum when present (what the AH categories use), else the fixed IDs.
 local ENUM_NAME={INVTYPE_HEAD='IndexHeadType',INVTYPE_SHOULDER='IndexShoulderType',INVTYPE_CHEST='IndexChestType',
  INVTYPE_WAIST='IndexWaistType',INVTYPE_LEGS='IndexLegsType',INVTYPE_FEET='IndexFeetType',INVTYPE_WRIST='IndexWristType',
- INVTYPE_HAND='IndexHandType',INVTYPE_CLOAK='IndexCloakType',INVTYPE_ROBE='IndexRobeType'}
+ INVTYPE_HAND='IndexHandType',INVTYPE_CLOAK='IndexCloakType',INVTYPE_ROBE='IndexRobeType',
+ INVTYPE_NECK='IndexNeckType',INVTYPE_FINGER='IndexFingerType',INVTYPE_TRINKET='IndexTrinketType'}
 function M:InventoryTypeFilter(equip)
  local e=Enum and Enum.InventoryType and Enum.InventoryType[ENUM_NAME[equip] or '']
  return tonumber(e) or INVTYPE_ENUM[equip]
@@ -323,6 +329,9 @@ function M:SearchShopTerms(list,onlyTerm)
    -- Category search: Armor > subclass (> slot when it is one inventory type).
    local inv=spec.slot and #spec.slot==1 and self:InventoryTypeFilter(spec.slot[1])
    classFilters[1]={classID=4,subClassID=armor,inventoryType=inv or nil}
+  elseif not armor and spec.slot and #spec.slot==1 and JEWELRY[spec.slot[1]] then
+   -- "ring: sorcerer": only rings come back (far fewer pages than every "sorcerer" item).
+   classFilters[1]={classID=4,subClassID=0,inventoryType=self:InventoryTypeFilter(spec.slot[1])}
   end
   local id='browse-term:'..term:lower();local pages=0
   local fail
@@ -510,4 +519,25 @@ function M:DealText(row)
  if pct<=self:DealPercent() then return '|cff40ff40'..t..'|r' end
  if pct<100 then return '|cffffffff'..t..'|r' end
  return '|cffff8060'..t..'|r'
+end
+
+-- Hidden lists: built in, never shown until unlocked with their command
+-- (not listed in /vmm help). Unlocking adds them as a normal shopping list.
+M.SECRET_LISTS={
+ rings={name='Rings 40-49',terms={
+  'ring: sorcerer max 1g50s lvl 40-49','ring: bandit max 1g50s lvl 40-49',
+  'ring: beast max 1g50s lvl 40-49','ring: physician max 1g50s lvl 40-49'}},
+}
+function M:UnlockSecretList(id,off)
+ local s=self.SECRET_LISTS[tostring(id or ''):lower()]
+ if not s or self.persistenceBlocked then return false end
+ if off then
+  if self.db.shoppingLists[s.name] then self:DeleteShoppingList(s.name) end
+  self:Print(s.name..' hidden.');return true
+ end
+ if not self:ListBook(s.name,true) then self:Print('Too many shopping lists to add '..s.name);return false end
+ for _,term in ipairs(s.terms) do self:AddShopTerm(s.name,term) end
+ self.shopExpanded=s.name
+ self:Print(s.name..' unlocked: it is in Shopping Lists. Clear the Level box before searching it.')
+ self:RefreshUI();return true
 end

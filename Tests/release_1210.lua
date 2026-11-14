@@ -876,4 +876,33 @@ check('1.23.13 Level box narrows shopping-list results, together with a term\'s 
  GetItemInfo=oldInfo;M.ShoppingResultRows,M.shoppingListMode=oldRows,oldMode
  M.db.settings.shopMinLevel=0;M.db.settings.shopMaxLevel=0;assert(ok,err)
 end)
+
+check('1.23.14 Ring, neck and trinket terms: "ring: sorcerer max 1g50s lvl 40-49"',function()
+ local text,armor,spec=M:ParseShopTerm('ring: sorcerer max 1g50s lvl 40-49')
+ assert(text=='sorcerer' and armor==nil and spec.slot[1]=='INVTYPE_FINGER' and spec.max==15000 and spec.minLevel==40 and spec.maxLevel==49)
+ assert(M:ShopTermValid('ring: bandit max 1g50s lvl 40-49'))
+ assert(select(3,M:ParseShopTerm('neck: beast')).slot[1]=='INVTYPE_NECK' and select(3,M:ParseShopTerm('trinket: x')).slot[1]=='INVTYPE_TRINKET')
+ assert(M:InventoryTypeFilter('INVTYPE_FINGER')==11)
+ -- The AH is asked for rings only (Armor > Miscellaneous > Finger), level 40-49.
+ local A=C_AuctionHouse;local sent;local oldSend,oldGet=A.SendBrowseQuery,A.GetBrowseResults
+ A.SendBrowseQuery=function(q) sent=q end;A.GetBrowseResults=function() return {} end
+ local oldOpen=M.ahOpen;M.ahOpen=true;M.queue.waiting={};M.queue.dedupe={};M.queue.active=nil;M.queue.nextSend=0
+ local ok,err=pcall(function()
+  M:SetList('RingTest');assert(M:AddShopTerm('RingTest','ring: sorcerer max 1g50s lvl 40-49'))
+  M:OpenShoppingList('RingTest');M.queue.nextSend=0;M:PumpQueue()
+  assert(sent and sent.searchString=='sorcerer' and sent.itemClassFilters[1].classID==4 and sent.itemClassFilters[1].subClassID==0
+   and sent.itemClassFilters[1].inventoryType==11 and sent.minLevel==40 and sent.maxLevel==49,'rings query')
+ end)
+ A.SendBrowseQuery,A.GetBrowseResults=oldSend,oldGet;M.ahOpen=oldOpen
+ M.queue.waiting={};M.queue.dedupe={};M.queue.active=nil;M:DeleteShoppingList('RingTest');assert(ok,err)
+end)
+
+check('1.23.14 Secret rings list: hidden until /vmm void rings, removable with /vmm void rings off',function()
+ assert(M.db.shoppingLists['Rings 40-49']==nil,'hidden by default')
+ SlashCmdList.VOIDMARKMARKET('void rings')
+ local terms=M:ShopTerms('Rings 40-49');assert(M.db.shoppingLists['Rings 40-49'] and #terms==4,'unlocked with 4 terms: '..#terms)
+ SlashCmdList.VOIDMARKMARKET('void rings');assert(#M:ShopTerms('Rings 40-49')==4,'no duplicates')
+ SlashCmdList.VOIDMARKMARKET('void rings off');assert(M.db.shoppingLists['Rings 40-49']==nil)
+ SlashCmdList.VOIDMARKMARKET('void nope') -- unknown: no error
+end)
 end
