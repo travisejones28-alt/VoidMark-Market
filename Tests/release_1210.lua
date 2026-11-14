@@ -905,4 +905,23 @@ check('1.23.14 Secret rings list: hidden until /vmm void rings, removable with /
  SlashCmdList.VOIDMARKMARKET('void rings off');assert(M.db.shoppingLists['Rings 40-49']==nil)
  SlashCmdList.VOIDMARKMARKET('void nope') -- unknown: no error
 end)
+
+check('1.23.15 /vmm void opens a dropdown of your lists and the hidden lists',function()
+ local opened;local oldOpen=M.OpenShoppingList;M.OpenShoppingList=function(_,n) opened=n end
+ local ok,err=pcall(function()
+  SlashCmdList.VOIDMARKMARKET('void')
+  local f=M.voidMenu;assert(f and f:IsShown(),'menu shown')
+  local e=M:VoidMenuEntries();local texts={}
+  for _,x in ipairs(e) do texts[#texts+1]=x.header or x.text end
+  local all=table.concat(texts,' | ')
+  assert(all:find('Shopping',1,true) and all:find('Unlock|r Rings 40-49',1,true),all)
+  -- Unlock from the menu: list appears and opens.
+  for i,x in ipairs(e) do if x.text and x.text:find('Unlock',1,true) then f:Hide();x.fn() end end
+  assert(M.db.shoppingLists['Rings 40-49'] and opened=='Rings 40-49')
+  M:ShowVoidMenu();e=M:VoidMenuEntries();all=''
+  for _,x in ipairs(e) do all=all..(x.header or x.text)..' | ' end
+  assert(all:find('Rings 40-49',1,true) and all:find('Hide|r Rings 40-49',1,true),all)
+ end)
+ M.OpenShoppingList=oldOpen;M:UnlockSecretList('rings',true);if M.voidMenu then M.voidMenu:Hide() end;assert(ok,err)
+end)
 end

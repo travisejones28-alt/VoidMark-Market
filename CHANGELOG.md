@@ -1,3 +1,7 @@
+## 1.23.15
+- An owner-only list menu.
+- 304 regressions.
+
 ## 1.23.14
 - **Ring, neck and trinket search terms.** "ring: sorcerer max 1g50s lvl 40-49" asks the AH for rings only (Armor > Miscellaneous > Finger), so results come back fast. "neck:"/"necklace:"/"amulet:" and "trinket:" work the same way.
 - A hidden built-in list for the owner.

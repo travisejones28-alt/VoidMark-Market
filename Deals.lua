@@ -541,3 +541,67 @@ function M:UnlockSecretList(id,off)
  self:Print(s.name..' unlocked: it is in Shopping Lists. Clear the Level box before searching it.')
  self:RefreshUI();return true
 end
+
+-- /vmm void: a small dropdown at your cursor with every shopping list (click
+-- = open it on Shopping and search it) and the hidden lists to unlock or hide.
+function M:VoidMenuEntries()
+ local out={{header='SHOPPING LISTS'}}
+ local names={}
+ for name in pairs(self.db.shoppingLists or {}) do if name~='Shopping' then names[#names+1]=name end end
+ table.sort(names);table.insert(names,1,'Shopping')
+ for _,name in ipairs(names) do
+  local n=#(self.ShopTerms and self:ShopTerms(name) or {})
+  out[#out+1]={text=name..(n>0 and ('  |cff8f8f8f('..n..' terms)|r') or ''),fn=function() self:VoidMenuOpenList(name) end}
+ end
+ out[#out+1]={header='HIDDEN LISTS'}
+ local ids={};for id in pairs(self.SECRET_LISTS) do ids[#ids+1]=id end;table.sort(ids)
+ for _,id in ipairs(ids) do
+  local s=self.SECRET_LISTS[id]
+  if self.db.shoppingLists[s.name] then out[#out+1]={text='|cff8f8f8fHide|r '..s.name,fn=function() self:UnlockSecretList(id,true) end}
+  else out[#out+1]={text='|cffc8a0ffUnlock|r '..s.name,fn=function() self:UnlockSecretList(id);self:VoidMenuOpenList(s.name) end} end
+ end
+ return out
+end
+function M:VoidMenuOpenList(name)
+ if self.SetView and self.view~='shopping' then pcall(self.SetView,self,'shopping') end
+ self:OpenShoppingList(name)
+ if not self.ahOpen then self:Print(name..' selected - open the Auction House to search it.') end
+end
+function M:ShowVoidMenu()
+ local f=self.voidMenu
+ if not f then
+  f=CreateFrame('Frame','VoidMarkMarketVoidMenu',UIParent,'BackdropTemplate');self.voidMenu=f
+  f:SetFrameStrata('FULLSCREEN_DIALOG');f:SetClampedToScreen(true);f:EnableMouse(true);f:SetWidth(230)
+  if f.SetBackdrop then
+   f:SetBackdrop({bgFile='Interface\\Buttons\\WHITE8X8',edgeFile='Interface\\Tooltips\\UI-Tooltip-Border',edgeSize=14,insets={left=3,right=3,top=3,bottom=3}})
+   f:SetBackdropColor(0.035,0.026,0.065,0.97);f:SetBackdropBorderColor(0.48,0.25,0.75,1)
+  end
+  if UISpecialFrames then table.insert(UISpecialFrames,'VoidMarkMarketVoidMenu') end
+  f.items={}
+ end
+ local entries=self:VoidMenuEntries();local y=-8
+ for i,e in ipairs(entries) do
+  local b=f.items[i]
+  if not b then
+   b=CreateFrame('Button',nil,f);b:SetSize(214,18);f.items[i]=b
+   b.text=b:CreateFontString(nil,'OVERLAY','GameFontHighlightSmall');b.text:SetPoint('LEFT',6,0);b.text:SetJustifyH('LEFT');b.text:SetWidth(206)
+   local hl=b:CreateTexture(nil,'HIGHLIGHT');hl:SetAllPoints();hl:SetColorTexture(0.55,0.3,0.85,0.35);b.hl=hl
+  end
+  b:ClearAllPoints();b:SetPoint('TOPLEFT',8,y);b:Show()
+  if e.header then
+   b.text:SetFontObject('GameFontNormalSmall');b.text:SetText(e.header);b:SetScript('OnClick',nil);b:EnableMouse(false)
+   if i>1 then y=y-4 end
+  else
+   b.text:SetFontObject('GameFontHighlightSmall');b.text:SetText(e.text);b:EnableMouse(true)
+   b:SetScript('OnClick',function() f:Hide();e.fn() end)
+  end
+  y=y-18
+ end
+ for i=#entries+1,#f.items do f.items[i]:Hide() end
+ f:SetHeight(-y+8)
+ local x,cy=0,0
+ if GetCursorPosition then x,cy=GetCursorPosition() end
+ local s=(UIParent.GetEffectiveScale and UIParent:GetEffectiveScale()) or 1
+ f:ClearAllPoints();f:SetPoint('TOPLEFT',UIParent,'BOTTOMLEFT',x/s,cy/s)
+ f:Show()
+end
