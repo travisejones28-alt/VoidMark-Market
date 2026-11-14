@@ -1,3 +1,8 @@
+## 1.23.20
+- **Every sale was counted twice.** Forever shows a sale invoice first without the buyer's name, then with it, and Market booked both. On the bank that was 52 of 233 sales, which doubled Flip Ledger sales and revenue. Now Market waits up to 3 seconds for the name. If the mail is taken first, the sale is still booked, and its named copy is recognised instead of counted again.
+- At login, sales already counted twice are removed once from the ledger and the Flip Ledger (chat says how many).
+- 310 regressions.
+
 ## 1.23.19
 - **Price box on Shopping** (bottom left, next to the result count): show only results from X to Y gold. Type gold ("1.5" = 1g 50s) or money ("50s", "1g20s"); leave a side empty for no limit. It filters what's on screen right away, for any list or search.
 - Owner list terms updated.

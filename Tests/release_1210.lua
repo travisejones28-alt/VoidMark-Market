@@ -987,4 +987,47 @@ check('1.23.19 Price box filters results by a gold range; ring terms have no pri
  M.ShoppingResultRows,M.shoppingListMode=oldRows,oldMode;M:SetShopPriceRange('','');assert(ok,err)
  for _,t in ipairs(M.SECRET_LISTS.rings.terms) do assert(not t:find('max',1,true),t) end
 end)
+
+check('1.23.20 A sale invoice read before and after its buyer name loads is booked once',function()
+ M.db.flips={};M.db.mailSeen={};M.db.mailOrder={};M.db.mailNameless=nil;M.mailNameWait=nil
+ local saved={GetInboxNumItems,GetInboxHeaderInfo,GetInboxInvoiceInfo}
+ local buyer=''
+ GetInboxNumItems=function() return 1 end
+ GetInboxHeaderInfo=function() return nil,nil,'Auction House','Auction successful: Twilight Cuffs of the Physician',3815 end
+ GetInboxInvoiceInfo=function() return 'seller','Twilight Cuffs of the Physician',buyer,3500,3500,490,175,0,0,0,1 end
+ local function sales() local n=0;for _,e in ipairs(M.db.ledger) do if e.kind=='mail sale' and e.name=='Twilight Cuffs of the Physician' then n=n+1 end end;return n end
+ local before=sales()
+ local ok,err=pcall(function()
+  M.mailOpen=true;M:ObserveMail();jobs();assert(sales()==before,'waits for the name')
+  buyer='Supak Kapus';M:ObserveMail();jobs();assert(sales()==before+1,'booked with the name')
+  M:ObserveMail();jobs();assert(sales()==before+1,'not again')
+  -- Name never loads (mail taken fast): booked after 3s, and its named copy later is not a second sale.
+  GetInboxInvoiceInfo=function() return 'seller','Elder\'s Sash of the Physician',buyer,4000,4000,300,200,0,0,0,1 end
+  buyer='';M:ObserveMail();jobs();advance(3.5);M:ObserveMail();jobs()
+  local n=0;for _,e in ipairs(M.db.ledger) do if e.name=="Elder's Sash of the Physician" and e.kind=='mail sale' then n=n+1 end end;assert(n==1,'booked nameless after waiting')
+  buyer='Someone';M:ObserveMail();jobs()
+  n=0;for _,e in ipairs(M.db.ledger) do if e.name=="Elder's Sash of the Physician" and e.kind=='mail sale' then n=n+1 end end;assert(n==1,'named copy matched, not doubled')
+  -- A real second sale (same price, later) still counts.
+  buyer='Third';M.db.mailSeen={};M.db.mailNameless=nil;M:ObserveMail();jobs()
+  n=0;for _,e in ipairs(M.db.ledger) do if e.name=="Elder's Sash of the Physician" and e.kind=='mail sale' then n=n+1 end end;assert(n==2)
+ end)
+ GetInboxNumItems,GetInboxHeaderInfo,GetInboxInvoiceInfo=saved[1],saved[2],saved[3];M.mailOpen=nil;assert(ok,err)
+end)
+
+check('1.23.20 Doubles already booked are removed once (ledger and Flip Ledger)',function()
+ local cid=M.characterID
+ local function fp(n,p,g) return table.concat({cid,'seller',n,p,g,g,'310','175','1'},'|') end
+ M.db.ledger={
+  {kind='mail sale',name='Twilight Cuffs of the Physician',gross=3500,quantity=1,at=1000,mailFingerprint=fp('Twilight Cuffs of the Physician','',3500)},
+  {kind='mail sale',name='Twilight Cuffs of the Physician',gross=3500,quantity=1,at=1060,mailFingerprint=fp('Twilight Cuffs of the Physician','Supak Kapus',3500)},
+  {kind='mail sale',name='Silk Cloth',gross=200,quantity=1,at=1000,mailFingerprint=fp('Silk Cloth','Bob',200)},
+  {kind='posted',name='x',at=1}}
+ M.db.flips={{id=1,name='Twilight Cuffs of the Physician',qty=1,sold=1,gross=3500,fee=175,at=1000,soldAt=1000,source='Sale only'},
+  {id=2,name='Twilight Cuffs of the Physician',qty=1,sold=1,gross=3500,fee=175,at=1060,soldAt=1060,source='Sale only'},
+  {id=3,name='Silk Cloth',qty=1,sold=1,gross=200,fee=10,at=1000,soldAt=1000,source='Sale only'}}
+ M.db.invoiceDupRepair=nil;M:MigrateInvoiceFingerprints()
+ assert(#M.db.ledger==3 and #M.db.flips==2,'one double removed: '..#M.db.ledger..'/'..#M.db.flips)
+ M:MigrateInvoiceFingerprints();assert(#M.db.flips==2,'once')
+ M.db.ledger={};M.db.flips={};M.db.invoiceDupRepair=nil
+end)
 end

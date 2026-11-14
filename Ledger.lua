@@ -100,6 +100,26 @@ function M:ObserveMail()
         local fingerprint=table.concat({self.characterID,kind,tostring(name),tostring(player),tostring(bid),tostring(buyout),tostring(deposit),tostring(fee),tostring(qty)},'|')
         occurrence[fingerprint]=(occurrence[fingerprint] or 0)+1
         local rank=occurrence[fingerprint]; local seen=self.db.mailSeen[fingerprint] or 0
+        -- 1.23.20: Forever first shows an invoice without the buyer's name, then
+        -- with it; both used to be booked (every sale counted twice). Wait up to
+        -- 3s for the name; a nameless one booked after that is matched to its
+        -- named copy instead of being booked again.
+        local base=table.concat({kind,tostring(name),tostring(bid),tostring(buyout),tostring(deposit),tostring(fee),tostring(qty)},'|')
+        local now=time()
+        local nameless=self.db.mailNameless;if type(nameless)~='table' then nameless={};self.db.mailNameless=nameless end
+        if rank>seen and (player==nil or player=='') then
+          self.mailNameWait=self.mailNameWait or {}
+          local w=self.mailNameWait[base..'#'..rank]
+          if not w then self.mailNameWait[base..'#'..rank]=GetTime();rank=-1;self.mailRecheck=true
+          elseif GetTime()-w<3 then rank=-1;self.mailRecheck=true
+          else local l=nameless[base] or {};l[#l+1]=now;nameless[base]=l end
+        elseif rank>seen and nameless[base] then
+          local l=nameless[base];local hit
+          for i=#l,1,-1 do if now-(l[i] or 0)<=3600 then hit=i;break end end
+          for i=#l,1,-1 do if now-(l[i] or 0)>3600 then table.remove(l,i);if hit and i<hit then hit=hit-1 end end end
+          if hit then table.remove(l,hit);self:RememberMail(fingerprint,rank);rank=-1 end
+          if #l==0 then nameless[base]=nil end
+        end
         if rank>seen then
           -- Invoice API has no unique mail/auction ID. Review before financial booking.
           local e=self:AddLedger(kind=='seller' and 'mail sale' or kind=='buyer' and 'mail won' or 'mail pending',{
@@ -146,6 +166,12 @@ function M:ObserveMail()
       end
       if debugprofilestop()-start>=4 then return false end
     end
+  end,function()
+    -- An invoice was waiting for its buyer's name: read the mailbox again shortly.
+    if self.mailRecheck then
+      self.mailRecheck=nil
+      if C_Timer and C_Timer.After then C_Timer.After(1.2,function() if self.mailOpen then self:ObserveMail() end end) end
+    end
   end)
 end
 M:RegisterHandler('MAIL_SHOW',function(self) self.mailOpen=true; self:ObserveMail() end)
@@ -157,3 +183,67 @@ function M:ReviewPending(entry,succeeded)
   self:ResolvePurchase(entry,succeeded and 'confirmed' or 'failed','User reported outcome after checking AH/mail; not API confirmation')
   if self.execution and self.execution.order==entry then self.execution.state='idle' end
 end
+
+-- Once: undo the doubles booked before 1.23.20.
+function M:MigrateInvoiceFingerprints()
+  if self.persistenceBlocked or self.db.invoiceDupRepair then return end
+  self.db.invoiceDupRepair=true
+  self:RepairDoubleInvoices()
+end
+-- Doubles: the same invoice booked once without and once with the buyer's
+-- name, minutes apart. Remove the nameless copy and what it added to the
+-- Flip Ledger (a second "Sale only" row, or a second buy from won mail).
+function M:RepairDoubleInvoices()
+  if self.persistenceBlocked or type(self.db.ledger)~='table' then return 0 end
+  local function parts(e)
+    local p={};for v in (tostring(e.mailFingerprint)..'|'):gmatch('([^|]*)|') do p[#p+1]=v end
+    if #p~=10 then return nil end
+    return table.concat({p[3],p[4],p[6],p[7],p[8],p[9],p[10]},'|'),p[5]
+  end
+  local named={}
+  for _,e in ipairs(self.db.ledger) do
+    if type(e)=='table' and (e.kind=='mail sale' or e.kind=='mail won') then
+      local base,player=parts(e)
+      if base and player~='' then named[#named+1]={base=base,at=tonumber(e.at) or 0,used=false} end
+    end
+  end
+  local removed,dropSale,dropBuy={}, {}, {}
+  for i,e in ipairs(self.db.ledger) do
+    if type(e)=='table' and (e.kind=='mail sale' or e.kind=='mail won') then
+      local base,player=parts(e)
+      if base and player=='' then
+        for _,n in ipairs(named) do
+          if not n.used and n.base==base and math.abs(n.at-(tonumber(e.at) or 0))<=3600 then
+            n.used=true;removed[i]=true
+            if e.kind=='mail sale' then dropSale[#dropSale+1]=e else dropBuy[#dropBuy+1]=e end
+            break
+          end
+        end
+      end
+    end
+  end
+  local kept={};for i,e in ipairs(self.db.ledger) do if not removed[i] then kept[#kept+1]=e end end
+  local n=#self.db.ledger-#kept;self.db.ledger=kept
+  -- Flip Ledger: one extra row per double.
+  local book=self.FlipBook and self:FlipBook() or {}
+  local gone={}
+  local function take(test)
+    for i,f in ipairs(book) do if not gone[i] and test(f) then gone[i]=true;return true end end
+    return false
+  end
+  for _,e in ipairs(dropSale) do
+    take(function(f) return f.cost==nil and f.name==e.name and (f.gross or 0)==(e.gross or -1)
+      and (f.qty or 1)==(e.quantity or 1) and math.abs((f.soldAt or f.at or 0)-(e.at or 0))<=3600 end)
+  end
+  for _,e in ipairs(dropBuy) do
+    take(function(f) return f.source=='Mail' and f.name==e.name and math.abs((f.cost or -1)-(e.gross or -2))<=1
+      and (f.sold or 0)==0 and math.abs((f.at or 0)-(e.at or 0))<=86400 end)
+  end
+  if next(gone) then
+    local keep={};for i,f in ipairs(book) do if not gone[i] then keep[#keep+1]=f end end
+    for i=#book,1,-1 do book[i]=nil end;for i,f in ipairs(keep) do book[i]=f end
+  end
+  if n>0 then self:Print(('Removed %d sales/purchases that were counted twice.'):format(n)) end
+  return n
+end
+M:RegisterHandler('PLAYER_ENTERING_WORLD',function(self) if self.db then pcall(self.MigrateInvoiceFingerprints,self) end end)
