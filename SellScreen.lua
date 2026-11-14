@@ -324,6 +324,7 @@ function M:RenderSellScreen()
  elseif q and q.fallback then info='Live price did not answer - using your last scan price. Click Refresh to try again.'
  elseif q then info=q.floor and ('Lowest other: '..money(self,q.floor)..(q.atMinimum and (q.minWhy=='paid' and ' | held at what you paid + AH cut' or ' | held at your minimum') or (' | your price undercuts by '..money(self,self.db.settings.sellUndercut or 1)))) or 'No other listings - your price sets the market.'
  else info='Click Refresh to check the live price.' end
+ if q and q.blocked then info='|cffff7070'..q.blocked..'|r'..(q.floor and ('  |  Lowest: '..money(self,q.floor)) or '') end
  local paid=r and self.SellPaidText and self:SellPaidText(r) or ''
  s.info:SetText(paid~='' and (paid..'  |  '..info) or info)
  self:UpdateSellSummary()

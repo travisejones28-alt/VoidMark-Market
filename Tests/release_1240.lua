@@ -154,4 +154,33 @@ check('1.23.23 Selling: a mis-posted cheap listing is marked; double-click opens
   assert(M.sellScreen:IsShown() and not M.shopScreen:IsShown(),'Back returns to Selling')
  end,restoreAH)
 end)
+check('1.23.24 Selling: AH answers 0 for "can post" - still post when the AH accepts it; say why once when it doesn\'t',function()
+ reset()
+ local loc,con,itm=ItemLocation,C_Container,C_Item
+ local old=C_AuctionHouse;local api=setmetatable({},{__index=old});C_AuctionHouse=api
+ local printed={};local oldPrint=M.Print;M.Print=function(_,t) printed[#printed+1]=t end
+ local ok,err=pcall(function()
+  ItemLocation={CreateFromBagAndSlot=function() return {} end}
+  C_Container={GetContainerItemInfo=function() return {itemID=9100,hyperlink='raiment',stackCount=1} end}
+  api.IsThrottledMessageSystemReady=function() return true end
+  local key={itemID=9100,itemSuffix=7,itemLevel=0,battlePetSpeciesID=0}
+  api.GetItemKeyFromItem=function() return key end
+  api.GetItemKeyInfo=function() return {isCommodity=false} end
+  api.GetAvailablePostCount=function() return 0 end
+  local valid=true;api.IsSellItemValid=function() return valid end
+  local row={bag=0,slot=1,itemID=9100,itemLink='raiment',name='Vital Raiment of the Whale',quantity=1,marketKey='9100:s7'}
+  local b,e=M.readBag(M,row)
+  assert(b and b.max==1,'AH accepts it: postable, got '..tostring(e))
+  valid=false;C_Item={IsBound=function() return true end}
+  local sent;api.HasSearchResults=function() return false end;api.SendSearchQuery=function(k) sent=k end
+  M.sellingRows={row};M:SetView('selling');M.ahOpen=true
+  M:CheckPost(row);M:CheckPost(row)
+  local n=0;for _,t in ipairs(printed) do if t:find('soulbound',1,true) then n=n+1 end end
+  assert(n==1,'reason said once, got '..n)
+  assert(M.postQuote and M.postQuote.blocked,'price check still runs')
+  advance(1);M:PumpQueue();assert(sent,'live prices still searched')
+ end)
+ C_AuctionHouse=old;ItemLocation=loc;C_Container=con;C_Item=itm;M.Print=oldPrint;M.sellBlockedSaid=nil
+ if not ok then error(err,0) end
+end)
 end

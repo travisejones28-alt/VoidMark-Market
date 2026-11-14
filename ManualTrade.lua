@@ -102,7 +102,19 @@ local function readBag(self,r)
  end
  if commodity==nil then return nil,'Waiting for item classification' end
  local n=A.GetAvailablePostCount and A.GetAvailablePostCount(loc)
- if not whole(n,1e9) then return nil,'Item cannot currently be posted' end
+ if not whole(n,1e9) then
+  -- Forever sometimes answers 0/nil for gear it will still take. Ask the AH
+  -- directly; only a clear "no" stops us (and the price check still runs).
+  local valid
+  if A.IsSellItemValid then local ok,v=pcall(A.IsSellItemValid,loc,false);if ok then valid=v end end
+  if valid==false then
+   local why='The auction house won\'t take this item right now'
+   local bound=C_Item and C_Item.IsBound and select(2,pcall(C_Item.IsBound,loc))
+   if bound==true then why='This item is soulbound - it can\'t be sold on the auction house' end
+   return nil,why,{k=k,commodity=commodity}
+  end
+  n=math.max(1,tonumber(b.stackCount) or 1)
+ end
  -- Like Auctionator: one post can use every unit in the bags (items become
  -- several auctions), capped by what the AH says can be posted.
  local total=self:BagCount(r.marketKey,b.itemID,r.name)
@@ -111,16 +123,21 @@ end
 M.readBag=readBag
 function M:CheckPost(row)
  self.postQuote=nil
- local b,e=readBag(self,row)
+ local b,e,partial=readBag(self,row)
  if not b then
   -- Right after a post the slot is briefly locked; try again shortly.
   if e and e:find('locked',1,true) and (self.sellRetry or 0)<10 then
    self.sellRetry=(self.sellRetry or 0)+1;self.sellCheckAt=GetTime()+0.2;self.sellCheckRow=row;return
   end
-  self.sellRetry=nil;self:Print(e);return
+  self.sellRetry=nil
+  -- Say it once per item, not on every Refresh.
+  local said=row and (row.marketKey or row.name)
+  if self.sellBlockedSaid~=said then self.sellBlockedSaid=said;self:Print(e) end
+  if not partial then return end
+  b=partial -- still show the live prices
  end
  self.sellRetry=nil
- local draft={row=row,k=b.k,commodity=b.commodity,deadline=GetTime()+10};self.postQuote=draft
+ local draft={row=row,k=b.k,commodity=b.commodity,deadline=GetTime()+10,blocked=partial and e or nil};self.postQuote=draft
  self:Search(b.k,60,function(result)
   if self.postQuote~=draft or self.view~='selling' then return end
   self.sellDupes=nil
@@ -130,7 +147,7 @@ function M:CheckPost(row)
   draft.at=result.received;draft.floor=result.rows[1] and result.rows[1].unit;draft.listings=result.all or {}
   local unit,clamped,why=self:SuggestPostUnit(row,draft.floor,draft.commodity);draft.atMinimum=clamped;draft.minWhy=why
   if (self:PostPriceEmpty() or replaceFallback) and unit then self:SetPostPrice(unit) end
-  local now=readBag(self,row);draft.max=now and now.max;draft.commodity=now and now.commodity
+  local now=readBag(self,row);draft.max=now and now.max;if now then draft.commodity=now.commodity end
   if now and self.postQty and not draft.qtyTouched then self.postQty:SetText(tostring(now.max)) end
   self:RefreshUI()
  end,function(e)
