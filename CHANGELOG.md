@@ -1,3 +1,6 @@
+## 1.23.25
+- Selling: when the AH refuses an item, the game's own reason now shows too (the red error text you'd get dropping it in Blizzard's Sell tab).
+
 ## 1.23.24
 - Selling: "Item cannot currently be posted" fixed for gear the AH will still take. Forever sometimes answers 0 for "how many can be posted"; Market now asks the AH whether it accepts the item and posts if so. If it really can't (e.g. soulbound) it says why once, not on every Refresh, and the live prices still show.
 - 318 regressions.

@@ -111,7 +111,7 @@ local function readBag(self,r)
    local why='The auction house won\'t take this item right now'
    local bound=C_Item and C_Item.IsBound and select(2,pcall(C_Item.IsBound,loc))
    if bound==true then why='This item is soulbound - it can\'t be sold on the auction house' end
-   return nil,why,{k=k,commodity=commodity}
+   return nil,why,{k=k,commodity=commodity,loc=loc}
   end
   n=math.max(1,tonumber(b.stackCount) or 1)
  end
@@ -132,7 +132,12 @@ function M:CheckPost(row)
   self.sellRetry=nil
   -- Say it once per item, not on every Refresh.
   local said=row and (row.marketKey or row.name)
-  if self.sellBlockedSaid~=said then self.sellBlockedSaid=said;self:Print(e) end
+  if self.sellBlockedSaid~=said then
+   self.sellBlockedSaid=said;self:Print(e)
+   -- Let the game show its own reason (red error text), like dropping it
+   -- in Blizzard's Sell tab would.
+   if partial and partial.loc and C_AuctionHouse.IsSellItemValid then pcall(C_AuctionHouse.IsSellItemValid,partial.loc,true) end
+  end
   if not partial then return end
   b=partial -- still show the live prices
  end
