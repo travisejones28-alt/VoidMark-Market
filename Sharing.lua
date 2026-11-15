@@ -130,6 +130,20 @@ end
 -- catchUp publishes an older trusted observation (e.g. scanned before pairing)
 -- so the partner can still use it; its timestamp keeps it labelled stale and
 -- it never replaces a newer observation on the receiving side.
+-- 1.23.30: a scan re-estimates every item, and almost every estimate moves a
+-- little, so each scan queued ~15,000 price rows and the bank sync ran for
+-- most of the time until the next scan. Only a real move is sent now: a floor
+-- off by more than 1% (and at least 1 copper), an estimate off by more than 5%,
+-- a confidence off by 10 points, or an estimate appearing/disappearing.
+-- Everything else just gets the 30-minute freshness stamp.
+function M.SameSharedPrice(oldFloor,oldFair,oldConf,floor,fair,conf)
+ if not (oldFloor and oldFair and oldConf) then return false end
+ if math.abs(floor-oldFloor)>math.max(1,oldFloor*0.01) then return false end
+ if (oldFair>0)~=(fair>0) then return false end
+ if fair>0 and math.abs(fair-oldFair)>math.max(1,oldFair*0.05) then return false end
+ if math.abs(conf-oldConf)>=10 then return false end
+ return true
+end
 function M:PublishPrice(m,catchUp)
  if not m or not self:ParseKey(m.marketKey) or m.cacheUntrusted or m.analysisIncomplete or type(m.latest)~='table' then return end
  if not self:MarketFresh(m) and not (catchUp and self:Finite(m.lastSeen,time()-self.db.settings.historyDays*86400,time()+60)) then return end
@@ -143,7 +157,7 @@ function M:PublishPrice(m,catchUp)
  if old then a,b,c,d=old:match('^P,[^,]+,(%d+),(%d+),(%d+),(%d+)$') end
  -- A saved legacy entry without confidence is published in the new format.
  local confidence=whole(m.confidenceScore,0,100) and m.confidenceScore or 0
- if tonumber(b)==floor and tonumber(c)==fair and tonumber(d)==confidence then
+ if old and M.SameSharedPrice(tonumber(b),tonumber(c),tonumber(d),floor,fair,confidence) then
   local stampRow=j.latest['U'..m.marketKey] and j.rows[j.latest['U'..m.marketKey]]
   local stamped=tonumber(stampRow and stampRow:match(',(%d+)$')) or tonumber(a)
   -- Freshness-only rows were most of the traffic after each scan; an unchanged
