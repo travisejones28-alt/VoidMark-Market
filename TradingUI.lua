@@ -35,7 +35,9 @@ function M:SimpleSyncStatus()
  if not r.lastContact or GetTime()-r.lastContact>65 then return 'Bank sync: waiting for partner' end
  if rx.total and rx.seq<rx.total then return 'Bank sync: receiving '..math.floor(rx.seq/rx.total*100)..'%' end
  local j=self.db.shareJournal
- if r.cursor and r.cursor<j.seq then return 'Bank sync: sending '..math.floor(r.cursor/math.max(1,j.seq)*100)..'%' end
+ if r.peerAsks then
+  if r.wantTarget and r.cursor and r.cursor<r.wantTarget then return 'Bank sync: sending '..math.floor(r.cursor/math.max(1,r.wantTarget)*100)..'%' end
+ elseif r.cursor and r.cursor<j.seq then return 'Bank sync: sending '..math.floor(r.cursor/math.max(1,j.seq)*100)..'%' end
  return 'Bank sync: connected'
 end
 function M:InitializeSimpleTradingUI(f,button,label)

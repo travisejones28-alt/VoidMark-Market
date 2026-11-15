@@ -1,3 +1,7 @@
+## 1.23.31
+- Bank sync no longer sends prices after every scan. Each character now asks for the other's prices only when its own are over an hour old (no scan of its own and no complete set from the partner in the last hour) and the partner has a newer scan. It asks as soon as the partner is seen online, so logging in a stale character pulls the latest prices once. Shopping lists, watches, sale alerts and your buys still go across right away. Update both accounts: a partner on an older version keeps the old behavior.
+- 322 regressions.
+
 ## 1.23.30
 - Bank sync was slow again: every scan re-estimates every item, almost every estimate moves a little, so each scan queued about 15,000 price rows and the sync was still sending when the next scan started. Now only a real change is sent: the lowest price moving more than 1% (and at least 1 copper), the estimate moving more than 5%, confidence moving 10 points, or an estimate appearing or disappearing. Unchanged prices still get their freshness stamp every 30 minutes. The send speed itself is unchanged (it is kept low so the server does not disconnect you for addon-message flooding).
 - 321 regressions.

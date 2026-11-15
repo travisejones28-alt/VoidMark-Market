@@ -126,6 +126,10 @@ function M:Journal(key,line)
  if old and j.rows[old]==line then return end
  if old then j.rows[old]=nil end
  j.seq=j.seq+1;j.rows[j.seq]=line;j.latest[key]=j.seq
+ -- Shopping lists, watches and the like go to the partner right away; only
+ -- price rows wait until the partner asks (see PumpSharing).
+ local kind=line:sub(1,2)
+ if kind~='P,' and kind~='U,' then j.urgentSeq=j.seq end
 end
 -- catchUp publishes an older trusted observation (e.g. scanned before pairing)
 -- so the partner can still use it; its timestamp keeps it labelled stale and
@@ -548,7 +552,7 @@ function M:PumpSharing()
   return
  end
  if r.capPending and r.lastContact then
-  if send(self,ch,table.concat({'C',j.epoch,3,#(self.shareLanes or {PREFIX})},'\t')) then r.capPending=nil else r.next=now+5 end
+  if send(self,ch,table.concat({'C',j.epoch,4,#(self.shareLanes or {PREFIX})},'\t')) then r.capPending=nil else r.next=now+5 end
   return
  end
  if not r.hello or now>=r.hello then
@@ -564,6 +568,17 @@ function M:PumpSharing()
   if unconfirmed and sent then r.status='Whisper queued; waiting for partner reply (delivery unconfirmed)'
   elseif not sent then r.status='Message rejected on '..ch..' (result '..tostring(r.lastSendError)..'); retrying' end
   return
+ end
+ -- Ask the partner for prices when ours are over an hour old and theirs are newer.
+ local rx=self.db.shareReceived[self.db.syncPeer]
+ if r.lastContact and self:SyncShouldAsk(rx) and now>=(r.askAt or 0) then
+  if send(self,ch,'R\t'..rx.epoch) then r.askAt=now+60;r.asked=true else r.next=now+5 end
+  return
+ end
+ -- Pages go out only when asked (a partner on 1.23.31+), not after every scan.
+ if r.peerAsks and j.urgentSeq and (r.cursor or 0)<j.urgentSeq then r.wantTarget=math.max(r.wantTarget or 0,j.urgentSeq) end
+ if r.peerAsks and not (r.wantTarget and (r.cursor or 0)<r.wantTarget) then
+  r.wantTarget=nil;r.status='Up to date (sends when your partner asks)';return
  end
  if r.peerV3 then return fastPages(self,r,j,ch,now) end
  r.window=nil
@@ -639,6 +654,10 @@ function M:ReceiveSharing(prefix,msg,ch,sender)
   else r.sentHi=n;r.pages={};r.retry=0 end
   if n==j.seq and r.lastAck~=n then self.db.syncLastSentAt=time() end
   r.lastAck=n;r.status=n==j.seq and 'Up to date' or 'Sending changes'
+ elseif f[2]=='R' and #f==3 and f[3]==j.epoch then
+  -- 1.23.31: the partner asks for our prices (theirs are over an hour old).
+  -- Send everything up to now, then go quiet again until the next ask.
+  r.lastContact=GetTime();r.wantTarget=j.seq;r.status='Partner asked for prices';r.next=0
  elseif f[2]=='B' and #f==4 then
   if self.ReceiveFlipBuys then self:ReceiveFlipBuys(f,sender) end
  elseif f[2]=='N' and #f==9 then
@@ -646,7 +665,7 @@ function M:ReceiveSharing(prefix,msg,ch,sender)
  elseif f[2]=='C' and #f==5 then
   -- Partner understands fast pages (and how many lanes it listens on).
   local v,n=tonumber(f[4]),tonumber(f[5])
-  if whole(v,1,99) and whole(n,1,#LANES) then r.peerV3=v>=3;r.peerLanes=n end
+  if whole(v,1,99) and whole(n,1,#LANES) then r.peerV3=v>=3;r.peerAsks=v>=4;r.peerLanes=n end
  elseif f[2]=='E' and #f==7 and rx and f[3]==rx.epoch then
   local lo,hi,base=tonumber(f[4]),tonumber(f[5]),unb62(f[6])
   if not whole(lo,0,1e12) or not whole(hi,lo+1,1e12) or not base then return end
@@ -702,6 +721,15 @@ end)
 -- Backup detection when a chat-frame filter is unavailable on the client.
 M:RegisterHandler('CHAT_MSG_SYSTEM',function(self,_,msg) self:HandlePeerOfflineNotice(msg) end)
 
+-- Our freshest prices: our own last scan or the last complete set from the partner.
+M.SYNC_STALE=3600
+function M:SyncShouldAsk(rx)
+ if not rx or not rx.total or rx.seq>=rx.total then return false end
+ local mine=math.max(tonumber(self.db.lastDepthSnapshotAt) or 0,tonumber(self.db.syncLastReceivedCompleteAt) or 0)
+ if time()-mine<M.SYNC_STALE then return false end
+ -- Only worth it when the partner has a newer scan than what we have.
+ return rx.scanAt==nil or rx.scanAt>mine
+end
 function M:IsBankCharacter() return (unitCharacter('player') or ''):lower()=='voidmark bank' end
 -- Synced partner answered within the heartbeat window (both characters online).
 function M:PartnerOnline()
