@@ -1,3 +1,7 @@
+## 1.23.28
+- Selling: picking an item no longer gets stuck on "Click Refresh to check the live price" about half the time. When the game hadn't loaded the item's auction info yet, the price check quietly stopped. It now asks the game to load it and keeps checking ("Checking live price...") for a few seconds, then searches.
+- 319 regressions.
+
 ## 1.23.27
 - Auto-invite: whisper "inv" or "invite" from any character whose first name is Voidmark and you get a group invite. Built into every VoidMark addon; only one runs, so no double invites.
 

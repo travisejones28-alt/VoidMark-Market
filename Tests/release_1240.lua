@@ -186,4 +186,32 @@ check('1.23.24 Selling: AH answers 0 for "can post" - still post when the AH acc
  C_AuctionHouse=old;ItemLocation=loc;C_Container=con;C_Item=itm;M.Print=oldPrint;M.sellBlockedSaid=nil
  if not ok then error(err,0) end
 end)
+check('1.23.28 Selling: picking an item whose AH info is not loaded yet keeps checking (no silent "Click Refresh")',function()
+ reset()
+ local loc,con=ItemLocation,C_Container
+ local old=C_AuctionHouse;local api=setmetatable({},{__index=old});C_AuctionHouse=api
+ local ok,err=pcall(function()
+  ItemLocation={CreateFromBagAndSlot=function() return {} end}
+  C_Container={GetContainerItemInfo=function() return {itemID=4776,hyperlink='feather',stackCount=5} end}
+  api.IsThrottledMessageSystemReady=function() return true end
+  local key={itemID=4776,itemSuffix=0,itemLevel=0,battlePetSpeciesID=0}
+  api.GetItemKeyFromItem=function() return key end
+  local loaded=false;local asked=0
+  api.GetItemKeyInfo=function() asked=asked+1;if loaded then return {isCommodity=true} end end
+  api.GetItemCommodityStatus=function() return loaded and 1 or 0 end -- 0 = unknown until loaded
+  api.GetAvailablePostCount=function() return 5 end
+  local sent;api.HasSearchResults=function() return false end;api.SendSearchQuery=function(k) sent=k end
+  local row={bag=0,slot=1,itemID=4776,itemLink='feather',name='Long Tail Feather',quantity=5,marketKey=M:Key(4776,0,0,0)}
+  M.sellingRows={row};M:SetView('selling');M.ahOpen=true;M.sellRetry=nil
+  M:SelectSellRow(row,true)
+  local b,e=M.readBag(M,row)
+  assert(M.postQuote and M.postQuote.loading,'shows checking, not Click Refresh: '..tostring(e)..' q='..tostring(M.postQuote)..' sel='..tostring(M.selectedRow==row)..' iscom='..tostring(M:IsCommodity(key)))
+  assert(asked>0,'asked the client to load the item')
+  loaded=true
+  advance(0.3);M:SellTick();advance(1);M:PumpQueue()
+  assert(M.postQuote and not M.postQuote.loading and sent,'price check went out once the item loaded')
+ end)
+ C_AuctionHouse=old;ItemLocation=loc;C_Container=con;M.sellRetry=nil
+ if not ok then error(err,0) end
+end)
 end

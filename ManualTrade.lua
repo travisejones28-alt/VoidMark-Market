@@ -100,7 +100,7 @@ local function readBag(self,r)
   local status=A.GetItemCommodityStatus(loc)
   if status==Enum.ItemCommodityStatus.Commodity then commodity=true elseif status==Enum.ItemCommodityStatus.Item then commodity=false end
  end
- if commodity==nil then return nil,'Waiting for item classification' end
+ if commodity==nil then return nil,'Waiting for item classification',{k=k,loading=true} end
  local n=A.GetAvailablePostCount and A.GetAvailablePostCount(loc)
  if not whole(n,1e9) then
   -- Forever sometimes answers 0/nil for gear it will still take. Ask the AH
@@ -122,12 +122,25 @@ local function readBag(self,r)
 end
 M.readBag=readBag
 function M:CheckPost(row)
+ local prev=self.postQuote
  self.postQuote=nil
  local b,e,partial=readBag(self,row)
  if not b then
   -- Right after a post the slot is briefly locked; try again shortly.
   if e and e:find('locked',1,true) and (self.sellRetry or 0)<10 then
    self.sellRetry=(self.sellRetry or 0)+1;self.sellCheckAt=GetTime()+0.2;self.sellCheckRow=row;return
+  end
+  -- The first time an item is picked the client often hasn't loaded its AH
+  -- info yet ("Waiting for item classification"). That used to stop the
+  -- check silently ("Click Refresh..."), about half the time. Ask the client
+  -- to load it and retry for a few seconds, showing "Checking live price...".
+  if e and (e:find('classification',1,true) or e:find('identity unavailable',1,true)) and (self.sellRetry or 0)<20 then
+   self.sellRetry=(self.sellRetry or 0)+1
+   local A=C_AuctionHouse
+   if partial and partial.k and A.GetItemKeyInfo then pcall(A.GetItemKeyInfo,partial.k,true) end
+   if row and row.itemID and C_Item and C_Item.RequestLoadItemDataByID then pcall(C_Item.RequestLoadItemDataByID,row.itemID) end
+   self.postQuote={row=row,deadline=(prev and prev.loading and prev.row==row and prev.deadline) or GetTime()+10,loading=true}
+   self.sellCheckAt=GetTime()+0.25;self.sellCheckRow=row;return
   end
   self.sellRetry=nil
   -- Say it once per item, not on every Refresh.
@@ -138,7 +151,7 @@ function M:CheckPost(row)
    -- in Blizzard's Sell tab would.
    if partial and partial.loc and C_AuctionHouse.IsSellItemValid then pcall(C_AuctionHouse.IsSellItemValid,partial.loc,true) end
   end
-  if not partial then return end
+  if not partial or partial.loading then return end
   b=partial -- still show the live prices
  end
  self.sellRetry=nil
