@@ -1,3 +1,9 @@
+## 1.23.32
+- A sale banner guessed the price ("about 1g 29s each (market price)") for a bow you posted at 1g. An auction you post with Market is now saved as one of your listings the moment it's created, so its sale knows your price even if Listings was never opened. Items whose name has a suffix ("of the Bandit") also match your post of that exact name.
+- Selling no longer sits on "Click Refresh to check the live price": when nothing is checking the picked item, it checks again by itself every 2 seconds (up to 15 times per item).
+- A price check of an item the game already has results for shows them after 0.4s instead of 2.5s, like Auctionator.
+- 324 regressions.
+
 ## 1.23.31
 - Bank sync no longer sends prices after every scan. Each character now asks for the other's prices only when its own are over an hour old (no scan of its own and no complete set from the partner in the last hour) and the partner has a newer scan. It asks as soon as the partner is seen online, so logging in a stale character pulls the latest prices once. Shopping lists, watches, sale alerts and your buys still go across right away. Update both accounts: a partner on an older version keeps the old behavior.
 - 322 regressions.

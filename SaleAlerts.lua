@@ -87,7 +87,15 @@ function M:BuildSaleAlert(name,auctionID,link)
    local list=type(self.db.postHistory)=='table' and self.db.postHistory[k]
    -- A key shared by several suffixes: only trust it when the scan says so.
    local m=self.db.market[k]
-   if type(list)=='table' and list[1] and not (m and m.mixedVariants) then h=list[1];key=k;break end
+   if type(list)=='table' and list[1] then
+    if not (m and m.mixedVariants) then h=list[1];key=k;break end
+    -- 1.23.32: shared by suffixes: the latest post of this exact name. The
+    -- sale said "about 1g 29s (market price)" for a bow posted at 1g.
+    for _,e in ipairs(list) do
+     if type(e)=='table' and type(e.name)=='string' and lower(e.name)==lower(name) then h=e;key=k;break end
+    end
+    if h then break end
+   end
   end
   key=key or keys[1]
   if h and self:Finite(h.unit,1,1e12) then

@@ -182,11 +182,37 @@ function M:BagCount(key,itemID,name)
 end
 function M:SellTick()
  local q=self.postQuote
+ -- 1.23.32: the picked item never sits on "Click Refresh": if nothing is
+ -- checking its price (a check was dropped, the AH was busy, the bag moved),
+ -- check again by itself every 2 seconds, up to 15 times per item.
+ local sel=self.selectedRow
+ if sel and not q and self.ahOpen and self.view=='selling' and not self.tradePending and not self.sellCheckAt then
+  if self.sellAutoRow~=sel then self.sellAutoRow=sel;self.sellAutoTries=0;self.sellAutoAt=GetTime()+0.5 end
+  if GetTime()>=(self.sellAutoAt or 0) and (self.sellAutoTries or 0)<15 then
+   self.sellAutoTries=(self.sellAutoTries or 0)+1;self.sellAutoAt=GetTime()+2
+   self:CheckPost(sel);self:RefreshUI()
+  end
+ end
  if q and not q.at and q.deadline and GetTime()>=q.deadline and self.UseScanPrice then self:UseScanPrice(q,'no reply in 10 seconds') end
  if self.sellCheckAt and GetTime()>=self.sellCheckAt then
   local row=self.sellCheckRow;self.sellCheckAt=nil;self.sellCheckRow=nil
   if row and row==self.selectedRow and self.ahOpen and self.view=='selling' then self:CheckPost(row);self:RefreshUI() end
  end
+end
+-- 1.23.32: a new auction goes into the saved listings right away, so its sale
+-- alert knows the price even if Listings is never opened before it sells (a
+-- bow posted at 1g was announced as "about 1g 29s each (market price)").
+function M:RememberPostedAuction(posted,auctionID)
+ if self.persistenceBlocked or type(posted)~='table' or not self:Finite(posted.postedUnit,1,1e12) then return end
+ local snap=type(self.db.ownedSnapshot)=='table' and self.db.ownedSnapshot or {at=time(),rows={}}
+ snap.rows=type(snap.rows)=='table' and snap.rows or {}
+ self.db.ownedSnapshot=snap
+ local name=(self.LinkName and type(posted.link)=='string' and self:LinkName(posted.link)) or posted.name
+ if type(name)~='string' then return end
+ local id=tonumber(auctionID)
+ table.insert(snap.rows,1,{auctionID=id,name=name,unit=posted.postedUnit,unitChecked=true,
+  quantity=tonumber(posted.postedQuantity) or 1,marketKey=posted.postKey or posted.marketKey})
+ while #snap.rows>300 do table.remove(snap.rows) end
 end
 -- Once per post (the post click and the created event can both report it).
 function M:RecordPostHistory(posted)
@@ -200,15 +226,19 @@ function M:RecordPostHistory(posted)
   if k~=nil and not done[k] then
    done[k]=true
    local h=self.db.postHistory[k] or {};self.db.postHistory[k]=h
-   table.insert(h,1,{at=time(),unit=posted.postedUnit,quantity=posted.postedQuantity,duration=posted.postedDuration})
+   -- 1.23.32: the name too, so a sale of one suffix ("of the Bandit") can be
+   -- matched even when its key is shared with other suffixes.
+   local nm=type(posted.name)=='string' and posted.name or nil
+   table.insert(h,1,{at=time(),unit=posted.postedUnit,quantity=posted.postedQuantity,duration=posted.postedDuration,name=nm})
    while #h>20 do table.remove(h) end
   end
  end
 end
-M:RegisterHandler('AUCTION_HOUSE_AUCTION_CREATED',function(self)
+M:RegisterHandler('AUCTION_HOUSE_AUCTION_CREATED',function(self,_,auctionID)
  local posted=self.postingRow;self.postingRow=nil
  if not posted then return end
  self:RecordPostHistory(posted)
+ self:RememberPostedAuction(posted,auctionID)
  if self.view~='selling' then return end
  local tiles=self.SellTiles and self:SellTiles(self.sellingRows or {}) or (self.sellingRows or {})
  for i,t in ipairs(tiles) do

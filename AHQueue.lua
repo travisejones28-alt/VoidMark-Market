@@ -183,7 +183,10 @@ end
 -- quote with the exact total before you confirm.
 function M:PollSearch(r)
   if not r or r.kind~='search' or r.reading or r.resend or r.polled then return end
-  if GetTime()-(r.sent or 0)<(r.allowCached and 2.5 or 3) then return end
+  -- 1.23.32: like Auctionator, a price check of an item the client already has
+  -- results for shows them almost at once (0.4s) instead of after 2.5s.
+  local wait=r.allowCached and (r.refreshed and 0.4 or 2.5) or 3
+  if GetTime()-(r.sent or 0)<wait then return end
   local A=C_AuctionHouse; local arg=r.commodity and r.key.itemID or r.key
   local fullFn=r.commodity and A.HasFullCommoditySearchResults or A.HasFullItemSearchResults
   if type(fullFn)~='function' then return end
