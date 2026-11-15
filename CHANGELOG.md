@@ -1,3 +1,7 @@
+## 1.23.29
+- Your data was split in two. The game sometimes gives the realm as "CAMWOW US2 Realm 8 PvP" and sometimes as "CAMWOWUS2Realm8PvP", and each spelling got its own copy of your prices, ledger, flips and settings, so each login saw only part of it. Market now always uses the name without spaces and, once, merges the copies: prices keep the newest reading, the ledger and flips are joined (the same sale is counted once, entries get fresh numbers), and seen mail, recipes, shopping lists and history are combined. This also halves the size of the saved file.
+- 320 regressions.
+
 ## 1.23.28
 - Selling: picking an item no longer gets stuck on "Click Refresh to check the live price" about half the time. When the game hadn't loaded the item's auction info yet, the price check quietly stopped. It now asks the game to load it and keeps checking ("Checking live price...") for a few seconds, then searches.
 - 319 regressions.

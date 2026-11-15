@@ -214,4 +214,33 @@ check('1.23.28 Selling: picking an item whose AH info is not loaded yet keeps ch
  C_AuctionHouse=old;ItemLocation=loc;C_Container=con;M.sellRetry=nil
  if not ok then error(err,0) end
 end)
+check('1.23.29 Realm name with or without spaces is one economy; the two old copies merge with nothing lost',function()
+ local oN,oR=GetNormalizedRealmName,GetRealmName
+ local ok,err=pcall(function()
+  VoidMarkMarketDB={economies={
+   ['Test Realm|Horde']={market={a={lastSeen=100,name='Old A'},b={lastSeen=300,name='B new'}},
+    ledger={{id=1,kind='sale',marketKey='a',at=10,quantity=1,gross=50,character='Me|Test Realm'},{id=2,kind='buy',marketKey='c',at=20,quantity=2,cost=30,character='Me|Test Realm'}},
+    flips={{id=1,name='X',at=5,cost=10}},mailSeen={m1=1},ledgerSequence=2,recipes={r1={}},
+    inventory={['Me|Test Realm/a']={character='Me|Test Realm',cost=5}}},
+   ['TestRealm|Horde']={market={a={lastSeen=200,name='A new'},b={lastSeen=50,name='B old'}},
+    ledger={{id=1,kind='sale',marketKey='a',at=10,quantity=1,gross=50,character='Me|TestRealm'},{id=2,kind='sale',marketKey='d',at=30,quantity=1,gross=70,character='Me|TestRealm'}},
+    flips={{id=1,name='Y',at=7,cost=12}},mailSeen={m2=1},ledgerSequence=2,shoppingLists={L={}}}}}
+  TaliaaTradeBetaDB=nil;M.jobs={};M.shareRun={}
+  -- The normalized name isn't ready at this login: the game gives the spaced one.
+  GetNormalizedRealmName=function() return nil end;GetRealmName=function() return 'Test Realm' end
+  M:InitializeDatabase();jobs()
+  assert(M.economyID=='TestRealm|Horde','one name without spaces: '..M.economyID)
+  local n=0;for _ in pairs(VoidMarkMarketDB.economies) do n=n+1 end;assert(n==1,'copies merged into one')
+  local db=M.db
+  assert(db.market.a.name=='A new' and db.market.b.name=='B new','newest price wins')
+  assert(#db.ledger==3,'ledger joined, the shared sale counted once: '..#db.ledger)
+  local ids={};for _,e in ipairs(db.ledger) do assert(not ids[e.id],'unique ids');ids[e.id]=true;assert(e.character=='Me|TestRealm') end
+  assert(#db.flips==2 and db.mailSeen.m1 and db.mailSeen.m2 and db.recipes.r1 and db.shoppingLists.L,'flips, seen mail, recipes, lists kept')
+  assert(db.inventory['Me|TestRealm/a'],'inventory keys renamed')
+  assert((db.ledgerSequence or 0)>=3,'new entries get fresh ids')
+ end)
+ GetNormalizedRealmName,GetRealmName=oN,oR
+ VoidMarkMarketDB={};M:InitializeDatabase();jobs()
+ if not ok then error(err,0) end
+end)
 end

@@ -57,7 +57,7 @@ function M:ImportMarketTransfer(raw)
   local realm,faction=self.economyID:match('^(.-)|([^|]+)$')
   local magic,r,f,t,n=lines[1]:match('^([^\t]+)\t([^\t]+)\t([^\t]+)\t([^\t]+)\t([^\t]+)$')
   t,n=tonumber(t),tonumber(n)
-  if (magic~='VMMX1' and magic~='VMMX2') or r~=realm or f~=faction then return false,'Incompatible realm/faction or protocol' end
+  if (magic~='VMMX1' and magic~='VMMX2') or tostring(r):gsub('%s',''):lower()~=realm:gsub('%s',''):lower() or f~=faction then return false,'Incompatible realm/faction or protocol' end
   if not validWhole(self,t,time()-7*86400,time()+300) or not validWhole(self,n,0,100)
     or #lines~=n+1 then return false,'Invalid or stale transfer header' end
   local staged,unique={},{}
@@ -150,7 +150,7 @@ function M:ImportShoppingTransfer(raw)
   if list and (#list>24 or list:find('[%c|]')) then return false,'Invalid list name' end
   local magic,r,f,at,count=(header or lines[1]):match('^([^\t]+)\t([^\t]+)\t([^\t]+)\t([^\t]+)\t([^\t]+)$')
   at,count=tonumber(at),tonumber(count)
-  if (magic~='VMMW1' and not (magic=='VMMW2' and list)) or r~=realm or f~=faction then return false,'Realm/faction or format mismatch' end
+  if (magic~='VMMW1' and not (magic=='VMMW2' and list)) or tostring(r):gsub('%s',''):lower()~=realm:gsub('%s',''):lower() or f~=faction then return false,'Realm/faction or format mismatch' end
   if not validWhole(self,at,time()-30*86400,time()+300)
     or not validWhole(self,count,0,200) or count~=#lines-1 then return false,'Invalid shopping header' end
   local staged,seen={},{}

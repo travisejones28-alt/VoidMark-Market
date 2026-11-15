@@ -22,10 +22,18 @@ function M:InitializeDatabase()
   root.settings.ahCut=math.min(0.30,root.settings.ahCut)
   root.settings.riskTolerance=math.min(2,root.settings.riskTolerance)
   root.economies=type(root.economies)=='table' and root.economies or {}
-  local realm=GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName()
+  -- One realm name, always without spaces. The game sometimes gives
+  -- "CAMWOW US2 Realm 8 PvP" and sometimes "CAMWOWUS2Realm8PvP" (the
+  -- normalized name isn't ready yet at some logins), and before 1.23.29 each
+  -- spelling got its own copy of your data, so every login saw only half.
+  local realm=tostring((GetNormalizedRealmName and GetNormalizedRealmName()) or GetRealmName() or ''):gsub('%s','')
   local faction=UnitFactionGroup('player') or 'Unknown'
-  self.economyID=tostring(realm)..'|'..faction
-  self.characterID=(UnitName('player') or 'Unknown')..'|'..tostring(realm)
+  self.economyID=realm..'|'..faction
+  self.characterID=(UnitName('player') or 'Unknown')..'|'..realm
+  if not self.persistenceBlocked and self.MergeSplitEconomies then
+    local ok,err=pcall(self.MergeSplitEconomies,self,root,self.economyID)
+    if not ok then self.economyMergeError=tostring(err) end
+  end
   local db=root.economies[self.economyID]
   if type(db)~='table' then db={}; root.economies[self.economyID]=db end
   self.db=db; db.settings=root.settings
@@ -141,4 +149,151 @@ function M:RepairFutureTimes(done)
       if debugprofilestop()-start>=self.budget then return false end
     end
   end,function() self.db.futureTimesFixed=(self.db.futureTimesFixed or 0)+fixed;if done then done(fixed) end end)
+end
+
+
+-- 1.23.29: fold the copies made under other spellings of this realm (spaces)
+-- into the one copy. Nothing is thrown away: lists are joined without
+-- duplicates, and for prices the newest reading wins.
+local function squash(x) return tostring(x or ''):gsub('%s',''):lower() end
+local function fixChar(v,canon)
+  if type(v)~='string' then return v end
+  local name,realm=v:match('^(.-)|(.+)$')
+  if name and squash(realm)==squash(canon) then return name..'|'..canon end
+  return v
+end
+local function newer(a,b,field)
+  return (tonumber(type(a)=='table' and a[field]) or 0)>=(tonumber(type(b)=='table' and b[field]) or 0)
+end
+local NEWEST={market='lastSeen',liveSeen='at',sharedPrices='at',shareBases='at',banker=nil}
+local UNION={'itemNames','keyNames','recipes','mailSeen','mailNameless','partnerBuys','dailyLowsBase','shopTerms','shoppingLists',
+  'sellFavourites','sellFloors','sellStacks','watchlist','flipSyncSent','ownedSnapshot','reviewQueue','postQueue'}
+function M:MergeSplitEconomies(root,canonID)
+  local realm,faction=canonID:match('^(.-)|([^|]+)$')
+  if not realm then return 0 end
+  local merged=0
+  for id,other in pairs(root.economies) do
+    local r,f=tostring(id):match('^(.-)|([^|]+)$')
+    if id~=canonID and type(other)=='table' and f==faction and squash(r)==squash(realm) then
+      local db=root.economies[canonID]
+      if type(db)~='table' then
+        root.economies[canonID]=other;root.economies[id]=nil;merged=merged+1
+        db=other
+      else
+        self:MergeEconomyInto(db,other,realm)
+        root.economies[id]=nil;merged=merged+1
+      end
+    end
+  end
+  -- Character names saved inside entries use the old spelling too.
+  if merged>0 then
+    local db=root.economies[canonID]
+    for _,t in ipairs({'ledger','pending','flips'}) do
+      for _,e in pairs(type(db[t])=='table' and db[t] or {}) do
+        if type(e)=='table' then e.character=fixChar(e.character,realm);e.char=fixChar(e.char,realm) end
+      end
+    end
+    if type(db.inventory)=='table' then
+      local inv={}
+      for k,lot in pairs(db.inventory) do
+        local c,rest=tostring(k):match('^(.-)/(.+)$')
+        if type(lot)=='table' then lot.character=fixChar(lot.character,realm) end
+        local nk=c and (fixChar(c,realm)..'/'..rest) or k
+        if inv[nk]==nil then inv[nk]=lot end
+      end
+      db.inventory=inv
+    end
+    if type(db.wealthHistory)=='table' then
+      local w={}
+      for k,list in pairs(db.wealthHistory) do
+        local nk=fixChar(k,realm)
+        if type(w[nk])=='table' and type(list)=='table' then for _,x in ipairs(list) do table.insert(w[nk],x) end
+          table.sort(w[nk],function(a,b) return (tonumber(type(a)=='table' and a.at) or 0)<(tonumber(type(b)=='table' and b.at) or 0) end)
+        else w[nk]=list end
+      end
+      db.wealthHistory=w
+    end
+    root.economyMerge={at=time(),economy=canonID,merged=merged}
+  end
+  return merged
+end
+
+function M:MergeEconomyInto(db,other,realm)
+  local function tbl(t,k) if type(t[k])~='table' then t[k]={} end return t[k] end
+  -- Prices: newest reading wins.
+  for name,field in pairs(NEWEST) do
+    local dst,src=tbl(db,name),other[name]
+    if type(src)=='table' then
+      for k,v in pairs(src) do if dst[k]==nil or not newer(dst[k],v,field) then dst[k]=v end end
+    end
+  end
+  -- Plain lookups and "already seen" sets: union.
+  for _,name in ipairs(UNION) do
+    local dst,src=tbl(db,name),other[name]
+    if type(src)=='table' then for k,v in pairs(src) do if dst[k]==nil then dst[k]=v end end end
+  end
+  -- Daily lows: per item per day, the lower price.
+  do local dst,src=tbl(db,'dailyLows'),other.dailyLows
+    if type(src)=='table' then for k,days in pairs(src) do
+      if type(dst[k])~='table' then dst[k]=days elseif type(days)=='table' then
+        for d,v in pairs(days) do local cur=tonumber(dst[k][d]);if not cur or (tonumber(v) and v<cur) then dst[k][d]=v end end
+      end end end
+  end
+  -- Post history: join each item's list, oldest first, no repeats.
+  do local dst,src=tbl(db,'postHistory'),other.postHistory
+    if type(src)=='table' then for k,list in pairs(src) do
+      if type(dst[k])~='table' then dst[k]=list elseif type(list)=='table' then
+        local seen={}
+        for _,e in ipairs(dst[k]) do if type(e)=='table' then seen[tostring(e.at)..':'..tostring(e.unit)..':'..tostring(e.quantity)]=true end end
+        for _,e in ipairs(list) do if type(e)=='table' and not seen[tostring(e.at)..':'..tostring(e.unit)..':'..tostring(e.quantity)] then table.insert(dst[k],e) end end
+        table.sort(dst[k],function(a,b) return (tonumber(a.at) or 0)>(tonumber(b.at) or 0) end)
+        while #dst[k]>20 do table.remove(dst[k]) end
+      end end end
+  end
+  -- Ledger and flips: append the other copy's entries with new ids, skipping
+  -- any that are the same event (same time, item, kind, amount).
+  local function fp(e) return table.concat({tostring(e.kind or e.type or e.source),tostring(e.marketKey or e.key or e.name),tostring(e.at),tostring(e.quantity or e.qty),tostring(e.gross or e.cost or e.amount or e.price)},'|') end
+  for _,name in ipairs({'ledger','flips'}) do
+    local dst,src=tbl(db,name),other[name]
+    if type(src)=='table' then
+      local seen,maxID={},0
+      for _,e in pairs(dst) do if type(e)=='table' then seen[fp(e)]=true;maxID=math.max(maxID,tonumber(e.id) or 0) end end
+      local add={}
+      for _,e in pairs(src) do if type(e)=='table' and not seen[fp(e)] then seen[fp(e)]=true;add[#add+1]=e end end
+      table.sort(add,function(a,b) return (tonumber(a.at) or 0)<(tonumber(b.at) or 0) end)
+      for _,e in ipairs(add) do maxID=maxID+1;e.id=maxID;table.insert(dst,e) end
+      table.sort(dst,function(a,b) return (tonumber(a.at) or 0)<(tonumber(b.at) or 0) end)
+      if name=='ledger' then db.ledgerSequence=math.max(tonumber(db.ledgerSequence) or 0,tonumber(other.ledgerSequence) or 0,maxID) end
+      if name=='flips' then
+        db.flipSequence=math.max(tonumber(db.flipSequence) or 0,tonumber(other.flipSequence) or 0,maxID)
+        -- Renumbered flips aren't new buys: don't re-send them to the other character.
+        if #add>0 and type(db.flipSyncSent)=='table' then db.flipSyncSent.high=math.max(tonumber(db.flipSyncSent.high) or 0,maxID) end
+      end
+    end
+  end
+  -- Mail order and scans: join, no repeats.
+  do local dst,src=tbl(db,'mailOrder'),other.mailOrder
+    if type(src)=='table' then local seen={};for _,k in ipairs(dst) do seen[k]=true end
+      for _,k in ipairs(src) do if not seen[k] then seen[k]=true;table.insert(dst,k) end end end
+  end
+  do local dst,src=tbl(db,'scans'),other.scans
+    if type(src)=='table' then for _,x in ipairs(src) do table.insert(dst,x) end
+      table.sort(dst,function(a,b) return (tonumber(a.responseAt) or 0)<(tonumber(b.responseAt) or 0) end)
+      while #dst>20 do table.remove(dst,1) end end
+  end
+  -- Recent searches: keep the newest 20.
+  do local dst,src=tbl(db,'recentSearches'),other.recentSearches
+    if type(src)=='table' then local seen={};for _,x in ipairs(dst) do seen[tostring(type(x)=='table' and x.text or x)]=true end
+      for _,x in ipairs(src) do local k=tostring(type(x)=='table' and x.text or x);if not seen[k] then seen[k]=true;table.insert(dst,x) end end
+      while #dst>20 do table.remove(dst) end end
+  end
+  -- Totals: both copies counted different buys.
+  if type(other.totals)=='table' then local t=tbl(db,'totals')
+    for k,v in pairs(other.totals) do if tonumber(v) then t[k]=(tonumber(t[k]) or 0)+v end end end
+  -- Everything else the canonical copy lacks: take it as is.
+  for k,v in pairs(other) do if db[k]==nil then db[k]=v end end
+  for _,k in ipairs({'scanSequence','ledgerSequence'}) do db[k]=math.max(tonumber(db[k]) or 0,tonumber(other[k]) or 0) end
+  local function scanAt(x) return type(x)=='table' and (tonumber(x.responseAt) or tonumber(x.startedAt) or tonumber(x.at)) or 0 end
+  if scanAt(other.latestScan)>scanAt(db.latestScan) then db.latestScan=other.latestScan end
+  if type(other.banker)=='table' and (tonumber(other.banker.latest and other.banker.latest.at) or 0)>(tonumber(db.banker and db.banker.latest and db.banker.latest.at) or 0) then db.banker=other.banker end
 end

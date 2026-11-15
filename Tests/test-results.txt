@@ -176,7 +176,7 @@ PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
 PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
 PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
-BENCH scan: 96 frames (1.6s at 60fps, 3.2s at 30fps), worst frame 12.1ms, cpu 0.96s | after:share-scan=18 done=1 model=59 processing=18
+BENCH scan: 81 frames (1.4s at 60fps, 2.7s at 30fps), worst frame 12.2ms, cpu 0.78s | after:share-scan=19 done=1 model=49 processing=12
 PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.13 history stores only the fields it needs; latest keeps the full snapshot
 PASS 1.9.13 history saved by older versions is shrunk once at login without losing prices
@@ -320,4 +320,5 @@ PASS 1.23.22 Listings/sale alert: stack price read right whether Forever gives i
 PASS 1.23.23 Selling: a mis-posted cheap listing is marked; double-click opens Buy with it lined up; Back returns
 PASS 1.23.24 Selling: AH answers 0 for "can post" - still post when the AH accepts it; say why once when it doesn't
 PASS 1.23.28 Selling: picking an item whose AH info is not loaded yet keeps checking (no silent "Click Refresh")
-ALL 319 TESTS PASSED
+PASS 1.23.29 Realm name with or without spaces is one economy; the two old copies merge with nothing lost
+ALL 320 TESTS PASSED

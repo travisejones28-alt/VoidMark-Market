@@ -46,7 +46,7 @@ end
 -- Imported recipes never supply invented material costs or sale evidence.
 function M:ReadNexusRecipes()
  local n=_G.VoidMarkNexus;local c=n and n.character
- if self.persistenceBlocked or not c or n.economy~=self.economyID or c.name~=UnitName('player') or type(c.professions)~='table' then
+ if self.persistenceBlocked or not c or tostring(n.economy):gsub('%s',''):lower()~=self.economyID:gsub('%s',''):lower() or c.name~=UnitName('player') or type(c.professions)~='table' then
   return false,'No matching Nexus profession cache for this character'
  end
  local captured=0
