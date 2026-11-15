@@ -1,3 +1,6 @@
+## 1.23.27
+- Auto-invite: whisper "inv" or "invite" from any character whose first name is Voidmark and you get a group invite. Built into every VoidMark addon; only one runs, so no double invites.
+
 ## 1.23.26
 - Selling price list: "cheap" now compares a listing with the next few listings above it, not all of them. Wool Cloth at 1s 40c next to 1s 42c is no longer flagged just because pricier stacks sit further down. The label is now a short "CHEAP - buy" on one line (it wrapped over the rows below).
 
