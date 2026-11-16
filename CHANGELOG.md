@@ -1,3 +1,15 @@
+## 1.23.37 - price check sweep
+- Amounts: "pc 20 bronze bar", "pc bronze bar x20" and "pc 20 [Bronze Bar]" answer with the total and the price each: "20x [Bronze Bar] 37s 80c (1s 89c each; 40 up, scanned 3m ago)". If fewer are listed than asked for, the reply adds "- only 40 up".
+- How many are listed: replies now say how many your last scan saw up ("5,120 up").
+- Several items in one ask: "pc tin ore, copper bar" (also / or ;), and up to 3 links.
+- "pc" or "price check" alone, or "pc help", in a whisper gets a one-line how-to. In guild and party it's ignored.
+- "pc[item]" with no space works. "price checker addon?", "pcs" and "my pc crashed" aren't treated as asks.
+- Instance chat is answered too, under the Party/Raid setting.
+- Limits: one player gets at most 6 answers a minute, and at most 15 replies wait at once.
+- Names: an item found by a looked-up name is remembered, so it's found again after a relog. Scanned items saved without a name are now named slowly in the background while Shopping is open, using the same light loader synced prices use (synced prices still go first).
+- /vmm pricecheck now takes anything an ask takes: "/vmm pricecheck 20 tin ore, copper bar".
+- 332 regressions.
+
 ## 1.23.36
 - Typed price checks missed items a full scan saved without a name. The game hadn't loaded those items yet, so they were stored as "" or "Item 2771", and "price check tin ore" said "no scan data" while Tin Ore was on the AH. Names now also come from remembered names and the game's cache. Only already-loaded items are asked for, so a lookup never makes the game fetch thousands of items.
 - Typos are forgiven: "brnze bar", "bronze bars", "coper bar", "elixer of giants", "free action pot", "magweave", "greater heal potion". If two items are equally close, the whisper lists them instead of guessing.

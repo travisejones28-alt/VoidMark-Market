@@ -162,4 +162,57 @@ check('1.23.36 typed price check finds items a full scan saved without a name (T
  local t=M:PriceCheckReply('[Tin Ore]','a','Tin Ore',2771);assert(t:find('[Tin Ore] 1s',1,true),t)
  C_Item,GetItemInfo=oldC,oldG
 end)
+check('1.23.37 price check sweep: amounts, several items, how-to, instance chat, limits, listed count, names kept',function()
+ VoidMarkMarketDB={};TaliaaTradeBetaDB=nil;M.jobs={};M:InitializeDatabase();jobs()
+ local sent={};SendChatMessage=function(t,ch,_,to) sent[#sent+1]={t,ch,to} end
+ local oldTimer,oldC=C_Timer,C_Item;C_Timer=nil
+ local PC=M.priceCheck;PC.pending={};PC.answered={};PC.sent={};PC.lastSend=nil;PC.last=nil;PC.askers={}
+ local function add(k,id,name,floor,qty)
+  M.db.market[k]={marketKey=k,itemID=id,name=name,lastSeen=time()-180,latest={floor=floor,quantity=qty},observations=1}
+ end
+ add('t',2771,'',100,5120);add('b',2841,'Bronze Bar',189,40)
+ add(M:LinkIdentity('|cnIQ1:|Hitem:2840::::::::60:::::::|h[Copper Bar]|h|r'),2840,'Copper Bar',50,300)
+ C_Item={IsItemDataCachedByID=function(id) return id==2771 end,GetItemNameByID=function(id) return id==2771 and 'Tin Ore' or nil end}
+ local function last() return sent[#sent] and sent[#sent][1] end
+ local function ask(msg,who,ev) advance(2);emit(ev or 'CHAT_MSG_WHISPER',msg,who or ('P'..#sent)) end
+ -- Listed count, and a name looked up once is kept.
+ ask('price check tin ore')
+ assert(last()=='VoidMark price: [Tin Ore] 1s (5,120 up, scanned 3m ago)',last())
+ assert(M.db.itemNames[2771]=='Tin Ore','looked-up name not kept')
+ -- Amounts.
+ ask('pc 20 bronze bar');assert(last()=='VoidMark price: 20x [Bronze Bar] 37s 80c (1s 89c each; 40 up, scanned 3m ago)',last())
+ ask('pc bronze bar x50');assert(last():find('50x [Bronze Bar] 94s 50c',1,true) and last():find('- only 40 up',1,true),last())
+ local link='|cnIQ1:|Hitem:2840::::::::60:::::::|h[Copper Bar]|h|r'
+ ask('pc 10 '..link);assert(last():find('10x '..link..' 5s (50c each',1,true),last())
+ ask('pc'..link);assert(last():find(link..' 50c (300 up',1,true),last())
+ -- Several in one message.
+ local n=#sent;ask('pc tin ore, copper bar','Multi Guy');advance(2);M:PriceCheckFlush()
+ assert(#sent==n+2 and sent[n+1][1]:find('[Tin Ore]',1,true) and sent[n+2][1]:find('[Copper Bar]',1,true))
+ -- How-to: whisper only.
+ ask('pc','Help Guy');assert(last():find('type "pc" and an item',1,true),last())
+ n=#sent;ask('pc','Guild Guy','CHAT_MSG_GUILD');advance(5);M:PriceCheckFlush();assert(#sent==n)
+ -- Not asks.
+ for _,m in ipairs({'price checker addon anyone?','pcs are expensive','my pc crashed lol x2'}) do
+  local p=M:ParsePriceCheck(m);assert(p==nil or (p.items and M:FindPriceCheckItem(p.items[1].text)==nil),m)
+ end
+ -- Instance chat answers under the party setting.
+ n=#sent;ask('pc copper bar','Dungeon Guy','CHAT_MSG_INSTANCE_CHAT');advance(5);M:PriceCheckFlush()
+ assert(#sent==n+1 and sent[n+1][2]=='INSTANCE_CHAT')
+ -- One player asking a lot: 6 a minute.
+ n=#sent
+ for i=1,9 do advance(1);emit('CHAT_MSG_WHISPER',i%2==0 and 'pc tin ore' or 'pc copper bar','Spammer');PC.sent={} end
+ assert(#sent-n<=6,'spam answered '..(#sent-n))
+ SendChatMessage=nil;C_Timer=oldTimer;C_Item=oldC
+end)
+check('1.23.37 unnamed scanned items are queued for slow name loading',function()
+ VoidMarkMarketDB={};TaliaaTradeBetaDB=nil;M.jobs={};M:InitializeDatabase();jobs()
+ M.nameWarm=nil;M.sharedIdSet=nil
+ M.db.market.a={marketKey='a',itemID=2771,name='',latest={floor=1}}
+ M.db.market.b={marketKey='b',itemID=2841,name='Bronze Bar',latest={floor=1}}
+ M.db.market.c={marketKey='c',itemID=2772,name='Item 2772',latest={floor=1}}
+ M:WarmItemNames()
+ local ids={};for _,id in ipairs(M.nameWarm.ids) do ids[id]=true end
+ assert(ids[2771] and ids[2772] and not ids[2841])
+ M.nameWarm=nil;M.sharedIdSet=nil
+end)
 end

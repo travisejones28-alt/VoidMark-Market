@@ -406,7 +406,18 @@ function M:WarmItemNames()
  local set=self.nameWarm and self.sharedIdSet or {}
  for _,s in pairs(self.db.sharedPrices) do
   local id=type(s)=='table' and tonumber(s.id)
-  if id and not set[id] then set[id]=true;w.ids[#w.ids+1]=id end
+  -- Synced prices come first (a name search may be waiting on them).
+  if id and not set[id] then set[id]=true;w.front=(w.front or 0)+1;table.insert(w.ids,w.i+w.front,id) end
+ end
+ w.front=nil
+ -- Scanned items saved before the game had loaded them have no name, so a
+ -- typed price check ("pc tin ore") couldn't find them: name those too.
+ for _,m in pairs(self.db.market) do
+  local id=type(m)=='table' and tonumber(m.itemID)
+  local n=id and m.name
+  if id and not set[id] and (type(n)~='string' or n=='' or n:match('^Item %d+$')) and not self.db.itemNames[id] then
+   set[id]=true;w.ids[#w.ids+1]=id
+  end
  end
  self.sharedIdSet=set;self.nameWarm=w
 end
