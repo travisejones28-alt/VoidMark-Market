@@ -86,4 +86,50 @@ check('1.23.34 price check reads quality-coloured links (|cnIQ) and /vmm pricech
  assert(M.priceCheck.last.reason:find('switched off',1,true))
  M.db.settings.priceCheckWhisper=nil;SendChatMessage=nil;C_Timer=oldTimer
 end)
+check('1.23.35 typed price checks: "price check bronze bar" without a link',function()
+ VoidMarkMarketDB={};TaliaaTradeBetaDB=nil;M.jobs={};M:InitializeDatabase();jobs()
+ local sent={};SendChatMessage=function(t,ch,_,to) sent[#sent+1]={t,ch,to} end
+ local oldTimer=C_Timer;C_Timer=nil
+ M.priceCheck.pending={};M.priceCheck.answered={};M.priceCheck.sent={};M.priceCheck.lastSend=nil;M.priceCheck.last=nil
+ local function add(id,name,floor,extra)
+  local k=M:LinkIdentity('|cffffffff|Hitem:'..id..'::::::::60:::::::|h['..name..']|h|r')
+  M.db.market[k]={marketKey=k,itemID=id,name=name,lastSeen=time()-60,latest={floor=floor},observations=1}
+  for a,b in pairs(extra or {}) do M.db.market[k][a]=b end
+ end
+ add(2841,'Bronze Bar',189);add(2840,'Copper Bar',50);add(3576,'Tin Bar',120)
+ add(91300,'Pagan Belt',5000,{suffixFloors={['Pagan Belt of the Bear']={floor=9000,at=time()-120}}})
+ assert(M:PriceCheckTypedName('price check bronze bar')=='bronze bar')
+ assert(M:PriceCheckTypedName('Price Check: Bronze Bar?')=='bronze bar')
+ assert(M:PriceCheckTypedName('pc [Bronze Bar]')=='bronze bar')
+ assert(M:PriceCheckTypedName('anyone got a price check addon')==nil and M:PriceCheckTypedName('pc lo')==nil)
+ emit('CHAT_MSG_WHISPER','price check bronze bar','Redridge Chad')
+ assert(#sent==1 and sent[1][1]=='VoidMark price: [Bronze Bar] 1s 89c (scanned 1m ago)' and sent[1][3]=='Redridge Chad',tostring(sent[1] and sent[1][1]))
+ advance(2);emit('CHAT_MSG_WHISPER','pc pagan belt of the bear','Redridge Chad')
+ assert(#sent==2 and sent[2][1]:find('[Pagan Belt of the Bear] 90s',1,true),sent[2][1])
+ -- One partial match: used. Several: whisper lists them; guild stays quiet.
+ -- One item holds the words: used.
+ advance(2);emit('CHAT_MSG_WHISPER','price check bronze','Second Guy')
+ assert(#sent==3 and sent[3][1]:find('[Bronze Bar] 1s 89c',1,true),sent[3][1])
+ -- Several hold them: the whisper lists them.
+ advance(2);emit('CHAT_MSG_WHISPER','price check bar','Third Guy')
+ assert(#sent==4 and sent[4][1]=='VoidMark price: no scan data for "bar". Check the spelling or link the item.',sent[4][1])
+ advance(2);emit('CHAT_MSG_WHISPER','price check  bar ','Fourth Guy')
+ assert(#sent==5 and sent[5][1]:find('"bar" matches',1,true)==nil)
+ advance(2);emit('CHAT_MSG_WHISPER','pc r bar','Fifth Guy')
+ assert(#sent==6 and sent[6][1]:find('[Copper Bar] 50c',1,true),sent[6][1])
+ advance(2);emit('CHAT_MSG_WHISPER','pc  bar  ','Sixth Guy')
+ M.db.market.extra1={marketKey='extra1',itemID=1,name='Iron Bars',lastSeen=time(),latest={floor=300}}
+ advance(2);emit('CHAT_MSG_WHISPER','pc  bars','Sixth Guy')
+ assert(sent[#sent][1]:find('[Iron Bars] 3s',1,true),sent[#sent][1])
+ advance(2);emit('CHAT_MSG_WHISPER','pc  r ba','Seventh Guy')
+ assert(sent[#sent][1]:find('[Copper Bar]',1,true),sent[#sent][1])
+ advance(2);emit('CHAT_MSG_WHISPER','price check  n ba','Eighth Guy')
+ assert(sent[#sent][1]:find('matches 2 items: Iron Bars, Tin Bar.',1,true),sent[#sent][1])
+ local n=#sent
+ advance(2);emit('CHAT_MSG_GUILD','price check made up thing','Redridge Chad');advance(5);M:PriceCheckFlush()
+ n=#sent;assert(sent[#sent][2]=='WHISPER','guild answered an unknown name')
+ advance(2);emit('CHAT_MSG_GUILD','pc copper bar','Redridge Chad');advance(5);M:PriceCheckFlush()
+ assert(sent[#sent][2]=='GUILD' and sent[#sent][1]:find('[Copper Bar] 50c',1,true))
+ SendChatMessage=nil;C_Timer=oldTimer
+end)
 end

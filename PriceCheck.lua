@@ -52,17 +52,18 @@ local function secret(...)
 end
 local function itemID(link) return tonumber(tostring(link):match('item:(%d+)')) end
 -- Reply text for one link, and whether we had a price at all.
-function M:PriceCheckReply(link)
+-- link: an item link, or for a typed name the text to show ("[Bronze Bar]")
+-- with key/name/id from the name lookup.
+function M:PriceCheckReply(link,key,name,id)
  if not self.db then return nil end
- local key=self:LinkIdentity(link)
- local name=self:LinkName(link)
+ if not name then key=self:LinkIdentity(link);name=self:LinkName(link) end
  local p
  if key~=nil then
   local state,sf=self:VariantPrice(key,name,name)
   if state=='suffix' then p={floor=sf.floor,at=sf.at}
   elseif state=='key' then p=self:PriceObservation(key) end
  end
- local tp=(key==nil or self:VariantPrice(key,name,name)~='none') and self:TSMPrice(link)
+ local tp=(key==nil or self:VariantPrice(key,name,name)~='none') and self:TSMPrice(id or link)
  if not p or not self:Finite(p.floor,1,1e12) then
   if tp then return cap(PREFIX..' '..link..' '..self:PlainCoins(tp)..' (TSM)'),true end
   return PREFIX..' '..link..' no scan data',false
@@ -83,10 +84,58 @@ function M:PriceCheckReply(link)
 end
 -- Someone (us on another client, a friend) already answered this item here.
 local function place(channel,target) return channel..'|'..(channel=='WHISPER' and tostring(target) or '') end
+-- Answers are matched by item name, so a linked ask and a typed one are the same.
+local function nameKey(text) local n=tostring(text):match('%[(.-)%]');return n and n:lower() end
 function M:NotePriceCheckAnswer(channel,target,msg)
  if type(msg)~='string' or msg:sub(1,#PREFIX)~=PREFIX then return end
- local id=itemID(msg);if not id then return end
- PC.answered[place(channel,target)..'|'..id]=now()
+ local n=nameKey(msg);if not n then return end
+ PC.answered[place(channel,target)..'|'..n]=now()
+end
+-- "price check bronze bar" / "pc bronze bar": the typed name, or nil.
+function M:PriceCheckTypedName(msg)
+ if type(msg)~='string' or msg:find('|H',1,true) then return nil end
+ local l=msg:lower()
+ local q=l:match('^%s*!?price%s*check%s*[:%-]?%s+(.+)$') or l:match('^%s*!?pc%s+(.+)$')
+ if not q then return nil end
+ q=q:gsub('[%?!%.]+%s*$',''):gsub('^%s+',''):gsub('%s+$',''):gsub('^%[(.-)%]$','%1')
+ if #q<3 then return nil end
+ return q
+end
+-- Find a typed name in our prices: the exact name first (suffix gear too:
+-- "pagan belt of the bear"); else one item whose name holds the words.
+-- Returns key,name,id or nil,{up to 3 close names}.
+function M:FindPriceCheckItem(q)
+ local exact,partial,seen=nil,{},{}
+ local function consider(key,m,full)
+  local n=full:lower()
+  if n==q then
+   if not exact or (m.lastSeen or 0)>(exact[4].lastSeen or 0) then exact={key,full,m.itemID,m} end
+  elseif #q>=4 and n:find(q,1,true) and not seen[n] then
+   seen[n]=true;partial[#partial+1]={key,full,m.itemID,m}
+  end
+ end
+ for key,m in pairs(self.db.market) do
+  if type(m)=='table' then
+   if type(m.name)=='string' then consider(key,m,m.name) end
+   if type(m.suffixFloors)=='table' then
+    for full in pairs(m.suffixFloors) do if type(full)=='string' then consider(key,m,full) end end
+   end
+  end
+ end
+ if exact then return exact[1],exact[2],exact[3] end
+ if #partial==1 then return partial[1][1],partial[1][2],partial[1][3] end
+ table.sort(partial,function(a,b) return a[2]<b[2] end)
+ local names={}
+ for i=1,math.min(3,#partial) do names[i]=partial[i][2] end
+ return nil,names,#partial
+end
+-- The link for a found item when the game has it cached, else "[Name]".
+local function displayFor(id,name)
+ if id and GetItemInfo then
+  local ok,_,link=pcall(GetItemInfo,id)
+  if ok and type(link)=='string' and link:find('|Hitem:',1,true) and nameKey(link)==name:lower() then return link end
+ end
+ return '['..name..']'
 end
 -- What the last ask did, for /vmm pricecheck.
 local function note(reason,from) PC.last={at=time(),reason=reason,from=from} end
@@ -107,24 +156,49 @@ function M:HandlePriceCheckInner(event,msg,sender)
  local channel,setting=ch[1],ch[2]
  local target=channel=='WHISPER' and sender or nil
  if msg:sub(1,#PREFIX)==PREFIX then self:NotePriceCheckAnswer(channel,target,msg);return end
- if not self:IsPriceCheckAsk(msg) then return end
+ local typed=self:PriceCheckTypedName(msg)
+ if not typed and not self:IsPriceCheckAsk(msg) then return end
  if self.db.settings[setting]==false then note(channel..' replies are switched off in Settings',sender);return end
+ if typed then return self:QueueTypedPriceCheck(typed,channel,target,sender) end
  local found=links(msg)
  if #found==0 then note('no item link found in: '..msg:gsub('|','||'),sender);return end
  note('reply queued ('..channel..')',sender)
  local t=now()
  for _,link in ipairs(found) do
-  local id=itemID(link)
-  local k=place(channel,target)..'|'..tostring(id)
-  if id and not (PC.sent[k] and t-PC.sent[k]<REPEAT) then
-   local text,has=self:PriceCheckReply(link)
-   if text then
-    -- Whispers are ours alone: answer at once. Shared channels: wait a moment.
-    local delay=channel=='WHISPER' and 0 or (has and 0.4+math.random()*1.4 or 2.5+math.random())
-    PC.sent[k]=t
-    PC.pending[#PC.pending+1]={due=t+delay,asked=t,channel=channel,target=target,text=text,key=k}
-   end
+  local text,has=self:PriceCheckReply(link)
+  self:QueuePriceCheckReply(channel,target,nameKey(link),text,has)
+ end
+ self:SchedulePriceCheckFlush()
+end
+function M:QueuePriceCheckReply(channel,target,name,text,has)
+ if not name or not text then return end
+ local t=now()
+ local k=place(channel,target)..'|'..name
+ if PC.sent[k] and t-PC.sent[k]<REPEAT then return end
+ -- Whispers are ours alone: answer at once. Shared channels: wait a moment.
+ local delay=channel=='WHISPER' and 0 or (has and 0.4+math.random()*1.4 or 2.5+math.random())
+ PC.sent[k]=t
+ PC.pending[#PC.pending+1]={due=t+delay,asked=t,channel=channel,target=target,text=text,key=k}
+end
+function M:QueueTypedPriceCheck(q,channel,target,sender)
+ local key,name,id=self:FindPriceCheckItem(q)
+ if key~=nil then
+  local text,has=self:PriceCheckReply(displayFor(id,name),key,name,id)
+  note('reply queued for typed "'..q..'" ('..channel..')',sender)
+  self:QueuePriceCheckReply(channel,target,name:lower(),text,has)
+ elseif channel=='WHISPER' then
+  -- Only whispers hear "not found": in guild/party another player's Market may know it.
+  local close,count=name,id
+  local text
+  if type(close)=='table' and #close>0 then
+   text=PREFIX..' "'..q..'" matches '..count..' items: '..table.concat(close,', ')..((count>3) and ', ...' or '')..'. Type the full name or link it.'
+  else
+   text=PREFIX..' no scan data for "'..q..'". Check the spelling or link the item.'
   end
+  note('typed "'..q..'": not found, told them',sender)
+  self:QueuePriceCheckReply(channel,target,'?'..q,cap(text),false)
+ else
+  note('typed "'..q..'": no item by that name in your scans',sender)
  end
  self:SchedulePriceCheckFlush()
 end
@@ -178,5 +252,10 @@ function M:PriceCheckStatus(arg)
  if type(arg)=='string' and arg:find('|Hitem:',1,true) then
   local link=links(arg)[1]
   if link then self:Print('Would reply: '..tostring((self:PriceCheckReply(link)))) end
+ elseif type(arg)=='string' and #arg>=3 then
+  local key,name,id=self:FindPriceCheckItem(arg:lower())
+  if key~=nil then self:Print('Would reply: '..tostring((self:PriceCheckReply(displayFor(id,name),key,name,id))))
+  elseif type(name)=='table' and #name>0 then self:Print('"'..arg..'" matches '..id..' items: '..table.concat(name,', '))
+  else self:Print('No item called "'..arg..'" in your scans.') end
  end
 end

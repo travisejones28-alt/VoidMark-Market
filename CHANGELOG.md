@@ -1,3 +1,10 @@
+## 1.23.35
+- Typed price checks: "price check bronze bar" (also "pricecheck", "pc", with or without "?") works without a link. The exact name is used first, including suffix gear ("pc pagan belt of the bear"). Otherwise one item whose name holds the words (4+ letters) is used. The reply shows the item's link when the game has it cached, else [Bronze Bar].
+- Names nobody has scanned, or that match several items, get a whisper back ("matches 3 items: Bronze Bar, Copper Bar, Tin Bar. Type the full name or link it."). In guild and party Market stays quiet, since another player's Market may know it.
+- Linked and typed asks for the same item count as one, for the 30-second repeat and the "another client answered" check.
+- /vmm pricecheck bronze bar shows what the reply would be.
+- 328 regressions.
+
 ## 1.23.34
 - Price check didn't answer in game. Newer clients colour item links by quality (|cnIQ1:) instead of |cffRRGGBB, and the reply only picked up the old style. Both are read now. The reply is sent with C_ChatInfo.SendChatMessage when the game has it.
 - A failed price check now says so in chat once (it used to fail silently).
