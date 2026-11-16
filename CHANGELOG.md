@@ -1,3 +1,9 @@
+## 1.23.34
+- Price check didn't answer in game. Newer clients colour item links by quality (|cnIQ1:) instead of |cffRRGGBB, and the reply only picked up the old style. Both are read now. The reply is sent with C_ChatInfo.SendChatMessage when the game has it.
+- A failed price check now says so in chat once (it used to fail silently).
+- /vmm pricecheck shows whether each place is on and what happened to the last ask (sent, switched off, no link found, another client answered, chat hidden in combat, or the error). /vmm pricecheck [item] shows the reply it would send, without sending it.
+- 327 regressions.
+
 ## 1.23.33
 - Price check replies: when someone types "pricecheck [item]" (also "price check" or "pc [item]") in party/raid, guild or a whisper, Market answers there with your last scan price, e.g. "VoidMark price: [item] 12g 34s 56c (scanned 2h ago)". Whispers are answered at once. In party and guild Market waits a moment and stays quiet if your other character or a friend already answered, so only one reply goes out. The same item is answered once per 30 seconds per place. Switch each place on or off in Settings ("Answer price checks").
 - TSM prices: TradeSkillMaster supports Forever, and its desktop app downloads AuctionDB prices. With TSM installed, an item Market has no price for shows TSM's (lowest buyout, else market value) as "Auction (TSM)" in the tooltip. A Market price from an earlier day gets a second "TSM" line under it. Price check replies use TSM's price when Market has none or only one from an earlier day, and say so ("(TSM)"). TSM prices gear by item ID and can't tell suffixes apart, so it isn't used where Market's scan knows the suffixes differ.

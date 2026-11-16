@@ -30,12 +30,13 @@ end
 function M:IsPriceCheckAsk(msg)
  if type(msg)~='string' or msg:sub(1,#PREFIX)==PREFIX then return false end
  if not msg:find('|Hitem:',1,true) then return false end
- local plain=msg:gsub('|c%x%x%x%x%x%x%x%x',''):gsub('|H.-|h(.-)|h','%1'):gsub('|r',''):lower()
+ -- Link colours come as |cffRRGGBB or, on newer clients, |cnIQ1: (by quality).
+ local plain=msg:gsub('|c[^|]*',''):gsub('|H.-|h(.-)|h','%1'):gsub('|r',''):lower()
  return plain:find('price%s*check')~=nil or plain:find('^%s*!?pc%s')~=nil or plain:find('^%s*!?pc%[')~=nil
 end
 local function links(msg)
  local out={}
- for link in msg:gmatch('|c%x+|Hitem:[^|]+|h%[.-%]|h|r') do
+ for link in msg:gmatch('|c[^|]*|Hitem:[^|]+|h%[.-%]|h|r') do
   out[#out+1]=link;if #out>=MAX_LINKS then break end
  end
  if #out==0 then
@@ -87,16 +88,32 @@ function M:NotePriceCheckAnswer(channel,target,msg)
  local id=itemID(msg);if not id then return end
  PC.answered[place(channel,target)..'|'..id]=now()
 end
+-- What the last ask did, for /vmm pricecheck.
+local function note(reason,from) PC.last={at=time(),reason=reason,from=from} end
 function M:HandlePriceCheck(event,msg,sender)
+ local ok,err=pcall(self.HandlePriceCheckInner,self,event,msg,sender)
+ if not ok then
+  note('error: '..tostring(err),sender)
+  if not PC.errorShown then PC.errorShown=true;self:Print('Price check failed: '..tostring(err)..' (/vmm pricecheck)') end
+ end
+end
+function M:HandlePriceCheckInner(event,msg,sender)
  local ch=CHANNELS[event];if not ch or not self.db or self.persistenceBlocked then return end
- if secret(msg,sender) or type(msg)~='string' or type(sender)~='string' then return end
+ if secret(msg,sender) then
+  PC.secretSeen=(PC.secretSeen or 0)+1
+  return
+ end
+ if type(msg)~='string' or type(sender)~='string' then return end
  local channel,setting=ch[1],ch[2]
- if self.db.settings[setting]==false then return end
  local target=channel=='WHISPER' and sender or nil
  if msg:sub(1,#PREFIX)==PREFIX then self:NotePriceCheckAnswer(channel,target,msg);return end
  if not self:IsPriceCheckAsk(msg) then return end
+ if self.db.settings[setting]==false then note(channel..' replies are switched off in Settings',sender);return end
+ local found=links(msg)
+ if #found==0 then note('no item link found in: '..msg:gsub('|','||'),sender);return end
+ note('reply queued ('..channel..')',sender)
  local t=now()
- for _,link in ipairs(links(msg)) do
+ for _,link in ipairs(found) do
   local id=itemID(link)
   local k=place(channel,target)..'|'..tostring(id)
   if id and not (PC.sent[k] and t-PC.sent[k]<REPEAT) then
@@ -127,9 +144,17 @@ function M:PriceCheckFlush()
   if r.due>t+0.01 then keep[#keep+1]=r
   else
    local other=PC.answered[r.key]
-   if not (other and other>=r.asked) and SendChatMessage then
+   if other and other>=r.asked then
+    if PC.last then PC.last.reason='another client answered first' end
+   elseif (C_ChatInfo and C_ChatInfo.SendChatMessage) or SendChatMessage then
     if PC.lastSend and t-PC.lastSend<1 then r.due=PC.lastSend+1;keep[#keep+1]=r
-    else PC.lastSend=t;pcall(SendChatMessage,r.text,r.channel,nil,r.target) end
+    else
+     PC.lastSend=t
+     local send=(C_ChatInfo and C_ChatInfo.SendChatMessage) or SendChatMessage
+     local ok,err=pcall(send,r.text,r.channel,nil,r.target)
+     if PC.last then PC.last.reason=ok and ('sent to '..r.channel..(r.target and (' '..r.target) or '')) or ('send failed: '..tostring(err)) end
+     if not ok and not PC.errorShown then PC.errorShown=true;self:Print('Price check reply failed: '..tostring(err)) end
+    end
    end
   end
  end
@@ -138,4 +163,20 @@ function M:PriceCheckFlush()
 end
 for event in pairs(CHANNELS) do
  M:RegisterHandler(event,function(self,ev,msg,sender) self:HandlePriceCheck(ev,msg,sender) end)
+end
+
+-- /vmm pricecheck: is it on, what happened to the last ask; with an item link,
+-- shows here (not in chat) what the reply would be.
+function M:PriceCheckStatus(arg)
+ local st=self.db.settings
+ local function on(k) return st[k]==false and 'off' or 'on' end
+ self:Print('Price check: party/raid '..on('priceCheckParty')..', guild '..on('priceCheckGuild')..', whisper '..on('priceCheckWhisper')..' | version '..tostring(self.version))
+ local l=PC.last
+ if l then self:Print('Last ask from '..tostring(l.from)..' '..self:TooltipAgeText(l.at)..' ago: '..tostring(l.reason))
+ else self:Print('No price check asks seen since login/reload.') end
+ if (PC.secretSeen or 0)>0 then self:Print(PC.secretSeen..' chat line(s) were hidden from addons by the game (combat) and could not be read.') end
+ if type(arg)=='string' and arg:find('|Hitem:',1,true) then
+  local link=links(arg)[1]
+  if link then self:Print('Would reply: '..tostring((self:PriceCheckReply(link)))) end
+ end
 end

@@ -65,4 +65,25 @@ check('1.23.33 TSM prices fill in when Market has none or only an old one; repli
  advance(60);emit('CHAT_MSG_WHISPER','SECRET','Ann');assert(#sent==2)
  issecretvalue=nil;TSM_API=nil;SendChatMessage=nil;C_Timer=oldTimer
 end)
+check('1.23.34 price check reads quality-coloured links (|cnIQ) and /vmm pricecheck explains the last ask',function()
+ VoidMarkMarketDB={};TaliaaTradeBetaDB=nil;M.jobs={};M:InitializeDatabase();jobs()
+ local sent={};SendChatMessage=function(t,ch,_,to) sent[#sent+1]={t,ch,to} end
+ local oldTimer=C_Timer;C_Timer=nil
+ M.priceCheck.pending={};M.priceCheck.answered={};M.priceCheck.sent={};M.priceCheck.lastSend=nil;M.priceCheck.last=nil
+ local link='|cnIQ1:|Hitem:5634::::::::60:::::::|h[Free Action Potion]|h|r'
+ local key=M:LinkIdentity(link)
+ M.db.market[key]={marketKey=key,itemID=5634,name='Free Action Potion',lastSeen=time()-60,latest={floor=25000},observations=1}
+ emit('CHAT_MSG_WHISPER','price check '..link,'Redridge Chad')
+ assert(#sent==1 and sent[1][1]=='VoidMark price: '..link..' 2g 50s (scanned 1m ago)' and sent[1][3]=='Redridge Chad',tostring(sent[1] and sent[1][1]))
+ assert(M.priceCheck.last.reason=='sent to WHISPER Redridge Chad',M.priceCheck.last.reason)
+ local printed={};local op=M.Print;M.Print=function(_,s) printed[#printed+1]=s end
+ SlashCmdList.VOIDMARKMARKET('pricecheck '..link)
+ M.Print=op
+ local all=table.concat(printed,'\n')
+ assert(all:find('whisper on',1,true) and all:find('sent to WHISPER',1,true) and all:find('Would reply: VoidMark price:',1,true),all)
+ M.db.settings.priceCheckWhisper=false;advance(60)
+ emit('CHAT_MSG_WHISPER','pc '..link,'Redridge Chad');assert(#sent==1)
+ assert(M.priceCheck.last.reason:find('switched off',1,true))
+ M.db.settings.priceCheckWhisper=nil;SendChatMessage=nil;C_Timer=oldTimer
+end)
 end
