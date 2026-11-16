@@ -2,7 +2,7 @@
 
 [Download the installable addon](https://github.com/travisejones28-alt/VoidMark-Market/raw/refs/heads/main/dist/VoidMarkMarket.zip). Install the `VoidMarkMarket` folder under `_forever_/Interface/AddOns`. If the game folder links to your GitHub Desktop checkout, pull `main` instead. Use the same version on both accounts.
 
-Open the Auction House and use the **Shopping**, **Selling**, **Listings**, and **VoidMark** tabs. Auctionator can be disabled. Use **/vmm** for the standalone window. Safe Mode has been removed. Market starts closed, never trades at login, and doesn’t send orders from timers, scans, shopping lists, or received messages. Your existing account’s settings, history, ledger, pending purchases and cost basis stay in its own SavedVariables.
+Open the Auction House and use the **Shopping**, **Selling**, **Listings**, and **VoidMark** tabs. Auctionator can be disabled. Use **/vmm** for the standalone window and **/vmm help** (or **Settings > HELP & COMMANDS**) for a searchable FAQ with every command. Safe Mode has been removed. Market starts closed, never trades at login, and doesn’t send orders from timers, scans, shopping lists, or received messages. Your existing account’s settings, history, ledger, pending purchases and cost basis stay in its own SavedVariables.
 
 ## What changed in 1.7
 

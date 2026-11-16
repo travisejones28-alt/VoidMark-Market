@@ -1,3 +1,7 @@
+## 1.23.38 - Help & commands
+- **Settings > HELP & COMMANDS** (or `/vmm help [word]`) opens a searchable window with a short FAQ and every `/vmm` command. Before, `/vmm help` just opened the main window.
+- A test fails if a command is handled but missing from the help.
+
 ## 1.23.37 - price check sweep
 - Amounts: "pc 20 bronze bar", "pc bronze bar x20" and "pc 20 [Bronze Bar]" answer with the total and the price each: "20x [Bronze Bar] 37s 80c (1s 89c each; 40 up, scanned 3m ago)". If fewer are listed than asked for, the reply adds "- only 40 up".
 - How many are listed: replies now say how many your last scan saw up ("5,120 up").

@@ -1,6 +1,6 @@
 local addonName, M = ...
 _G.VoidMarkMarket = M
-M.name, M.version = addonName or 'VoidMarkMarket', '1.23.37'
+M.name, M.version = addonName or 'VoidMarkMarket', '1.23.38'
 M.eventHandlers, M.runtimeLog, M.jobs = {}, {}, {}
 M.ahOpen = false
 M.scanState = {running=false, phase='idle', status='No scan yet', progress=0}
@@ -227,7 +227,9 @@ SLASH_VOIDMARKMARKET1='/vmm'; SLASH_VOIDMARKMARKET2='/voidmarkmarket'
 SlashCmdList.VOIDMARKMARKET=function(msg)
   local raw=(msg or ''):match('^%s*(.-)%s*$')
   msg=raw:lower()
-  if msg=='peer' or msg:match('^peer%s') then M:Print(M:PairPeer(raw:match('^%S+%s+(.+)$')))
+  if (msg=='help' or msg:match('^help%s') or msg=='faq' or msg=='commands') and _G.VoidMarkMarketHelp then
+    _G.VoidMarkMarketHelp.Open(raw:match('^%S+%s+(.+)$'))
+  elseif msg=='peer' or msg:match('^peer%s') then M:Print(M:PairPeer(raw:match('^%S+%s+(.+)$')))
   elseif msg=='perf' then M:StartPerf(10)
   elseif msg=='scanspeed' or msg:match('^scanspeed%s') then
     local v=msg:match('^scanspeed%s+(%a+)$')
