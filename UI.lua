@@ -299,6 +299,22 @@ function M:InitializeUI()
     self.flipToggles[#self.flipToggles+1]=c
   end
   button(self.settingsFrame,'Test sound',744,-482,110,function() self:TestSaleSound() end)
+  -- Price check replies (1.23.33): answer "pricecheck [item]" in these places.
+  label(self.settingsFrame,'Answer price checks:',262,-490,140)
+  local pcTip='When someone types "pricecheck [item]" (or "pc [item]"), reply with your last scan price.'
+  for i,t in ipairs({{'priceCheckParty','Party/Raid'},{'priceCheckGuild','Guild'},{'priceCheckWhisper','Whisper'}}) do
+    local x=402+(i-1)*112
+    local c=CreateFrame('CheckButton',nil,self.settingsFrame,'UICheckButtonTemplate')
+    c:SetPoint('TOPLEFT',x,-482);c:SetSize(28,28);c.key=t[1]
+    label(self.settingsFrame,t[2],x+30,-490,80)
+    c:SetScript('OnClick',function(b)
+      if self.persistenceBlocked then return end
+      self.db.settings[b.key]=b:GetChecked() and true or false
+    end)
+    c:SetScript('OnEnter',function(b) GameTooltip:SetOwner(b,'ANCHOR_RIGHT');GameTooltip:SetText('Price check: '..t[2]);GameTooltip:AddLine(pcTip,1,1,1,true);GameTooltip:Show() end)
+    c:SetScript('OnLeave',function() GameTooltip:Hide() end)
+    self.flipToggles[#self.flipToggles+1]=c
+  end
   self.view='browse';self:BuildBrowseRows(self.db.settings.filter or ''); self.page=1; self:RefreshUI(); f:Hide() -- Keep Market closed on login/reload until opened by the user.
 end
 function M:ShowReport()

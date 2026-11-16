@@ -1,3 +1,7 @@
+## 1.23.33
+- Price check replies: when someone types "pricecheck [item]" (also "price check" or "pc [item]") in party/raid, guild or a whisper, Market answers there with your last scan price, e.g. "VoidMark price: [item] 12g 34s 56c (scanned 2h ago)". Whispers are answered at once. In party and guild Market waits a moment and stays quiet if your other character or a friend already answered, so only one reply goes out. The same item is answered once per 30 seconds per place. Switch each place on or off in Settings ("Answer price checks").
+- 325 regressions.
+
 ## 1.23.32
 - A sale banner guessed the price ("about 1g 29s each (market price)") for a bow you posted at 1g. An auction you post with Market is now saved as one of your listings the moment it's created, so its sale knows your price even if Listings was never opened. Items whose name has a suffix ("of the Bandit") also match your post of that exact name.
 - Selling no longer sits on "Click Refresh to check the live price": when nothing is checking the picked item, it checks again by itself every 2 seconds (up to 15 times per item).
