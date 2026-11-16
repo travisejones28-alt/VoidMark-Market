@@ -43,6 +43,12 @@ local function links(msg)
  end
  return out
 end
+local function cap(t) if #t>255 then return t:sub(1,252)..'...' end return t end
+local function secret(...)
+ if not issecretvalue then return false end
+ for i=1,select('#',...) do if issecretvalue((select(i,...))) then return true end end
+ return false
+end
 local function itemID(link) return tonumber(tostring(link):match('item:(%d+)')) end
 -- Reply text for one link, and whether we had a price at all.
 function M:PriceCheckReply(link)
@@ -55,7 +61,13 @@ function M:PriceCheckReply(link)
   if state=='suffix' then p={floor=sf.floor,at=sf.at}
   elseif state=='key' then p=self:PriceObservation(key) end
  end
- if not p or not self:Finite(p.floor,1,1e12) then return PREFIX..' '..link..' no scan data',false end
+ local tp=(key==nil or self:VariantPrice(key,name,name)~='none') and self:TSMPrice(link)
+ if not p or not self:Finite(p.floor,1,1e12) then
+  if tp then return cap(PREFIX..' '..link..' '..self:PlainCoins(tp)..' (TSM)'),true end
+  return PREFIX..' '..link..' no scan data',false
+ end
+ -- Ours is from an earlier day and TSM has one: TSM's is fresher.
+ if tp and time()-p.at>=86400 then return cap(PREFIX..' '..link..' '..self:PlainCoins(tp)..' (TSM; our scan '..self:TooltipAgeText(p.at)..' old)'),true end
  local text=PREFIX..' '..link..' '..self:PlainCoins(p.floor)
  local scan=self.NewestFullScanAt and self:NewestFullScanAt()
  if scan and p.at<scan-300 and not p.unverified then
@@ -66,7 +78,7 @@ function M:PriceCheckReply(link)
  if self:Finite(p.fair,1,1e12) and math.abs(p.fair-p.floor)>=p.floor*0.1 then
   text=text..', usually '..self:PlainCoins(p.fair)
  end
- return text,true
+ return cap(text),true
 end
 -- Someone (us on another client, a friend) already answered this item here.
 local function place(channel,target) return channel..'|'..(channel=='WHISPER' and tostring(target) or '') end
@@ -77,7 +89,7 @@ function M:NotePriceCheckAnswer(channel,target,msg)
 end
 function M:HandlePriceCheck(event,msg,sender)
  local ch=CHANNELS[event];if not ch or not self.db or self.persistenceBlocked then return end
- if type(msg)~='string' or type(sender)~='string' then return end
+ if secret(msg,sender) or type(msg)~='string' or type(sender)~='string' then return end
  local channel,setting=ch[1],ch[2]
  if self.db.settings[setting]==false then return end
  local target=channel=='WHISPER' and sender or nil
@@ -116,11 +128,13 @@ function M:PriceCheckFlush()
   else
    local other=PC.answered[r.key]
    if not (other and other>=r.asked) and SendChatMessage then
-    pcall(SendChatMessage,r.text,r.channel,nil,r.target)
+    if PC.lastSend and t-PC.lastSend<1 then r.due=PC.lastSend+1;keep[#keep+1]=r
+    else PC.lastSend=t;pcall(SendChatMessage,r.text,r.channel,nil,r.target) end
    end
   end
  end
  PC.pending=keep
+ if #keep>0 and C_Timer and C_Timer.After then self:SchedulePriceCheckFlush() end
 end
 for event in pairs(CHANNELS) do
  M:RegisterHandler(event,function(self,ev,msg,sender) self:HandlePriceCheck(ev,msg,sender) end)

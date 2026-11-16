@@ -176,7 +176,7 @@ PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
 PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
 PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
-BENCH scan: 99 frames (1.6s at 60fps, 3.3s at 30fps), worst frame 12.1ms, cpu 0.95s | after:share-scan=24 done=1 model=58 processing=16
+BENCH scan: 100 frames (1.7s at 60fps, 3.3s at 30fps), worst frame 12.6ms, cpu 1.00s | after:share-scan=20 done=1 model=63 processing=16
 PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.13 history stores only the fields it needs; latest keeps the full snapshot
 PASS 1.9.13 history saved by older versions is shrunk once at login without losing prices
@@ -326,4 +326,5 @@ PASS 1.23.31 prices go to the partner only when asked (theirs over an hour old);
 PASS 1.23.32 a sale knows the price you posted at, even unopened Listings and suffix items
 PASS 1.23.32 Selling re-checks a picked item by itself instead of waiting on Refresh
 PASS 1.23.33 "pricecheck [item]" in guild/party/whisper is answered with the last scan price
-ALL 325 TESTS PASSED
+PASS 1.23.33 TSM prices fill in when Market has none or only an old one; replies are paced and secret chat is ignored
+ALL 326 TESTS PASSED

@@ -35,4 +35,34 @@ check('1.23.33 "pricecheck [item]" in guild/party/whisper is answered with the l
  assert(#sent==3 and sent[3][1]:find('no scan data',1,true),'no-data reply')
  SendChatMessage=nil;C_Timer=oldTimer
 end)
+check('1.23.33 TSM prices fill in when Market has none or only an old one; replies are paced and secret chat is ignored',function()
+ VoidMarkMarketDB={};TaliaaTradeBetaDB=nil;M.jobs={};M:InitializeDatabase();jobs()
+ local sent={};SendChatMessage=function(t,ch,_,to) sent[#sent+1]={t,ch,to} end
+ local oldTimer=C_Timer;C_Timer=nil
+ M.priceCheck.pending={};M.priceCheck.answered={};M.priceCheck.sent={};M.priceCheck.lastSend=nil
+ assert(M:TSMPrice('|Hitem:5|h[X]|h')==nil,'no TSM installed')
+ TSM_API={GetCustomPriceValue=function(src,item)
+  if item=='i:91240' and src=='DBMinBuyout' then return 4200 end
+  if item=='i:91241' and src=='DBMarket' then return 9900 end
+  if item=='i:91242' then return 5000 end
+ end}
+ assert(M:TSMPrice('|cffffffff|Hitem:91241::::::::60:::::::|h[B]|h|r')==9900,'DBMarket fallback')
+ local a='|cffffffff|Hitem:91240::::::::60:::::::|h[Alpha]|h|r'
+ local t1,has=M:PriceCheckReply(a)
+ assert(has and t1=='VoidMark price: '..a..' 42s (TSM)',t1)
+ -- Our price from 2 days ago: TSM's wins in the reply.
+ local b='|cffffffff|Hitem:91242::::::::60:::::::|h[Beta]|h|r';local k=M:LinkIdentity(b)
+ M.db.market[k]={marketKey=k,itemID=91242,name='Beta',lastSeen=time()-2*86400,latest={floor=7000},observations=1}
+ local t2=M:PriceCheckReply(b);assert(t2:find('50s (TSM; our scan 2d old)',1,true),t2)
+ -- Fresh ours wins.
+ M.db.market[k].lastSeen=time()-600;M.db.latestScan=nil
+ local t3=M:PriceCheckReply(b);assert(t3:find('70s (scanned 10m ago)',1,true),t3)
+ -- Two whispers in the same second: the second waits a second.
+ emit('CHAT_MSG_WHISPER','pc '..a,'Ann');emit('CHAT_MSG_WHISPER','pc '..b,'Bob')
+ assert(#sent==1,'two replies in one second');advance(1);M:PriceCheckFlush();assert(#sent==2 and sent[2][3]=='Bob')
+ -- Secret chat values (combat): ignored, no error.
+ issecretvalue=function(v) return v=='SECRET' end
+ advance(60);emit('CHAT_MSG_WHISPER','SECRET','Ann');assert(#sent==2)
+ issecretvalue=nil;TSM_API=nil;SendChatMessage=nil;C_Timer=oldTimer
+end)
 end

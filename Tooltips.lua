@@ -99,6 +99,8 @@ function M:AppendMarketTooltip(tip,link,count)
  local p
  if state=='suffix' then p={floor=sf.floor,at=sf.at} else p=self:PriceObservation(key) end
  if not p then
+  local tp=self:TSMPrice(link)
+  if tp then tip:AddDoubleLine('Auction |cff999999(TSM)|r',self:Coins(tp),1,.82,0,1,1,1);return end
   if self.db.settings.tooltipNoData~=false and not bindBlocksAuction(link) then
    tip:AddDoubleLine('Auction','|cff999999No price yet|r',1,.82,0,.6,.6,.6)
   end
@@ -115,6 +117,26 @@ function M:AppendMarketTooltip(tip,link,count)
  local r,g,b=1,1,1;if stale or name:find('none listed',1,true) then r,g,b=.6,.6,.6 end
  tip:AddDoubleLine(name,self:Coins(p.floor),1,.82,0,r,g,b)
  if count then tip:AddDoubleLine('Auction x'..count,self:Coins(p.floor*count),1,.82,0,r,g,b) end
+ -- Our price is from an earlier day: TSM's (kept fresh by its desktop app) as a second line.
+ if state~='suffix' and time()-p.at>=86400 then
+  local tp=self:TSMPrice(link)
+  if tp then tip:AddDoubleLine('TSM',self:Coins(tp),1,.82,0,1,1,1) end
+ end
+end
+-- TradeSkillMaster's price, when it's installed (TSM supports Forever; its desktop
+-- app downloads AuctionDB prices). Lowest buyout it knows, else market value.
+-- TSM prices gear by item ID, so it can't tell "of the Bear" from "of the Eagle":
+-- callers skip it where our scan knows the suffixes differ.
+function M:TSMPrice(link)
+ if self.db and self.db.settings.useTSM==false then return nil end
+ local api=TSM_API
+ if not (api and api.GetCustomPriceValue) then return nil end
+ local id=type(link)=='number' and link or (type(link)=='string' and tonumber(link:match('item:(%d+)')))
+ if not id then return nil end
+ for _,src in ipairs({'DBMinBuyout','DBMarket'}) do
+  local ok,v=pcall(api.GetCustomPriceValue,src,'i:'..id)
+  if ok and self:Finite(v,1,1e12) then return v,src end
+ end
 end
 -- Item ID from a link, for checking that a slot really holds the hovered item.
 local function linkItemID(link)
