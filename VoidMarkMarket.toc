@@ -3,7 +3,7 @@
 ## Notes: Forever market intelligence, live-validated trading and local ledger. Click to trade.
 ## Author: Taliaa / OpenAI
 ## Version: 1.23.38
-## SavedVariables: VoidMarkMarketDB, TaliaaTradeBetaDB
+## SavedVariables: VoidMarkMarketDB, TaliaaTradeBetaDB, VoidMarkMarketUsage
 ## IconTexture: Interface\Icons\INV_Misc_Coin_01
 
 Help.lua
@@ -48,3 +48,4 @@ AuctionTabs.lua
 Snipe.lua
 AutoInvite.lua
 PriceCheck.lua
+Usage.lua
