@@ -101,13 +101,33 @@ function M:PriceCheckTypedName(msg)
  if #q<3 then return nil end
  return q
 end
+-- An item's name for typed lookups. A full scan can save items the game hadn't
+-- loaded yet with no name ("" or "Item 2771"), so fall back to remembered
+-- names, then the game's cache. Only already-loaded items are asked for, so a
+-- lookup never makes the game fetch thousands of items.
+function M:PriceCheckItemName(m)
+ local n=m.name
+ if type(n)=='string' and n~='' and not n:match('^Item %d+$') then return n end
+ local id=tonumber(m.itemID);if not id then return nil end
+ local cached=self.db.itemNames and self.db.itemNames[id]
+ if type(cached)=='string' and cached~='' then return cached end
+ if C_Item and C_Item.IsItemDataCachedByID then
+  local ok,yes=pcall(C_Item.IsItemDataCachedByID,id)
+  if not (ok and yes) then return nil end
+ end
+ local get=(C_Item and C_Item.GetItemNameByID) or GetItemInfo
+ if not get then return nil end
+ local ok,name=pcall(get,id)
+ if ok and type(name)=='string' and name~='' then return name end
+end
 -- Find a typed name in our prices: the exact name first (suffix gear too:
 -- "pagan belt of the bear"); else one item whose name holds the words.
 -- Returns key,name,id or nil,{up to 3 close names}.
 function M:FindPriceCheckItem(q)
- local exact,partial,seen=nil,{},{}
+ local exact,partial,seen,all=nil,{},{},{}
  local function consider(key,m,full)
   local n=full:lower()
+  all[#all+1]={key,full,m.itemID,m}
   if n==q then
    if not exact or (m.lastSeen or 0)>(exact[4].lastSeen or 0) then exact={key,full,m.itemID,m} end
   elseif #q>=4 and n:find(q,1,true) and not seen[n] then
@@ -116,7 +136,8 @@ function M:FindPriceCheckItem(q)
  end
  for key,m in pairs(self.db.market) do
   if type(m)=='table' then
-   if type(m.name)=='string' then consider(key,m,m.name) end
+   local n=self:PriceCheckItemName(m)
+   if n then consider(key,m,n) end
    if type(m.suffixFloors)=='table' then
     for full in pairs(m.suffixFloors) do if type(full)=='string' then consider(key,m,full) end end
    end
@@ -124,10 +145,76 @@ function M:FindPriceCheckItem(q)
  end
  if exact then return exact[1],exact[2],exact[3] end
  if #partial==1 then return partial[1][1],partial[1][2],partial[1][3] end
+ if #partial==0 then
+  -- Nothing holds the words: allow typos ("brnze bar", "bronze bars",
+  -- "elixer of giants", "free action pot").
+  local best,bestScore={},nil
+  for _,e in ipairs(all) do
+   local sc=self:TypoScore(q,e[2]:lower())
+   if sc and not seen[e[2]:lower()] then
+    if not bestScore or sc<bestScore-0.001 then best={e};bestScore=sc
+    elseif math.abs(sc-bestScore)<=0.001 then best[#best+1]=e end
+    seen[e[2]:lower()]=true
+   end
+  end
+  if #best==1 then return best[1][1],best[1][2],best[1][3] end
+  partial=best
+ end
  table.sort(partial,function(a,b) return a[2]<b[2] end)
  local names={}
  for i=1,math.min(3,#partial) do names[i]=partial[i][2] end
  return nil,names,#partial
+end
+-- Typo distance (letters added, dropped, changed or swapped), giving up past cap.
+local function distance(a,b,cap)
+ local la,lb=#a,#b
+ if math.abs(la-lb)>cap then return nil end
+ local prev2,prev,cur={},{},{}
+ for j=0,lb do prev[j]=j end
+ for i=1,la do
+  cur={[0]=i};local rowMin=i
+  local ai=a:byte(i)
+  for j=1,lb do
+   local bj=b:byte(j)
+   local c=math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(ai==bj and 0 or 1))
+   if i>1 and j>1 and ai==b:byte(j-1) and a:byte(i-1)==bj then c=math.min(c,prev2[j-2]+1) end
+   cur[j]=c;if c<rowMin then rowMin=c end
+  end
+  if rowMin>cap then return nil end
+  prev2,prev=prev,cur
+ end
+ return prev[lb]<=cap and prev[lb] or nil
+end
+local FILLER={['of']=true,['the']=true,['a']=true}
+local function clean(t) return (t:gsub("[%'%-%.,:]",''):gsub('%s+',' '):gsub('^ ',''):gsub(' $','')) end
+local function words(t) local w={};for x in t:gmatch('%S+') do if not FILLER[x] then w[#w+1]=x end end;return w end
+local function wordCap(n) return n>=9 and 2 or (n>=5 and 1 or 0) end
+-- How close a typed name is to an item name: lower is closer, nil = not close.
+-- Whole name with a few typos, or every typed word matching one of the
+-- item's words (a typo each, or the start of it: "pot" for "potion").
+function M:TypoScore(q,name)
+ q,name=clean(q),clean(name)
+ if #q<4 then return nil end
+ local whole=distance(q,name,#q<=8 and 1 or (#q<=14 and 2 or 3))
+ local qw,nw=words(q),words(name)
+ local wordScore
+ if #qw>0 and #qw<=#nw then
+  local used,total=({}),0.5
+  for _,w in ipairs(qw) do
+   local hit
+   for j,x in ipairs(nw) do
+    if not used[j] then
+     local d=(#w>=3 and x:sub(1,#w)==w) and 0.2 or distance(w,x,wordCap(#w))
+     if d and (not hit or d<hit[2]) then hit={j,d} end
+    end
+   end
+   if not hit then total=nil;break end
+   used[hit[1]]=true;total=total+hit[2]
+  end
+  if total then wordScore=total+0.1*(#nw-#qw) end
+ end
+ if whole and wordScore then return math.min(whole,wordScore) end
+ return whole or wordScore
 end
 -- The link for a found item when the game has it cached, else "[Name]".
 local function displayFor(id,name)

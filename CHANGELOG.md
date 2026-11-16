@@ -1,3 +1,8 @@
+## 1.23.36
+- Typed price checks missed items a full scan saved without a name. The game hadn't loaded those items yet, so they were stored as "" or "Item 2771", and "price check tin ore" said "no scan data" while Tin Ore was on the AH. Names now also come from remembered names and the game's cache. Only already-loaded items are asked for, so a lookup never makes the game fetch thousands of items.
+- Typos are forgiven: "brnze bar", "bronze bars", "coper bar", "elixer of giants", "free action pot", "magweave", "greater heal potion". If two items are equally close, the whisper lists them instead of guessing.
+- 330 regressions.
+
 ## 1.23.35
 - Typed price checks: "price check bronze bar" (also "pricecheck", "pc", with or without "?") works without a link. The exact name is used first, including suffix gear ("pc pagan belt of the bear"). Otherwise one item whose name holds the words (4+ letters) is used. The reply shows the item's link when the game has it cached, else [Bronze Bar].
 - Names nobody has scanned, or that match several items, get a whisper back ("matches 3 items: Bronze Bar, Copper Bar, Tin Bar. Type the full name or link it."). In guild and party Market stays quiet, since another player's Market may know it.

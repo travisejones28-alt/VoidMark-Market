@@ -132,4 +132,34 @@ check('1.23.35 typed price checks: "price check bronze bar" without a link',func
  assert(sent[#sent][2]=='GUILD' and sent[#sent][1]:find('[Copper Bar] 50c',1,true))
  SendChatMessage=nil;C_Timer=oldTimer
 end)
+check('1.23.36 typed price checks forgive typos',function()
+ VoidMarkMarketDB={};TaliaaTradeBetaDB=nil;M.jobs={};M:InitializeDatabase();jobs()
+ local i=0
+ for _,n in ipairs({'Bronze Bar','Bronze Tube','Copper Bar','Tin Bar','Iron Bar','Free Action Potion','Elixir of the Giants','Elixir of Giant Growth','Mageweave Cloth','Silk Cloth','Runecloth','Black Lotus','Arcane Crystal','Swiftness Potion','Greater Healing Potion','Healing Potion'}) do
+  i=i+1;M.db.market['k'..i]={marketKey='k'..i,itemID=95000+i,name=n,lastSeen=time(),latest={floor=100*i}}
+ end
+ local function find(q) local _,n=M:FindPriceCheckItem(q);return type(n)=='string' and n or nil end
+ local cases={['brnze bar']='Bronze Bar',['bronze bars']='Bronze Bar',['bronz bar']='Bronze Bar',['coper bar']='Copper Bar',
+  ['free actoin potion']='Free Action Potion',['free action pot']='Free Action Potion',['free action potions']='Free Action Potion',
+  ['elixer of giants']='Elixir of the Giants',['mageweve cloth']='Mageweave Cloth',['magweave']='Mageweave Cloth',
+  ['runecoth']='Runecloth',['blak lotus']='Black Lotus',['arcane crystl']='Arcane Crystal',['swiftnes potion']='Swiftness Potion',
+  ['greater healing pot']='Greater Healing Potion',['greater heal potion']='Greater Healing Potion'}
+ for q,want in pairs(cases) do assert(find(q)==want,q..' -> '..tostring(find(q))) end
+ for _,q in ipairs({'zzzz','dragon scale','iron ore','bronze shield'}) do assert(find(q)==nil,q..' wrongly -> '..tostring(find(q))) end
+ -- Equally close to several: listed, not guessed.
+ local key,names=M:FindPriceCheckItem('tni bar');assert(key==nil or names=='Tin Bar')
+end)
+check('1.23.36 typed price check finds items a full scan saved without a name (Tin Ore)',function()
+ VoidMarkMarketDB={};TaliaaTradeBetaDB=nil;M.jobs={};M:InitializeDatabase();jobs()
+ M.db.market.a={marketKey='a',itemID=2771,name='',lastSeen=time()-30,latest={floor=100}}
+ M.db.market.b={marketKey='b',itemID=2772,name='Item 2772',lastSeen=time()-30,latest={floor=500}}
+ M.db.market.c={marketKey='c',itemID=2773,lastSeen=time()-30,latest={floor=900}}
+ M.db.itemNames[2772]='Iron Ore'
+ local oldC,oldG=C_Item,GetItemInfo
+ C_Item={IsItemDataCachedByID=function(id) return id==2771 end,GetItemNameByID=function(id) if id==2771 then return 'Tin Ore' end;error('uncached item asked for') end}
+ local _,n=M:FindPriceCheckItem('tin ore');assert(n=='Tin Ore',tostring(n))
+ _,n=M:FindPriceCheckItem('iron ore');assert(n=='Iron Ore',tostring(n))
+ local t=M:PriceCheckReply('[Tin Ore]','a','Tin Ore',2771);assert(t:find('[Tin Ore] 1s',1,true),t)
+ C_Item,GetItemInfo=oldC,oldG
+end)
 end
