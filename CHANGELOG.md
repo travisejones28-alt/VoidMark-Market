@@ -1,3 +1,7 @@
+## 1.24.1
+- Price checks and tooltips said "none up in last scan, last seen 27m ago" for items with plenty listed. A synced price that doesn't change is only re-stamped every 30 minutes, and the bank's scan time can arrive before the item's row, so anything not re-stamped yet looked gone. Your own full scan still decides right away; the bank's scan now counts only once all its data has arrived, and only for prices more than 35 minutes older than it.
+- 337 regressions.
+
 ## 1.24.0 - Warpath feed
 - The bank sync is held to about 1 KB/s by the game, so a full scan took many minutes to reach the other character ("Bank sync: receiving 98%"). Both accounts are on one PC, so Warpath 3.6.0 now carries the whole scan as a file:
   - On logout or /reload, Market saves this character's latest prices and list changes (VoidMarkMarketFeedOut). A scan still being published is finished first.

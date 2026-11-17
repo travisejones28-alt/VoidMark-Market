@@ -281,8 +281,7 @@ function M:PriceCheckReply(display,key,name,id,count)
   return cap(head..price(tp)..(count>1 and ', ' or '')..'TSM; our scan '..self:TooltipAgeText(p.at)..' old)'),true
  end
  local parts={}
- local scan=self.NewestFullScanAt and self:NewestFullScanAt()
- if scan and p.at<scan-300 and not p.unverified then
+ if self:ScanSaysNoneUp(p) then
   parts[#parts+1]='none up in last scan, last seen '..self:TooltipAgeText(p.at)..' ago'
  else
   if self:Finite(listed,1,1e9) then parts[#parts+1]=commas(listed)..' up' end

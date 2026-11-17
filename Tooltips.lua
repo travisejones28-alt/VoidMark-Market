@@ -68,6 +68,22 @@ function M:NewestFullScanAt()
  if t and t>time()+60 then return nil end
  return t
 end
+-- 1.24.1: is this price missing from a full scan (so the item isn't listed now)?
+-- Our own full scan sees every listing, so anything older than it wasn't up.
+-- The partner's scan is different: an unchanged price is only re-stamped every
+-- 30 minutes, and the scan time can arrive before the item's row does. Without
+-- that slack a listed item said "none up, last seen 27m ago". The partner's
+-- scan counts only once everything it sent has arrived, and with the 30 minutes.
+function M:ScanSaysNoneUp(p)
+ if type(p)~='table' or p.unverified or p.source=='Live search' or not self:Finite(p.at,1,time()+60) then return false end
+ local own=self.db.latestScan and tonumber(self.db.latestScan.completedAt)
+ if own and own<=time()+60 and p.at<own-300 then return true end
+ local rx=self.db.syncPeer and self.db.shareReceived and self.db.shareReceived[self.db.syncPeer]
+ local scan=type(rx)=='table' and tonumber(rx.scanAt)
+ if not scan or scan>time()+60 or not (rx.total and rx.seq and rx.seq>=rx.total) then return false end
+ if (tonumber(self.db.syncLastReceivedCompleteAt) or 0)<scan then return false end
+ return p.at<scan-1800-300
+end
 function M:TooltipAgeText(at)
  local age=math.max(0,time()-at)
  return age>=86400 and math.floor(age/86400)..'d' or age>=3600 and math.floor(age/3600)..'h' or math.max(1,math.floor(age/60))..'m'
@@ -110,8 +126,7 @@ function M:AppendMarketTooltip(tip,link,count)
  local name=stale and ('Auction |cff999999('..self:TooltipAgeText(p.at)..' old)|r') or 'Auction'
  -- A full scan (here or on the synced character) ran after this price was last
  -- seen: the item isn't on the AH right now. Say so instead of just "14h old".
- local scan=self:NewestFullScanAt()
- if scan and p.at<scan-300 and not p.unverified then
+ if self:ScanSaysNoneUp(p) then
   name='Auction |cff999999(none listed now, last seen '..self:TooltipAgeText(p.at)..' ago)|r'
  end
  local r,g,b=1,1,1;if stale or name:find('none listed',1,true) then r,g,b=.6,.6,.6 end

@@ -146,8 +146,19 @@ check('1.22.2 Tooltip: an item missing from the latest full scan says "none list
  assert(not lines[#lines]:find('none listed',1,true),lines[#lines])
  -- The partner's newer scan counts too.
  lines={};M.db.market[key].lastSeen=time()-14*3600;M.db.latestScan={completedAt=time()-30*3600}
- M.db.syncPeer='bank';M.db.shareReceived={bank={scanAt=time()-600}}
+ M.db.syncPeer='bank';M.db.shareReceived={bank={scanAt=time()-600,seq=5,total=5}};M.db.syncLastReceivedCompleteAt=time()-300
  M:AppendMarketTooltip(tip,'|Hitem:1070|h[x]|h');assert(lines[#lines]:find('none listed now',1,true))
+ -- 1.24.1: a synced price re-stamped 27 minutes ago is still listed (stamps come every 30 minutes).
+ M.db.market[key]=nil;M.db.sharedPrices[key]={id=1070,floor=8888,at=time()-27*60}
+ lines={};M:AppendMarketTooltip(tip,'|Hitem:1070|h[x]|h');assert(not lines[#lines]:find('none listed',1,true),lines[#lines])
+ local reply=M:PriceCheckReply('[x]',key,'Expert Cookbook',1070)
+ assert(reply and not reply:find('none up',1,true) and reply:find('scanned 27m ago',1,true),reply)
+ -- Partner data still arriving: its scan time proves nothing yet.
+ M.db.sharedPrices[key].at=time()-3*3600;M.db.shareReceived.bank.seq=4
+ lines={};M:AppendMarketTooltip(tip,'|Hitem:1070|h[x]|h');assert(not lines[#lines]:find('none listed',1,true),lines[#lines])
+ M.db.shareReceived.bank.seq=5
+ lines={};M:AppendMarketTooltip(tip,'|Hitem:1070|h[x]|h');assert(lines[#lines]:find('none listed now, last seen 3h ago',1,true),lines[#lines])
+ M.db.sharedPrices[key]=nil;M.db.syncLastReceivedCompleteAt=nil
  M.db.market[key]=nil;M.db.latestScan=oldScan;M.LinkIdentity=oldLink;M.db.syncPeer=nil;M.db.shareReceived={}
 end)
 
