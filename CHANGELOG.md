@@ -1,3 +1,6 @@
+## 1.23.40 - "none listed" only after the partner scan fully arrives
+- The tooltip said "none listed now" for items while the bank's newer scan was still syncing (or stalled). The partner's scan now counts only once all of its prices have arrived.
+
 ## 1.23.39 - mail subject autofill
 - Attach items to a mail (or add gold) and an empty subject fills itself: "Linen Cloth", "Linen Cloth and 4 more", or "Gold". Send works without typing a subject.
 - A subject you type yourself is never changed. The filled one updates as you add or remove items.

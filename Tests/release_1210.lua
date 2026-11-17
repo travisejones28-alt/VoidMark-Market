@@ -146,8 +146,14 @@ check('1.22.2 Tooltip: an item missing from the latest full scan says "none list
  assert(not lines[#lines]:find('none listed',1,true),lines[#lines])
  -- The partner's newer scan counts too.
  lines={};M.db.market[key].lastSeen=time()-14*3600;M.db.latestScan={completedAt=time()-30*3600}
- M.db.syncPeer='bank';M.db.shareReceived={bank={scanAt=time()-600}}
+ M.db.syncPeer='bank';M.db.shareReceived={bank={scanAt=time()-600,total=50,seq=50}}
  M:AppendMarketTooltip(tip,'|Hitem:1070|h[x]|h');assert(lines[#lines]:find('none listed now',1,true))
+ -- 1.23.40: ...but only after all of that scan's prices have arrived. Mid-transfer
+ -- (or a stalled sync) the item may simply not have come over yet.
+ lines={};M.db.shareReceived={bank={scanAt=time()-600,total=50,seq=49}}
+ M:AppendMarketTooltip(tip,'|Hitem:1070|h[x]|h');assert(not lines[#lines]:find('none listed',1,true),lines[#lines])
+ lines={};M.db.shareReceived={bank={scanAt=time()-600}}
+ M:AppendMarketTooltip(tip,'|Hitem:1070|h[x]|h');assert(not lines[#lines]:find('none listed',1,true),lines[#lines])
  M.db.market[key]=nil;M.db.latestScan=oldScan;M.LinkIdentity=oldLink;M.db.syncPeer=nil;M.db.shareReceived={}
 end)
 
