@@ -128,15 +128,11 @@ function M:AppendMarketTooltip(tip,link,count)
  end
  local stale=time()-p.at>self.db.settings.maxDataAge or p.unverified
  -- How many were up when that price was scanned (it may have changed since).
- local qty=self:Finite(p.quantity,1,1e9) and self:CountText(p.quantity)..' up' or nil
- local name=stale and ('Auction |cff999999('..(qty and (qty..', ') or '')..self:TooltipAgeText(p.at)..' old)|r')
-  or (qty and ('Auction |cff999999('..qty..')|r') or 'Auction')
- -- A full scan (here or on the synced character) ran after this price was last
- -- seen: the item isn't on the AH right now. Say so instead of just "14h old".
- if self:MissedLatestScan(p) then
-  name='Auction |cff999999(none listed now, '..(qty and (qty..' when last seen ') or 'last seen ')..self:TooltipAgeText(p.at)..' ago)|r'
- end
- local r,g,b=1,1,1;if stale or name:find('none listed',1,true) then r,g,b=.6,.6,.6 end
+ -- 1.23.43: plain facts, e.g. "Auction (226 seen 20m ago)"; old prices greyed.
+ local qty=self:Finite(p.quantity,1,1e9) and self:CountText(p.quantity)..' seen ' or ''
+ local name=stale and ('Auction |cff999999('..qty..self:TooltipAgeText(p.at)..' old)|r')
+  or ('Auction |cff999999('..qty..self:TooltipAgeText(p.at)..' ago)|r')
+ local r,g,b=1,1,1;if stale then r,g,b=.6,.6,.6 end
  tip:AddDoubleLine(name,self:Coins(p.floor),1,.82,0,r,g,b)
  if count then tip:AddDoubleLine('Auction x'..count,self:Coins(p.floor*count),1,.82,0,r,g,b) end
  -- Our price is from an earlier day: TSM's (kept fresh by its desktop app) as a second line.

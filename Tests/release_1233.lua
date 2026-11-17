@@ -14,7 +14,7 @@ check('1.23.33 "pricecheck [item]" in guild/party/whisper is answered with the l
  -- Whisper: answered at once to the asker.
  emit('CHAT_MSG_WHISPER','pricecheck '..link,'Some Friend')
  assert(#sent==1 and sent[1][2]=='WHISPER' and sent[1][3]=='Some Friend','whisper not answered')
- assert(sent[1][1]=='VoidMark price: '..link..' 12g 34s 56c (scanned 2h ago)',sent[1][1])
+ assert(sent[1][1]=='VoidMark price: '..link..' 12g 34s 56c (last scan (2h ago))',sent[1][1])
  -- Guild: answered after a short wait.
  emit('CHAT_MSG_GUILD','pricecheck '..link,'Some Friend')
  assert(#sent==1,'guild answered without waiting');advance(5);M:PriceCheckFlush()
@@ -56,7 +56,7 @@ check('1.23.33 TSM prices fill in when Market has none or only an old one; repli
  local t2=M:PriceCheckReply(b);assert(t2:find('50s (TSM; our scan 2d old)',1,true),t2)
  -- Fresh ours wins.
  M.db.market[k].lastSeen=time()-600;M.db.latestScan=nil
- local t3=M:PriceCheckReply(b);assert(t3:find('70s (scanned 10m ago)',1,true),t3)
+ local t3=M:PriceCheckReply(b);assert(t3:find('70s (last scan (10m ago))',1,true),t3)
  -- Two whispers in the same second: the second waits a second.
  emit('CHAT_MSG_WHISPER','pc '..a,'Ann');emit('CHAT_MSG_WHISPER','pc '..b,'Bob')
  assert(#sent==1,'two replies in one second');advance(1);M:PriceCheckFlush();assert(#sent==2 and sent[2][3]=='Bob')
@@ -74,7 +74,7 @@ check('1.23.34 price check reads quality-coloured links (|cnIQ) and /vmm pricech
  local key=M:LinkIdentity(link)
  M.db.market[key]={marketKey=key,itemID=5634,name='Free Action Potion',lastSeen=time()-60,latest={floor=25000},observations=1}
  emit('CHAT_MSG_WHISPER','price check '..link,'Redridge Chad')
- assert(#sent==1 and sent[1][1]=='VoidMark price: '..link..' 2g 50s (scanned 1m ago)' and sent[1][3]=='Redridge Chad',tostring(sent[1] and sent[1][1]))
+ assert(#sent==1 and sent[1][1]=='VoidMark price: '..link..' 2g 50s (last scan (1m ago))' and sent[1][3]=='Redridge Chad',tostring(sent[1] and sent[1][1]))
  assert(M.priceCheck.last.reason=='sent to WHISPER Redridge Chad',M.priceCheck.last.reason)
  local printed={};local op=M.Print;M.Print=function(_,s) printed[#printed+1]=s end
  SlashCmdList.VOIDMARKMARKET('pricecheck '..link)
@@ -103,7 +103,7 @@ check('1.23.35 typed price checks: "price check bronze bar" without a link',func
  assert(M:PriceCheckTypedName('pc [Bronze Bar]')=='bronze bar')
  assert(M:PriceCheckTypedName('anyone got a price check addon')==nil and M:PriceCheckTypedName('pc lo')==nil)
  emit('CHAT_MSG_WHISPER','price check bronze bar','Redridge Chad')
- assert(#sent==1 and sent[1][1]=='VoidMark price: [Bronze Bar] 1s 89c (scanned 1m ago)' and sent[1][3]=='Redridge Chad',tostring(sent[1] and sent[1][1]))
+ assert(#sent==1 and sent[1][1]=='VoidMark price: [Bronze Bar] 1s 89c (last scan (1m ago))' and sent[1][3]=='Redridge Chad',tostring(sent[1] and sent[1][1]))
  advance(2);emit('CHAT_MSG_WHISPER','pc pagan belt of the bear','Redridge Chad')
  assert(#sent==2 and sent[2][1]:find('[Pagan Belt of the Bear] 90s',1,true),sent[2][1])
  -- One partial match: used. Several: whisper lists them; guild stays quiet.
@@ -177,14 +177,14 @@ check('1.23.37 price check sweep: amounts, several items, how-to, instance chat,
  local function ask(msg,who,ev) advance(2);emit(ev or 'CHAT_MSG_WHISPER',msg,who or ('P'..#sent)) end
  -- Listed count, and a name looked up once is kept.
  ask('price check tin ore')
- assert(last()=='VoidMark price: [Tin Ore] 1s (5,120 up, scanned 3m ago)',last())
+ assert(last()=='VoidMark price: [Tin Ore] 1s (5,120 seen during last scan (3m ago))',last())
  assert(M.db.itemNames[2771]=='Tin Ore','looked-up name not kept')
  -- Amounts.
- ask('pc 20 bronze bar');assert(last()=='VoidMark price: 20x [Bronze Bar] 37s 80c (1s 89c each; 40 up, scanned 3m ago)',last())
+ ask('pc 20 bronze bar');assert(last()=='VoidMark price: 20x [Bronze Bar] 37s 80c (1s 89c each; 40 seen during last scan (3m ago))',last())
  ask('pc bronze bar x50');assert(last():find('50x [Bronze Bar] 94s 50c',1,true) and last():find('- only 40 up',1,true),last())
  local link='|cnIQ1:|Hitem:2840::::::::60:::::::|h[Copper Bar]|h|r'
  ask('pc 10 '..link);assert(last():find('10x '..link..' 5s (50c each',1,true),last())
- ask('pc'..link);assert(last():find(link..' 50c (300 up',1,true),last())
+ ask('pc'..link);assert(last():find(link..' 50c (300 seen',1,true),last())
  -- Several in one message.
  local n=#sent;ask('pc tin ore, copper bar','Multi Guy');advance(2);M:PriceCheckFlush()
  assert(#sent==n+2 and sent[n+1][1]:find('[Tin Ore]',1,true) and sent[n+2][1]:find('[Copper Bar]',1,true))
@@ -203,6 +203,32 @@ check('1.23.37 price check sweep: amounts, several items, how-to, instance chat,
  for i=1,9 do advance(1);emit('CHAT_MSG_WHISPER',i%2==0 and 'pc tin ore' or 'pc copper bar','Spammer');PC.sent={} end
  assert(#sent-n<=6,'spam answered '..(#sent-n))
  SendChatMessage=nil;C_Timer=oldTimer;C_Item=oldC
+end)
+check('1.23.43 paired characters both online: only one answers in guild/party; whispers always answered',function()
+ VoidMarkMarketDB={};TaliaaTradeBetaDB=nil;M.jobs={};M:InitializeDatabase();jobs()
+ local sent={};SendChatMessage=function(t,ch,_,to) sent[#sent+1]={t,ch,to} end
+ local oldTimer=C_Timer;C_Timer=nil
+ local PC=M.priceCheck;PC.pending={};PC.answered={};PC.sent={};PC.lastSend=nil;PC.askers={}
+ M.db.market['b']={marketKey='b',itemID=2841,name='Bronze Bar',lastSeen=time()-60,latest={floor=189,quantity=40},observations=1}
+ local oldName,oldOnline=M.PlayerCharacterName,M.PartnerOnline
+ local me,online='Voidmark Soulreaver',true
+ M.PlayerCharacterName=function() return me end;M.PartnerOnline=function() return online end
+ local function ask(ev,who) PC.sent={};advance(3);emit(ev,'pc bronze bar',who or 'Guildie');advance(3);M:PriceCheckFlush() end
+ -- Soulreaver, bank online: the bank answers, Soulreaver stays quiet.
+ M.db.syncPeer='Voidmark Bank'
+ ask('CHAT_MSG_GUILD');assert(#sent==0,'main stays quiet while the bank is on')
+ ask('CHAT_MSG_PARTY');assert(#sent==0)
+ ask('CHAT_MSG_WHISPER','Asker');assert(#sent==1 and sent[1][2]=='WHISPER','whispers to this character are still answered')
+ -- Bank side of the same pair: it answers.
+ sent={};me='Voidmark Bank';M.db.syncPeer='Voidmark Soulreaver'
+ ask('CHAT_MSG_GUILD');assert(#sent==1 and sent[1][2]=='GUILD',tostring(#sent))
+ -- Bank offline: Soulreaver answers.
+ sent={};me='Voidmark Soulreaver';M.db.syncPeer='Voidmark Bank';online=false
+ ask('CHAT_MSG_GUILD');assert(#sent==1 and sent[1][2]=='GUILD')
+ -- Not paired: answers as before.
+ sent={};M.db.syncPeer=nil;online=true
+ ask('CHAT_MSG_GUILD');assert(#sent==1)
+ M.PlayerCharacterName,M.PartnerOnline=oldName,oldOnline;C_Timer=oldTimer
 end)
 check('1.23.37 unnamed scanned items are queued for slow name loading',function()
  VoidMarkMarketDB={};TaliaaTradeBetaDB=nil;M.jobs={};M:InitializeDatabase();jobs()

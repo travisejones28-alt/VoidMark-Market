@@ -76,6 +76,7 @@ local function nameKey(name)
  return s~='' and s or nil
 end
 M.SharingNameKey=nameKey
+function M:PlayerCharacterName() return unitCharacter('player') end
 local function enc(s) return (tostring(s):gsub('[%%%c,;|/]',function(c)return ('%%%02X'):format(c:byte()) end)) end
 local function dec(s) return (s:gsub('%%(%x%x)',function(x)return string.char(tonumber(x,16)) end)) end
 local function fields(s,sep)

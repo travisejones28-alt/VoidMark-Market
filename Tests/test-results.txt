@@ -176,7 +176,7 @@ PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
 PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
 PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
-BENCH scan: 97 frames (1.6s at 60fps, 3.2s at 30fps), worst frame 14.0ms, cpu 0.97s | after:share-scan=21 done=1 model=60 processing=15
+BENCH scan: 98 frames (1.6s at 60fps, 3.3s at 30fps), worst frame 12.1ms, cpu 0.96s | after:share-scan=21 done=1 model=61 processing=15
 PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.13 history stores only the fields it needs; latest keeps the full snapshot
 PASS 1.9.13 history saved by older versions is shrunk once at login without losing prices
@@ -253,8 +253,7 @@ PASS 1.21 packed mode: only after the partner says so; pages spread over lanes a
 PASS 1.21 receiver: fast pages applied in order even when lanes deliver them out of order
 PASS 1.22 Sale alert: coin sound, on-screen message with price and flip profit, sent to the partner
 PASS 1.22.1 Settings has checkboxes for sale alerts, coin sound, sending to partner and the paid floor
-PASS 1.22.2 Tooltip: an item missing from the latest full scan says "none listed now" instead of just "14h old"
-PASS 1.23.40 Synced price stamped up to 30m before the bank scan is not "none listed" (tooltip and guild reply)
+PASS 1.23.43 Price lines state plain facts: count seen and scan age, never "none listed/none up"
 PASS 1.23.42 How many were up at the scan: synced from the bank and shown in tooltip and guild reply
 PASS 1.22.6 Forever AH notifications: a sale (with its auction ID) alerts and relays; a win records the buy
 PASS 1.22.7 Purple sale banner: label, item, numbers, green/red profit, stacking, fade and saved position
@@ -334,6 +333,7 @@ PASS 1.23.35 typed price checks: "price check bronze bar" without a link
 PASS 1.23.36 typed price checks forgive typos
 PASS 1.23.36 typed price check finds items a full scan saved without a name (Tin Ore)
 PASS 1.23.37 price check sweep: amounts, several items, how-to, instance chat, limits, listed count, names kept
+PASS 1.23.43 paired characters both online: only one answers in guild/party; whispers always answered
 PASS 1.23.37 unnamed scanned items are queued for slow name loading
 PASS 1.23.39 mail subject fills from attachments, never overwrites typed text
 PASS Help lists every /vmm command and opens from /vmm help and Settings

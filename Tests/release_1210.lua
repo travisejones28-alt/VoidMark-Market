@@ -132,54 +132,21 @@ check('1.22.1 Settings has checkboxes for sale alerts, coin sound, sending to pa
  M.db.settings.sellNeverBelowPaid=true;M:SetView('browse')
 end)
 
-check('1.22.2 Tooltip: an item missing from the latest full scan says "none listed now" instead of just "14h old"',function()
+check('1.23.43 Price lines state plain facts: count seen and scan age, never "none listed/none up"',function()
  local key=M:Key(1070);local lines={}
  local tip={AddDoubleLine=function(_,l,r) lines[#lines+1]=l..'='..r end,AddLine=function() end}
  local oldLink=M.LinkIdentity;M.LinkIdentity=function() return key end
- M.db.market[key]={itemID=1070,marketKey=key,lastSeen=time()-14*3600,latest={floor=3200}}
  local oldScan=M.db.latestScan
- M.db.latestScan={completedAt=time()-20*60}
+ M.db.market[key]={itemID=1070,marketKey=key,lastSeen=time()-20*60,latest={floor=2397,quantity=226}}
+ M.db.latestScan={completedAt=time()-60} -- a newer scan than the sighting: no guessing
  M:AppendMarketTooltip(tip,'|Hitem:1070|h[x]|h')
- assert(lines[#lines]:find('none listed now, last seen 14h ago',1,true) and lines[#lines]:find(M:Coins(3200),1,true),lines[#lines])
- -- Seen in the latest scan: normal line.
- lines={};M.db.market[key].lastSeen=time()-20*60;M:AppendMarketTooltip(tip,'|Hitem:1070|h[x]|h')
- assert(not lines[#lines]:find('none listed',1,true),lines[#lines])
- -- The partner's newer scan counts too.
- lines={};M.db.market[key].lastSeen=time()-14*3600;M.db.latestScan={completedAt=time()-30*3600}
- M.db.syncPeer='bank';M.db.shareReceived={bank={scanAt=time()-600,total=50,seq=50}}
- M:AppendMarketTooltip(tip,'|Hitem:1070|h[x]|h');assert(lines[#lines]:find('none listed now',1,true))
- -- 1.23.40: ...but only after all of that scan's prices have arrived. Mid-transfer
- -- (or a stalled sync) the item may simply not have come over yet.
- lines={};M.db.shareReceived={bank={scanAt=time()-600,total=50,seq=49}}
- M:AppendMarketTooltip(tip,'|Hitem:1070|h[x]|h');assert(not lines[#lines]:find('none listed',1,true),lines[#lines])
- lines={};M.db.shareReceived={bank={scanAt=time()-600}}
- M:AppendMarketTooltip(tip,'|Hitem:1070|h[x]|h');assert(not lines[#lines]:find('none listed',1,true),lines[#lines])
- M.db.market[key]=nil;M.db.latestScan=oldScan;M.LinkIdentity=oldLink;M.db.syncPeer=nil;M.db.shareReceived={}
-end)
-
-check('1.23.40 Synced price stamped up to 30m before the bank scan is not "none listed" (tooltip and guild reply)',function()
- local key=M:Key(1071);local lines={}
- local tip={AddDoubleLine=function(_,l,r) lines[#lines+1]=l..'='..r end,AddLine=function() end}
- local oldLink=M.LinkIdentity;M.LinkIdentity=function() return key end
- local oldScan,oldShared=M.db.latestScan,M.db.sharedPrices[key]
- M.db.market[key]=nil;M.db.latestScan={completedAt=time()-30*3600}
- M.db.syncPeer='bank';M.db.shareReceived={bank={scanAt=time()-60,total=50,seq=50}}
- -- Unchanged price: the bank last re-stamped it 25 minutes before its newest scan.
- M.db.sharedPrices[key]={floor=5089,at=time()-25*60-60,origin='bank'}
- M:AppendMarketTooltip(tip,'|Hitem:1071|h[x]|h')
- assert(not lines[#lines]:find('none listed',1,true),lines[#lines])
- local reply=M:PriceCheckReply('[Blasted Boar Lung]',key,'Blasted Boar Lung',1071,1)
- assert(not reply:find('none up',1,true),reply)
- -- Truly gone: last seen well before the bank's scan.
- M.db.sharedPrices[key].at=time()-2*3600
- lines={};M:AppendMarketTooltip(tip,'|Hitem:1071|h[x]|h');assert(lines[#lines]:find('none listed now',1,true),lines[#lines])
- reply=M:PriceCheckReply('[Blasted Boar Lung]',key,'Blasted Boar Lung',1071,1)
- assert(reply:find('none up in last scan',1,true),reply)
- -- Our own scan stamps every item it sees, so its 5-minute margin is unchanged.
- M.db.sharedPrices[key]=oldShared;M.db.shareReceived={};M.db.syncPeer=nil
- M.db.market[key]={itemID=1071,marketKey=key,lastSeen=time()-25*60,latest={floor=5089}}
- M.db.latestScan={completedAt=time()-60}
- lines={};M:AppendMarketTooltip(tip,'|Hitem:1071|h[x]|h');assert(lines[#lines]:find('none listed now',1,true),lines[#lines])
+ assert(lines[#lines]:find('Auction |cff999999(226 seen 20m ago)|r=',1,true),lines[#lines])
+ local reply=M:PriceCheckReply('[Snickerfang Jowl]',key,'Snickerfang Jowl',1070,1)
+ assert(reply:find('(226 seen during last scan (20m ago)',1,true),reply)
+ assert(not reply:find('none',1,true) and not lines[#lines]:find('none',1,true))
+ -- No count known: just the age.
+ M.db.market[key].latest.quantity=nil
+ reply=M:PriceCheckReply('[Snickerfang Jowl]',key,'Snickerfang Jowl',1070,1);assert(reply:find('(last scan (20m ago)',1,true),reply)
  M.db.market[key]=nil;M.db.latestScan=oldScan;M.LinkIdentity=oldLink
 end)
 
@@ -213,15 +180,9 @@ check('1.23.42 How many were up at the scan: synced from the bank and shown in t
  assert(M.db.sharedPrices[key].floor==5100,'old 6-field price still accepted')
  M.db.sharedPrices[key]={floor=5089,at=time()-60,origin='Bank',quantity=12}
  -- Tooltip and guild reply show the count.
- lines={};M:AppendMarketTooltip(tip,'|Hitem:1072|h[x]|h');assert(lines[#lines]:find('(12 up)',1,true),lines[#lines])
+ lines={};M:AppendMarketTooltip(tip,'|Hitem:1072|h[x]|h');assert(lines[#lines]:find('(12 seen 1m ago)',1,true),lines[#lines])
  local reply=M:PriceCheckReply('[Blasted Boar Lung]',key,'Blasted Boar Lung',1072,1)
- assert(reply:find('12 up, scanned',1,true),reply)
- -- Gone from the latest scan: still says how many were up when last seen.
- M.db.sharedPrices[key].at=time()-2*3600;M.db.latestScan={completedAt=time()-60}
- lines={};M:AppendMarketTooltip(tip,'|Hitem:1072|h[x]|h')
- assert(lines[#lines]:find('none listed now, 12 up when last seen 2h ago',1,true),lines[#lines])
- reply=M:PriceCheckReply('[Blasted Boar Lung]',key,'Blasted Boar Lung',1072,1)
- assert(reply:find('none up in last scan, 12 up when last seen 2h ago',1,true),reply)
+ assert(reply:find('12 seen during last scan (1m ago)',1,true),reply)
  M.db.sharedPrices[key]=nil;M.db.syncPeer,M.db.shareReceived,M.shareRun,M.db.latestScan=oldPeer,oldRx,oldRun,oldScan;M.LinkIdentity=oldLink
 end)
 

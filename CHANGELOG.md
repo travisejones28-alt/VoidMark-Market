@@ -1,3 +1,7 @@
+## 1.23.43 - plain price replies, one responder per pair
+- Guild/party/whisper price reply: "226 seen during last scan (20m ago)". Tooltip: "Auction (226 seen 20m ago)". No more "none up / none listed" guesses.
+- When both paired characters are online, only one answers in guild or party (the name that sorts first, e.g. Voidmark Bank). Whispers are always answered. If the partner is offline, whoever is on answers.
+
 ## 1.23.42 - how many were up at the scan
 - Tooltip and guild price reply show how many were on the AH at the last scan, e.g. "Auction (12 up)" and "none up in last scan, 12 up when last seen 2h ago".
 - Bank sync now carries that count with each price and each 30-minute re-stamp. Older 1.23.41 rows are still accepted; update both accounts together.

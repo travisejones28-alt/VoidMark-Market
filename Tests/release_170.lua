@@ -30,7 +30,7 @@ check('1.8 tooltip shows Vendor and Auction lines, a stack total, greys old pric
  M.db.market[9001]={itemID=9001,marketKey=9001,name='Ore',lastSeen=time()-120,observations=8,confidenceScore=80,
   volatility=.1,fairValue=260,historySpan=10*86400,latest={floor=250,quantity=40},history={}}
  lines,tip=tipLines();M:AppendMarketTooltip(tip,link,20);local text=table.concat(lines,'\n')
- assert(text:find('Vendor x20:'..M:Coins(100),1,true) and text:find('Auction |cff999999(40 up)|r:'..M:Coins(250),1,true) and text:find('Auction x20:'..M:Coins(5000),1,true))
+ assert(text:find('Vendor x20:'..M:Coins(100),1,true) and text:find('Auction |cff999999(40 seen 2m ago)|r:'..M:Coins(250),1,true) and text:find('Auction x20:'..M:Coins(5000),1,true))
  assert(#lines==3 and not text:find('old)',1,true))
  M.db.settings.tooltipVendor=nil;lines,tip=tipLines();M:AppendMarketTooltip(tip,link);assert(#lines==1) -- off by default: Forever shows Sell Price itself
  advance(M.db.settings.maxDataAge+10)

@@ -281,13 +281,8 @@ function M:PriceCheckReply(display,key,name,id,count)
   return cap(head..price(tp)..(count>1 and ', ' or '')..'TSM; our scan '..self:TooltipAgeText(p.at)..' old)'),true
  end
  local parts={}
- if self.MissedLatestScan and self:MissedLatestScan(p) then
-  parts[#parts+1]='none up in last scan'
-  parts[#parts+1]=(self:Finite(listed,1,1e9) and (commas(listed)..' up when last seen ') or 'last seen ')..self:TooltipAgeText(p.at)..' ago'
- else
-  if self:Finite(listed,1,1e9) then parts[#parts+1]=commas(listed)..' up' end
-  parts[#parts+1]='scanned '..self:TooltipAgeText(p.at)..' ago'
- end
+ -- 1.23.43: plain facts only, e.g. "226 seen during last scan (20m ago)".
+ parts[#parts+1]=(self:Finite(listed,1,1e9) and (commas(listed)..' seen during last scan') or 'last scan')..' ('..self:TooltipAgeText(p.at)..' ago)'
  if self:Finite(p.fair,1,1e12) and math.abs(p.fair-p.floor)>=p.floor*0.1 then
   parts[#parts+1]='usually '..self:PlainCoins(p.fair)
  end
@@ -302,6 +297,17 @@ function M:NotePriceCheckAnswer(channel,target,msg)
  if type(msg)~='string' or msg:sub(1,#PREFIX)~=PREFIX then return end
  local n=nameKey(msg);if not n then return end
  PC.answered[place(channel,target)..'|'..n]=now()
+end
+-- The pair picks the same responder on both sides without talking: the name that
+-- sorts first ("Voidmark Bank" before "Voidmark Soulreaver"). Only while the
+-- partner is online; otherwise whoever is on answers.
+function M:PartnerAnswersPriceChecks()
+ local peer=self.db and self.db.syncPeer
+ if not peer or not (self.PartnerOnline and self:PartnerOnline()) then return false end
+ local key=self.SharingNameKey
+ local mine=key and self.PlayerCharacterName and key(self:PlayerCharacterName())
+ local theirs=key and key(peer)
+ return mine~=nil and theirs~=nil and theirs<mine
 end
 function M:HandlePriceCheck(event,msg,sender)
  local ok,err=pcall(self.HandlePriceCheckInner,self,event,msg,sender)
@@ -334,6 +340,8 @@ function M:HandlePriceCheckInner(event,msg,sender)
   if channel=='WHISPER' then note('sent how to use it',sender);self:QueuePriceCheckReply(channel,target,'?help',HELP,false) end
   return self:SchedulePriceCheckFlush()
  end
+ -- Both paired characters online in the same guild/party: only one answers.
+ if channel~='WHISPER' and self:PartnerAnswersPriceChecks() then note('your other character answers this one',sender);return end
  note('reply queued ('..channel..')',sender)
  for _,it in ipairs(ask.items) do
   if it.link then
