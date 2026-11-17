@@ -7,9 +7,12 @@ local _,M=...
 --   anyone pricecheck [Item]?      pc        (whisper: how to use it)
 --
 -- Answer: "VoidMark price: [Tin Ore] 1s (5,120 up, scanned 3m ago)".
--- Two clients (main + bank) or friends with Market may hear the same ask: each
--- waits a short random moment and stays quiet if someone already answered that
--- item there. A client with no price waits longer, so one with a price wins.
+-- Two clients (main + bank) or friends with Market may hear the same ask.
+-- 1.23.44: in guild/party each one with a price sends a hidden claim ("I have
+-- this item from a scan at time T") and waits about a second; the freshest
+-- claim answers, the others stay quiet (ties: name that sorts first). Older
+-- versions without claims: stay quiet if someone already answered that item.
+-- A client with no price waits longer and never answers over a claim.
 local PREFIX='VoidMark price:'
 local CHANNELS={
  CHAT_MSG_PARTY={'PARTY','priceCheckParty'},CHAT_MSG_PARTY_LEADER={'PARTY','priceCheckParty'},
@@ -24,6 +27,10 @@ local REPEAT=30     -- same item in the same place answered at most once per 30s
 local MAX_ITEMS=3   -- items answered per message
 local PER_ASKER=6   -- asks answered per player per minute
 local MAX_PENDING=15
+local CLAIM_PREFIX='VMMPC'  -- hidden addon messages: price-check claims
+local CLAIM_WAIT=1.2        -- how long to collect other players' claims
+PC.claims=PC.claims or {}
+if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then pcall(C_ChatInfo.RegisterAddonMessagePrefix,CLAIM_PREFIX) end
 
 local function now() return (GetTime and GetTime()) or time() end
 local function cap(t) if #t>255 then return t:sub(1,252)..'...' end return t end
@@ -273,12 +280,12 @@ function M:PriceCheckReply(display,key,name,id,count)
   return self:PlainCoins(each)..' ('
  end
  if not p or not self:Finite(p.floor,1,1e12) then
-  if tp then return cap(head..price(tp)..(count>1 and ', ' or '')..'TSM)'),true end
+  if tp then return cap(head..price(tp)..(count>1 and ', ' or '')..'TSM)'),true,0 end
   return cap(PREFIX..' '..display..' no scan data'),false
  end
  -- Ours is from an earlier day and TSM has one: TSM's is fresher.
  if tp and time()-p.at>=86400 then
-  return cap(head..price(tp)..(count>1 and ', ' or '')..'TSM; our scan '..self:TooltipAgeText(p.at)..' old)'),true
+  return cap(head..price(tp)..(count>1 and ', ' or '')..'TSM; our scan '..self:TooltipAgeText(p.at)..' old)'),true,0
  end
  local parts={}
  -- 1.23.43: plain facts only, e.g. "226 seen during last scan (20m ago)".
@@ -288,7 +295,7 @@ function M:PriceCheckReply(display,key,name,id,count)
  end
  local text=head..price(p.floor)..(count>1 and '; ' or '')..table.concat(parts,', ')..')'
  if count>1 and self:Finite(listed,1,1e9) and listed<count then text=text..' - only '..commas(listed)..' up' end
- return cap(text),true
+ return cap(text),true,p.at
 end
 local HELP=PREFIX..' type "pc" and an item link or name, e.g. "pc tin ore", "pc 20 bronze bar" or "pc [item]".'
 
@@ -345,30 +352,68 @@ function M:HandlePriceCheckInner(event,msg,sender)
  note('reply queued ('..channel..')',sender)
  for _,it in ipairs(ask.items) do
   if it.link then
-   local text,has=self:PriceCheckReply(it.link,nil,nil,nil,it.count)
-   self:QueuePriceCheckReply(channel,target,nameKey(it.link),text,has)
+   local text,has,at=self:PriceCheckReply(it.link,nil,nil,nil,it.count)
+   self:QueuePriceCheckReply(channel,target,nameKey(it.link),text,has,at)
   else
    self:QueueTypedPriceCheck(it.text,channel,target,sender,it.count)
   end
  end
  self:SchedulePriceCheckFlush()
 end
-function M:QueuePriceCheckReply(channel,target,name,text,has)
+function M:QueuePriceCheckReply(channel,target,name,text,has,at)
  if not name or not text or #PC.pending>=MAX_PENDING then return end
  local t=now()
  local k=place(channel,target)..'|'..name
  if PC.sent[k] and t-PC.sent[k]<REPEAT then return end
- -- Whispers are ours alone: answer at once. Shared channels: wait a moment.
- local delay=channel=='WHISPER' and 0 or (has and 0.4+math.random()*1.4 or 2.5+math.random())
+ -- Whispers are ours alone: answer at once. Shared channels: claim, then wait.
+ local delay=channel=='WHISPER' and 0 or (has and CLAIM_WAIT+math.random()*0.2 or 2.5+math.random())
  PC.sent[k]=t
- PC.pending[#PC.pending+1]={due=t+delay,asked=t,channel=channel,target=target,text=text,key=k}
+ at=tonumber(at) or 0
+ PC.pending[#PC.pending+1]={due=t+delay,asked=t,channel=channel,target=target,text=text,key=k,has=has,at=at}
+ if channel~='WHISPER' and has then self:SendPriceCheckClaim(channel,name,at) end
+end
+-- Our name, as other clients see it in a claim (ties go to the name sorting first).
+local function selfKey(self)
+ local key=self.SharingNameKey
+ return key and self.PlayerCharacterName and key(self:PlayerCharacterName()) or nil
+end
+function M:SendPriceCheckClaim(channel,name,at)
+ local send=C_ChatInfo and C_ChatInfo.SendAddonMessage
+ if type(send)~='function' or #name>120 then return end
+ pcall(send,CLAIM_PREFIX,'C\t'..name..'\t'..math.floor(at),channel)
+end
+function M:ReceivePriceCheckClaim(prefix,msg,channel,sender)
+ if prefix~=CLAIM_PREFIX or secret(msg,channel,sender) or type(msg)~='string' or type(sender)~='string' or #msg>200 then return end
+ local name,at=msg:match('^C\t([^\t]+)\t(%d+)$')
+ at=tonumber(at)
+ if not name or not at then return end
+ local who=self.SharingNameKey and self.SharingNameKey(sender) or sender:lower()
+ if not who or who==selfKey(self) then return end -- our own claim echoed back
+ local k=place(channel,nil)..'|'..name:lower()
+ local list=PC.claims[k] or {};PC.claims[k]=list
+ local t=now();local keep={}
+ for _,c in ipairs(list) do if t-c.t<10 and c.who~=who then keep[#keep+1]=c end end
+ keep[#keep+1]={at=at,who=who,t=t};PC.claims[k]=keep
+end
+M:RegisterHandler('CHAT_MSG_ADDON',function(self,_,...) self:ReceivePriceCheckClaim(...) end)
+-- Someone else claimed this ask with a fresher scan (or the same one and a name
+-- that sorts first), or, when we have no price, anyone with a price claimed it.
+function M:PriceCheckOutclaimed(r)
+ if r.channel=='WHISPER' then return false end
+ local me=selfKey(self) or '~'
+ for _,c in ipairs(PC.claims[r.key] or {}) do
+  if c.t>=r.asked-1 then
+   if not r.has or c.at>r.at or (c.at==r.at and c.who<me) then return true end
+  end
+ end
+ return false
 end
 function M:QueueTypedPriceCheck(q,channel,target,sender,count)
  local key,name,id=self:FindPriceCheckItem(q)
  if key~=nil then
-  local text,has=self:PriceCheckReply(displayFor(id,name),key,name,id,count)
+  local text,has,at=self:PriceCheckReply(displayFor(id,name),key,name,id,count)
   note('reply queued for "'..q..'" -> '..name..' ('..channel..')',sender)
-  self:QueuePriceCheckReply(channel,target,name:lower(),text,has)
+  self:QueuePriceCheckReply(channel,target,name:lower(),text,has,at)
  elseif channel=='WHISPER' then
   -- Only whispers hear "not found": in guild/party another player's Market may know it.
   local close,n=name,id
@@ -403,6 +448,8 @@ function M:PriceCheckFlush()
    local send=(C_ChatInfo and C_ChatInfo.SendChatMessage) or SendChatMessage
    if other and other>=r.asked then
     if PC.last then PC.last.reason='another client answered first' end
+   elseif self:PriceCheckOutclaimed(r) then
+    if PC.last then PC.last.reason='another player has a fresher scan and answers' end
    elseif send then
     -- At most one reply a second.
     if PC.lastSend and t-PC.lastSend<1 then r.due=PC.lastSend+1;keep[#keep+1]=r

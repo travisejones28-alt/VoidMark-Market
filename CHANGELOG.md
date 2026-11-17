@@ -1,3 +1,6 @@
+## 1.23.44 - one price-check answer per guild/group
+- Players running Market send a hidden claim (their scan time) before answering in guild/party/raid. After about a second the freshest scan answers and everyone else stays quiet; ties go to the name that sorts first. Whispers unchanged. Older versions still fall back to "someone already answered".
+
 ## 1.23.43 - plain price replies, one responder per pair
 - Guild/party/whisper price reply: "226 seen during last scan (20m ago)". Tooltip: "Auction (226 seen 20m ago)". No more "none up / none listed" guesses.
 - When both paired characters are online, only one answers in guild or party (the name that sorts first, e.g. Voidmark Bank). Whispers are always answered. If the partner is offline, whoever is on answers.

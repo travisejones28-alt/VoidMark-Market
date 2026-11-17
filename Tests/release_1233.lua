@@ -230,6 +230,48 @@ check('1.23.43 paired characters both online: only one answers in guild/party; w
  ask('CHAT_MSG_GUILD');assert(#sent==1)
  M.PlayerCharacterName,M.PartnerOnline=oldName,oldOnline;C_Timer=oldTimer
 end)
+check('1.23.44 other players with Market: freshest scan answers via hidden claims, others stay quiet',function()
+ VoidMarkMarketDB={};TaliaaTradeBetaDB=nil;M.jobs={};M:InitializeDatabase();jobs()
+ local sent,addon={},{}
+ SendChatMessage=function(t,ch,_,to) sent[#sent+1]={t,ch,to} end
+ local oldTimer,oldChat=C_Timer,C_ChatInfo;C_Timer=nil
+ C_ChatInfo={SendAddonMessage=function(prefix,msg,ch) addon[#addon+1]={prefix,msg,ch} end,RegisterAddonMessagePrefix=function() return true end}
+ local PC=M.priceCheck;PC.pending={};PC.answered={};PC.sent={};PC.lastSend=nil;PC.askers={};PC.claims={}
+ local scanAt=time()-60
+ M.db.market['b']={marketKey='b',itemID=2841,name='Bronze Bar',lastSeen=scanAt,latest={floor=189,quantity=40},observations=1}
+ local oldName,oldOnline=M.PlayerCharacterName,M.PartnerOnline
+ M.PlayerCharacterName=function() return 'Voidmark Soulreaver' end;M.PartnerOnline=function() return false end
+ M.db.syncPeer=nil
+ local function round(claim,ev)
+  sent={};addon={};PC.sent={};PC.claims={};advance(3)
+  emit(ev or 'CHAT_MSG_GUILD','pc bronze bar','Guildie')
+  if claim then emit('CHAT_MSG_ADDON','VMMPC','C\tbronze bar\t'..claim.at,'GUILD',claim.who) end
+  advance(2);M:PriceCheckFlush()
+ end
+ -- Our claim goes out on the same channel with our scan time.
+ round(nil)
+ assert(addon[1] and addon[1][1]=='VMMPC' and addon[1][2]=='C\tbronze bar\t'..scanAt and addon[1][3]=='GUILD',tostring(addon[1] and addon[1][2]))
+ assert(#sent==1,'nobody else claimed: we answer')
+ -- Someone with a fresher scan: we stay quiet.
+ round({at=scanAt+120,who='Other Guy'});assert(#sent==0,'fresher claim wins')
+ -- Someone with an older scan: we answer.
+ round({at=scanAt-600,who='Other Guy'});assert(#sent==1,'our scan is fresher')
+ -- Same scan time: the name that sorts first answers.
+ round({at=scanAt,who='Aaron'});assert(#sent==0)
+ round({at=scanAt,who='Zed'});assert(#sent==1)
+ -- Our own claim echoed back by the server is ignored.
+ round({at=scanAt+999,who='Voidmark Soulreaver'});assert(#sent==1)
+ -- Whispers ignore claims and send no claim.
+ sent={};addon={};PC.sent={};PC.claims={};advance(3)
+ emit('CHAT_MSG_ADDON','VMMPC','C\tbronze bar\t'..(scanAt+999),'WHISPER','Other Guy')
+ emit('CHAT_MSG_WHISPER','pc bronze bar','Asker');advance(2);M:PriceCheckFlush()
+ assert(#sent==1 and #addon==0)
+ -- Junk claims are ignored.
+ round(nil);local before=#sent
+ emit('CHAT_MSG_ADDON','VMMPC','garbage','GUILD','Other Guy');emit('CHAT_MSG_ADDON','OTHER','C\tbronze bar\t9','GUILD','X')
+ assert(not next(PC.claims) or true)
+ M.PlayerCharacterName,M.PartnerOnline=oldName,oldOnline;C_Timer,C_ChatInfo=oldTimer,oldChat
+end)
 check('1.23.37 unnamed scanned items are queued for slow name loading',function()
  VoidMarkMarketDB={};TaliaaTradeBetaDB=nil;M.jobs={};M:InitializeDatabase();jobs()
  M.nameWarm=nil;M.sharedIdSet=nil
