@@ -274,9 +274,6 @@ local function apply(self,p)
  end
  return true
 end
--- 1.24.0: the Warpath feed (WarpathFeed.lua) applies the partner's journal rows
--- with exactly the same checks as a sync page.
-M.SharingDecode=decode;M.SharingApply=apply;M.SharingUnitCharacter=unitCharacter
 local function fullAddress(name)
  if secret(name) then return end
  if not validText(name,80) then return end

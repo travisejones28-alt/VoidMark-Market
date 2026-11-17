@@ -40,7 +40,6 @@ function A.CanInvite()
 end
 
 function A.Invite(name)
-  if A.blocked then return false end
   if C_PartyInfo and C_PartyInfo.InviteUnit then return pcall(C_PartyInfo.InviteUnit,name) end
   if InviteUnit then return pcall(InviteUnit,name) end
   return false
