@@ -1,3 +1,13 @@
+## 1.24.0 - Warpath feed
+- The bank sync is held to about 1 KB/s by the game, so a full scan took many minutes to reach the other character ("Bank sync: receiving 98%"). Both accounts are on one PC, so Warpath 3.6.0 now carries the whole scan as a file:
+  - On logout or /reload, Market saves this character's latest prices and list changes (VoidMarkMarketFeedOut). A scan still being published is finished first.
+  - Warpath copies it into the VoidMarkMarket_Feed addon. At login or /reload the other character loads it with the same checks as sync pages, and the sync skips ahead (the partner is told, so it stops resending).
+  - The live in-game sync keeps running for anything newer.
+- After the first scan of the day, Market offers "Reload now" so Warpath can hand it over. Once a day, never in combat, never on logout.
+- "Last scan" shows the partner's scan when it's newer: "Last scan: 2 hr ago by Voidmark Bank | 204122 auctions".
+- After a reload, Shopping showed "No saved prices match" for the remembered search term because nothing had searched yet. It searches on its own now.
+- 337 regressions.
+
 ## 1.23.38 - Help & commands
 - **Settings > HELP & COMMANDS** (or `/vmm help [word]`) opens a searchable window with a short FAQ and every `/vmm` command. Before, `/vmm help` just opened the main window.
 - A test fails if a command is handled but missing from the help.

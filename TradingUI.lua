@@ -26,12 +26,19 @@ function M:SimpleScanStatus()
  end
  if s.phase=='aborted' then return 'Scan stopped when the Auction House closed'..retry end
  local scan=self.db.latestScan
+ -- 1.24.0: the partner's scan (Warpath file or sync) counts when it's newer.
+ local pAt,pCount,pName
+ if self.PartnerScan then pAt,pCount,pName=self:PartnerScan() end
+ if pAt and pAt>(scan and tonumber(scan.completedAt) or 0) then
+  return 'Last scan: '..self:PriceAge(pAt)..' by '..pName..(pCount and pCount>0 and (' | '..pCount..' auctions') or '')..retry
+ end
  if scan then return 'Last scan: '..self:PriceAge(scan.completedAt)..' | '..tostring(scan.auctionsProcessed or 0)..' auctions'..retry end
  return (self.ahOpen and 'Ready to scan' or 'Open the Auction House to search or scan')..retry
 end
 function M:SimpleSyncStatus()
  if not self.db.syncPeer then return 'Bank sync: not paired' end
  local r=self.shareRun or {};local rx=self.db.shareReceived[self.db.syncPeer] or {}
+ if self.feedImporting then return 'Bank sync: loading Warpath copy' end
  if not r.lastContact or GetTime()-r.lastContact>65 then return 'Bank sync: waiting for partner' end
  if rx.total and rx.seq<rx.total then return 'Bank sync: receiving '..math.floor(rx.seq/rx.total*100)..'%' end
  local j=self.db.shareJournal
@@ -139,7 +146,13 @@ function M:SetTradingColumns(view)
  end
 end
 function M:ShoppingResultRows()
- if not self.shoppingListMode then return self.browseRows or {} end
+ if not self.shoppingListMode then
+  -- After a reload the search box still shows the last search but nothing
+  -- had searched the saved prices yet ("No saved prices match"). Run it.
+  local f=self.db.settings.filter or ''
+  if self.browseRows==nil and f~='' and self.marketIndex and not self.feedImporting then self:BuildBrowseRows(f) end
+  return self.browseRows or {}
+ end
  local out={};local needle=(self.db.settings.filter or ''):lower()
  for _,row in ipairs(self:GetWatchRows()) do
   if needle=='' or row.name:lower():find(needle,1,true) or tostring(row.itemID)==needle then
