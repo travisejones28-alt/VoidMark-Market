@@ -1,3 +1,7 @@
+## 1.23.39 - mail subject autofill
+- Attach items to a mail (or add gold) and an empty subject fills itself: "Linen Cloth", "Linen Cloth and 4 more", or "Gold". Send works without typing a subject.
+- A subject you type yourself is never changed. The filled one updates as you add or remove items.
+
 ## 1.23.38 - Help & commands
 - **Settings > HELP & COMMANDS** (or `/vmm help [word]`) opens a searchable window with a short FAQ and every `/vmm` command. Before, `/vmm help` just opened the main window.
 - A test fails if a command is handled but missing from the help.
