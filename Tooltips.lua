@@ -72,6 +72,16 @@ function M:NewestFullScanAt()
  if t and t>time()+60 then return nil end
  return t
 end
+-- True when a full scan ran after this price was last seen: not on the AH now.
+-- Unchanged synced prices are only re-stamped every 30 minutes, so a price from
+-- the partner can look up to 30 minutes older than the scan that saw it.
+function M:MissedLatestScan(p)
+ if not p or p.unverified or not self:Finite(p.at,1,time()+60) then return false end
+ local scan=self:NewestFullScanAt()
+ if not scan then return false end
+ local slack=300+(p.source=='Synced account' and (M.SHARE_STAMP_EVERY or 1800) or 0)
+ return p.at<scan-slack
+end
 function M:TooltipAgeText(at)
  local age=math.max(0,time()-at)
  return age>=86400 and math.floor(age/86400)..'d' or age>=3600 and math.floor(age/3600)..'h' or math.max(1,math.floor(age/60))..'m'
@@ -114,8 +124,7 @@ function M:AppendMarketTooltip(tip,link,count)
  local name=stale and ('Auction |cff999999('..self:TooltipAgeText(p.at)..' old)|r') or 'Auction'
  -- A full scan (here or on the synced character) ran after this price was last
  -- seen: the item isn't on the AH right now. Say so instead of just "14h old".
- local scan=self:NewestFullScanAt()
- if scan and p.at<scan-300 and not p.unverified then
+ if self:MissedLatestScan(p) then
   name='Auction |cff999999(none listed now, last seen '..self:TooltipAgeText(p.at)..' ago)|r'
  end
  local r,g,b=1,1,1;if stale or name:find('none listed',1,true) then r,g,b=.6,.6,.6 end

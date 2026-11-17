@@ -47,6 +47,7 @@ local function unpackRow(line,base)
 end
 M.SyncPack={b62=b62,unb62=unb62,hash=econHash,pack=packRow,unpack=unpackRow,lanes=LANES}
 local STAMP_EVERY=1800
+M.SHARE_STAMP_EVERY=STAMP_EVERY
 local function secret(v) return issecretvalue and issecretvalue(v) end
 local function unitCharacter(unit)
  -- Forever returns first name and surname separately. A surname is not a realm.

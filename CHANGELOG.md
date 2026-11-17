@@ -1,3 +1,6 @@
+## 1.23.41 - no false "none up in last scan" for synced prices
+- Unchanged prices from the bank are only re-stamped every 30 minutes, so they could look up to 30 minutes older than the scan that saw them. The tooltip and the guild price reply now allow for that before saying "none listed / none up".
+
 ## 1.23.40 - "none listed" only after the partner scan fully arrives
 - The tooltip said "none listed now" for items while the bank's newer scan was still syncing (or stalled). The partner's scan now counts only once all of its prices have arrived.
 

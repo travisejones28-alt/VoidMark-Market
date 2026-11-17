@@ -157,6 +157,32 @@ check('1.22.2 Tooltip: an item missing from the latest full scan says "none list
  M.db.market[key]=nil;M.db.latestScan=oldScan;M.LinkIdentity=oldLink;M.db.syncPeer=nil;M.db.shareReceived={}
 end)
 
+check('1.23.40 Synced price stamped up to 30m before the bank scan is not "none listed" (tooltip and guild reply)',function()
+ local key=M:Key(1071);local lines={}
+ local tip={AddDoubleLine=function(_,l,r) lines[#lines+1]=l..'='..r end,AddLine=function() end}
+ local oldLink=M.LinkIdentity;M.LinkIdentity=function() return key end
+ local oldScan,oldShared=M.db.latestScan,M.db.sharedPrices[key]
+ M.db.market[key]=nil;M.db.latestScan={completedAt=time()-30*3600}
+ M.db.syncPeer='bank';M.db.shareReceived={bank={scanAt=time()-60,total=50,seq=50}}
+ -- Unchanged price: the bank last re-stamped it 25 minutes before its newest scan.
+ M.db.sharedPrices[key]={floor=5089,at=time()-25*60-60,origin='bank'}
+ M:AppendMarketTooltip(tip,'|Hitem:1071|h[x]|h')
+ assert(not lines[#lines]:find('none listed',1,true),lines[#lines])
+ local reply=M:PriceCheckReply('[Blasted Boar Lung]',key,'Blasted Boar Lung',1071,1)
+ assert(not reply:find('none up',1,true),reply)
+ -- Truly gone: last seen well before the bank's scan.
+ M.db.sharedPrices[key].at=time()-2*3600
+ lines={};M:AppendMarketTooltip(tip,'|Hitem:1071|h[x]|h');assert(lines[#lines]:find('none listed now',1,true),lines[#lines])
+ reply=M:PriceCheckReply('[Blasted Boar Lung]',key,'Blasted Boar Lung',1071,1)
+ assert(reply:find('none up in last scan',1,true),reply)
+ -- Our own scan stamps every item it sees, so its 5-minute margin is unchanged.
+ M.db.sharedPrices[key]=oldShared;M.db.shareReceived={};M.db.syncPeer=nil
+ M.db.market[key]={itemID=1071,marketKey=key,lastSeen=time()-25*60,latest={floor=5089}}
+ M.db.latestScan={completedAt=time()-60}
+ lines={};M:AppendMarketTooltip(tip,'|Hitem:1071|h[x]|h');assert(lines[#lines]:find('none listed now',1,true),lines[#lines])
+ M.db.market[key]=nil;M.db.latestScan=oldScan;M.LinkIdentity=oldLink
+end)
+
 check('1.22.6 Forever AH notifications: a sale (with its auction ID) alerts and relays; a win records the buy',function()
  local old=C_ChatInfo;local sent={}
  C_ChatInfo={RegisterAddonMessagePrefix=function() return 0 end,SendAddonMessage=function(prefix,msg) sent[#sent+1]={prefix,msg};return 0 end}
