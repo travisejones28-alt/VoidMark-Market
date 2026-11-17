@@ -282,7 +282,8 @@ function M:PriceCheckReply(display,key,name,id,count)
  end
  local parts={}
  if self.MissedLatestScan and self:MissedLatestScan(p) then
-  parts[#parts+1]='none up in last scan, last seen '..self:TooltipAgeText(p.at)..' ago'
+  parts[#parts+1]='none up in last scan'
+  parts[#parts+1]=(self:Finite(listed,1,1e9) and (commas(listed)..' up when last seen ') or 'last seen ')..self:TooltipAgeText(p.at)..' ago'
  else
   if self:Finite(listed,1,1e9) then parts[#parts+1]=commas(listed)..' up' end
   parts[#parts+1]='scanned '..self:TooltipAgeText(p.at)..' ago'

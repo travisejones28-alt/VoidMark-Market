@@ -183,6 +183,48 @@ check('1.23.40 Synced price stamped up to 30m before the bank scan is not "none 
  M.db.market[key]=nil;M.db.latestScan=oldScan;M.LinkIdentity=oldLink
 end)
 
+check('1.23.42 How many were up at the scan: synced from the bank and shown in tooltip and guild reply',function()
+ local key=M:Key(1072);local lines={}
+ local tip={AddDoubleLine=function(_,l,r) lines[#lines+1]=l..'='..r end,AddLine=function() end}
+ local oldLink=M.LinkIdentity;M.LinkIdentity=function() return key end
+ local oldPeer,oldRx,oldRun,oldScan=M.db.syncPeer,M.db.shareReceived,M.shareRun,M.db.latestScan
+ -- Bank side: the journal row carries the count; an unchanged price re-stamps it.
+ local j=M.db.shareJournal;local m={itemID=1072,marketKey=key,name='Lung',lastSeen=time(),observations=8,confidenceScore=80,
+  volatility=.1,fairValue=8504,historySpan=10*86400,latest={floor=5089,quantity=12},history={}}
+ M:PublishPrice(m)
+ local row=j.rows[j.latest['P'..key]];assert(row:match(',12$'),row)
+ advance(1900);m.lastSeen=time();m.latest.quantity=7;M:PublishPrice(m)
+ local stamp=j.rows[j.latest['U'..key]];assert(stamp and stamp:match(',7$'),tostring(stamp))
+ advance(1900);m.lastSeen=time();M:PublishPrice(m) -- stamp parsing ignores the count field
+ assert(j.rows[j.latest['U'..key]]:match('^U,[^,]+,%d+,'..m.lastSeen..',7$'))
+ -- Main side: rows from the bank (new and old formats) arrive over sync.
+ M.db.market[key]=nil;M.db.sharedPrices[key]=nil;M.db.latestScan=nil
+ M.db.syncPeer='Bank';M.db.shareReceived={};M.shareRun={}
+ local lane=M.SyncPack.lanes[1];local econ=M.economyID
+ M:ReceiveSharing(lane,econ..'\tH\t5-6','WHISPER','Bank')
+ local at=time()-600
+ M:ReceiveSharing(lane,econ..'\tD\t5-6\t0\t1\tP,'..key..','..at..',5089,8504,80,12','WHISPER','Bank')
+ assert(M.db.sharedPrices[key] and M.db.sharedPrices[key].quantity==12,'count arrives with the price')
+ M:ReceiveSharing(lane,econ..'\tD\t5-6\t1\t2\tU,'..key..','..at..','..(at+300)..',9','WHISPER','Bank')
+ assert(M.db.sharedPrices[key].quantity==9 and M.db.sharedPrices[key].at==at+300,'re-stamp updates the count')
+ M:ReceiveSharing(lane,econ..'\tD\t5-6\t2\t3\tU,'..key..','..at..','..(at+400),'WHISPER','Bank')
+ assert(M.db.sharedPrices[key].at==at+400,'old 4-field stamp still accepted')
+ M:ReceiveSharing(lane,econ..'\tD\t5-6\t3\t4\tP,'..key..','..(at+500)..',5100,8504,80','WHISPER','Bank')
+ assert(M.db.sharedPrices[key].floor==5100,'old 6-field price still accepted')
+ M.db.sharedPrices[key]={floor=5089,at=time()-60,origin='Bank',quantity=12}
+ -- Tooltip and guild reply show the count.
+ lines={};M:AppendMarketTooltip(tip,'|Hitem:1072|h[x]|h');assert(lines[#lines]:find('(12 up)',1,true),lines[#lines])
+ local reply=M:PriceCheckReply('[Blasted Boar Lung]',key,'Blasted Boar Lung',1072,1)
+ assert(reply:find('12 up, scanned',1,true),reply)
+ -- Gone from the latest scan: still says how many were up when last seen.
+ M.db.sharedPrices[key].at=time()-2*3600;M.db.latestScan={completedAt=time()-60}
+ lines={};M:AppendMarketTooltip(tip,'|Hitem:1072|h[x]|h')
+ assert(lines[#lines]:find('none listed now, 12 up when last seen 2h ago',1,true),lines[#lines])
+ reply=M:PriceCheckReply('[Blasted Boar Lung]',key,'Blasted Boar Lung',1072,1)
+ assert(reply:find('none up in last scan, 12 up when last seen 2h ago',1,true),reply)
+ M.db.sharedPrices[key]=nil;M.db.syncPeer,M.db.shareReceived,M.shareRun,M.db.latestScan=oldPeer,oldRx,oldRun,oldScan;M.LinkIdentity=oldLink
+end)
+
 check('1.22.6 Forever AH notifications: a sale (with its auction ID) alerts and relays; a win records the buy',function()
  local old=C_ChatInfo;local sent={}
  C_ChatInfo={RegisterAddonMessagePrefix=function() return 0 end,SendAddonMessage=function(prefix,msg) sent[#sent+1]={prefix,msg};return 0 end}

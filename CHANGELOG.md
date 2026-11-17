@@ -1,3 +1,7 @@
+## 1.23.42 - how many were up at the scan
+- Tooltip and guild price reply show how many were on the AH at the last scan, e.g. "Auction (12 up)" and "none up in last scan, 12 up when last seen 2h ago".
+- Bank sync now carries that count with each price and each 30-minute re-stamp. Older 1.23.41 rows are still accepted; update both accounts together.
+
 ## 1.23.41 - no false "none up in last scan" for synced prices
 - Unchanged prices from the bank are only re-stamped every 30 minutes, so they could look up to 30 minutes older than the scan that saw them. The tooltip and the guild price reply now allow for that before saying "none listed / none up".
 

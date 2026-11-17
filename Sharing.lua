@@ -159,18 +159,20 @@ function M:PublishPrice(m,catchUp)
  local j=self.db.shareJournal;local index='P'..m.marketKey
  local old=j.latest[index] and j.rows[j.latest[index]]
  local a,b,c,d
- if old then a,b,c,d=old:match('^P,[^,]+,(%d+),(%d+),(%d+),(%d+)$') end
+ if old then a,b,c,d=old:match('^P,[^,]+,(%d+),(%d+),(%d+),(%d+),?%d*$') end
+ -- How many were up in this scan travels with the row (receivers show it).
+ local qty=whole(m.latest.quantity,1,1e9) and m.latest.quantity or nil
  -- A saved legacy entry without confidence is published in the new format.
  local confidence=whole(m.confidenceScore,0,100) and m.confidenceScore or 0
  if old and M.SameSharedPrice(tonumber(b),tonumber(c),tonumber(d),floor,fair,confidence) then
   local stampRow=j.latest['U'..m.marketKey] and j.rows[j.latest['U'..m.marketKey]]
-  local stamped=tonumber(stampRow and stampRow:match(',(%d+)$')) or tonumber(a)
+  local stamped=tonumber(stampRow and stampRow:match('^U,[^,]+,%d+,(%d+)')) or tonumber(a)
   -- Freshness-only rows were most of the traffic after each scan; an unchanged
   -- price is re-stamped at most every 30 minutes (well inside the 2h window).
-  if m.lastSeen>tonumber(a) and m.lastSeen-stamped>=STAMP_EVERY then self:Journal('U'..m.marketKey,table.concat({'U',m.marketKey,a,m.lastSeen},',')) end
+  if m.lastSeen>tonumber(a) and m.lastSeen-stamped>=STAMP_EVERY then self:Journal('U'..m.marketKey,table.concat({'U',m.marketKey,a,m.lastSeen,qty},',')) end
  else
   local u='U'..m.marketKey;if j.latest[u] then j.rows[j.latest[u]]=nil;j.latest[u]=nil end
-  self:Journal(index,table.concat({'P',m.marketKey,m.lastSeen,floor,fair,confidence},','))
+  self:Journal(index,table.concat({'P',m.marketKey,m.lastSeen,floor,fair,confidence,qty},','))
  end
 end
 -- 1.9.3: a live search on this account also updates the partner. Sent as an
@@ -187,7 +189,7 @@ function M:PublishLiveFloor(key,floor,at)
  oldAt,oldFloor=tonumber(oldAt),tonumber(oldFloor)
  if oldAt and oldAt>=at then return end
  local u=j.latest['U'..key] and j.rows[j.latest['U'..key]]
- local stamped=tonumber(u and u:match(',(%d+)$')) or oldAt
+ local stamped=tonumber(u and u:match('^U,[^,]+,%d+,(%d+)')) or oldAt
  if oldFloor==floor and stamped and at-stamped<STAMP_EVERY then return end
  if u then j.rows[j.latest['U'..key]]=nil;j.latest['U'..key]=nil end
  self:Journal(index,table.concat({'P',key,at,floor,0,0},','))
@@ -210,19 +212,24 @@ local FUTURE=20*365*86400
 local function past(v) local now=time();if type(v)=='number' and v>now then return now end;return v end
 local function decode(self,line)
  local f=fields(line,',')
- if f[1]=='P' and (#f==5 or #f==6) then
+ if f[1]=='P' and (#f==5 or #f==6 or #f==7) then
   local key,id,s,l,p=self:ParseKey(f[2]);local at,floor,fair=tonumber(f[3]),tonumber(f[4]),tonumber(f[5])
   at=whole(at,1,time()+FUTURE) and past(at) or at
-  local confidence=#f==6 and tonumber(f[6]) or nil
+  local confidence=#f>=6 and tonumber(f[6]) or nil
+  -- 1.23.42: an optional 7th field is how many were up in that scan.
+  local qty=#f==7 and tonumber(f[7]) or nil
   if key and whole(at,1,time()+60) and whole(floor,1,1e12) and whole(fair,0,1e12)
-    and (confidence==nil and #f==5 or whole(confidence,0,100)) then
-   return {kind='P',key=key,id=id,suffix=s,level=l,pet=p,at=at,floor=floor,fair=fair>0 and fair or nil,reliable=fair>0,confidence=confidence}
+    and (confidence==nil and #f==5 or whole(confidence,0,100)) and (#f<7 or whole(qty,0,1e9)) then
+   return {kind='P',key=key,id=id,suffix=s,level=l,pet=p,at=at,floor=floor,fair=fair>0 and fair or nil,reliable=fair>0,confidence=confidence,
+    quantity=qty and qty>0 and qty or nil}
   end
- elseif f[1]=='U' and #f==4 then
+ elseif f[1]=='U' and (#f==4 or #f==5) then
   local key=self:ParseKey(f[2]);local base,at=tonumber(f[3]),tonumber(f[4])
+  local qty=#f==5 and tonumber(f[5]) or nil
+  if #f==5 and not whole(qty,0,1e9) then return nil end
   base=whole(base,1,time()+FUTURE) and past(base) or base;at=whole(at,1,time()+FUTURE) and past(at) or at
   if base and at and at<base then at=base end
-  if key and whole(base,1,time()+60) and whole(at,base,time()+60) then return {kind='U',key=key,base=base,at=at} end
+  if key and whole(base,1,time()+60) and whole(at,base,time()+60) then return {kind='U',key=key,base=base,at=at,quantity=qty and qty>0 and qty or nil} end
  elseif f[1]=='W' and #f==6 then
   local list=dec(f[2]);local key,id=self:ParseKey(f[3]);local at,target=tonumber(f[4]),tonumber(f[5]);local author=dec(f[6])
   at=whole(at,1,time()+FUTURE) and past(at) or at
@@ -249,14 +256,14 @@ local function apply(self,p)
  end
  if p.kind=='U' then
   local prev=self.db.sharedPrices[p.key]
-  if prev and prev.origin==self.db.syncPeer and prev.base==p.base and p.at>prev.at then prev.at=p.at;if prev.reliable then prev.histAt=p.at end
+  if prev and prev.origin==self.db.syncPeer and prev.base==p.base and p.at>prev.at then prev.at=p.at;prev.quantity=p.quantity;if prev.reliable then prev.histAt=p.at end
   elseif prev and prev.at>=p.at then return true
   else
    -- An offline import can be newer than the original base. Its different
    -- price must never be restamped; resolve from the sender's full base.
    local base=self.db.shareBases[p.key]
    if base and base.origin==self.db.syncPeer and base.base==p.base then
-    local copy={};for k,v in pairs(base) do copy[k]=v end;copy.at=p.at;self:MergeAsk(copy)
+    local copy={};for k,v in pairs(base) do copy[k]=v end;copy.at=p.at;copy.quantity=p.quantity;self:MergeAsk(copy)
    end
   end
   return true

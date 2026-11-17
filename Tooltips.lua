@@ -34,7 +34,8 @@ function M:StoredPriceObservation(key)
    confidence=self:Finite(m.confidenceScore,0,100) and m.confidenceScore or nil,
    developing=m.developingMarket~=false and
     ((tonumber(m.observations) or 0)<6 or (tonumber(m.historySpan) or 0)<3*86400 or (tonumber(m.confidenceScore) or 0)<70),
-   source='Local scan',unverified=m.cacheUntrusted or m.analysisIncomplete}
+   source='Local scan',unverified=m.cacheUntrusted or m.analysisIncomplete,
+   quantity=self:Finite(m.latest.quantity,1,1e9) and m.latest.quantity or nil}
  end
  local p=self.db.sharedPrices[key]
  local sharedHistory=p and (p.histFair or (p.reliable and p.fair))
@@ -45,7 +46,7 @@ function M:StoredPriceObservation(key)
    (not localPrice or p.at>localPrice.at or (p.at==localPrice.at and localPrice.unverified)) then
   return {floor=p.floor,at=p.at,fair=sharedHistory or (localPrice and localPrice.fair),
    confidence=self:Finite(p.confidence,0,100) and p.confidence or (localPrice and localPrice.confidence),
-   developing=true,source='Synced account'}
+   developing=true,source='Synced account',quantity=self:Finite(p.quantity,1,1e9) and p.quantity or nil}
  end
  return localPrice
 end
@@ -81,6 +82,11 @@ function M:MissedLatestScan(p)
  if not scan then return false end
  local slack=300+(p.source=='Synced account' and (M.SHARE_STAMP_EVERY or 1800) or 0)
  return p.at<scan-slack
+end
+function M:CountText(n)
+ local s=tostring(math.floor(n));local k
+ repeat s,k=s:gsub('^(%d+)(%d%d%d)','%1,%2') until k==0
+ return s
 end
 function M:TooltipAgeText(at)
  local age=math.max(0,time()-at)
@@ -121,11 +127,14 @@ function M:AppendMarketTooltip(tip,link,count)
   return
  end
  local stale=time()-p.at>self.db.settings.maxDataAge or p.unverified
- local name=stale and ('Auction |cff999999('..self:TooltipAgeText(p.at)..' old)|r') or 'Auction'
+ -- How many were up when that price was scanned (it may have changed since).
+ local qty=self:Finite(p.quantity,1,1e9) and self:CountText(p.quantity)..' up' or nil
+ local name=stale and ('Auction |cff999999('..(qty and (qty..', ') or '')..self:TooltipAgeText(p.at)..' old)|r')
+  or (qty and ('Auction |cff999999('..qty..')|r') or 'Auction')
  -- A full scan (here or on the synced character) ran after this price was last
  -- seen: the item isn't on the AH right now. Say so instead of just "14h old".
  if self:MissedLatestScan(p) then
-  name='Auction |cff999999(none listed now, last seen '..self:TooltipAgeText(p.at)..' ago)|r'
+  name='Auction |cff999999(none listed now, '..(qty and (qty..' when last seen ') or 'last seen ')..self:TooltipAgeText(p.at)..' ago)|r'
  end
  local r,g,b=1,1,1;if stale or name:find('none listed',1,true) then r,g,b=.6,.6,.6 end
  tip:AddDoubleLine(name,self:Coins(p.floor),1,.82,0,r,g,b)
