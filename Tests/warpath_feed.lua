@@ -88,6 +88,21 @@ check('1.24.0 the remembered search runs on its own after a reload',function()
  GetItemInfo=gii;M.db.settings.filter=''
 end)
 
+check('1.24.2 a blocked action is named in chat and its feature stops for the session',function()
+ local printed={};local oldPrint=M.Print;M.Print=function(_,t) printed[#printed+1]=t end
+ emit('ADDON_ACTION_BLOCKED','SomeOtherAddon','SendChatMessage()');assert(not M.priceCheckBlocked and #printed==0,'other addons ignored')
+ emit('ADDON_ACTION_BLOCKED',M.name,'SendChatMessage()')
+ assert(M.priceCheckBlocked and printed[1]:find('SendChatMessage',1,true) and printed[1]:find('price check reply',1,true),printed[1])
+ emit('ADDON_ACTION_BLOCKED',M.name,'SendChatMessage()');assert(#printed==1,'said once')
+ assert(M.db.blockedActions[2].fn=='SendChatMessage()','kept')
+ local sent=0;local oldSend=SendChatMessage;SendChatMessage=function() sent=sent+1 end
+ M.priceCheck.pending={{due=0,asked=0,channel='PARTY',text='x',key='k'}};M:PriceCheckFlush();assert(sent==0,'no more replies')
+ SendChatMessage=oldSend
+ emit('ADDON_ACTION_FORBIDDEN',M.name,'C_PartyInfo.InviteUnit()')
+ assert(VoidMarkAutoInvite.blocked and VoidMarkAutoInvite.Invite('Voidmark Bank')==false,'auto-invite off')
+ VoidMarkAutoInvite.blocked=nil;M.priceCheckBlocked=nil;M.blockedSeen=nil;M.Print=oldPrint
+end)
+
 UnitName,NameUtil,UnitNameUnmodified=oldName,oldNU,oldUNU
 VoidMarkMarketDB={};M.jobs={};M.shareRun={};M:InitializeDatabase();jobs()
 end

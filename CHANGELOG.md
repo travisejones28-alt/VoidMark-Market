@@ -1,3 +1,7 @@
+## 1.24.2
+- "VoidMarkMarket has been blocked from an action only available to the Blizzard UI": the game's popup doesn't say what. Market now says in chat which action was blocked, keeps the last 10 in its saved data, and turns that feature off until the next /reload so the popup doesn't repeat (price check auto-replies or the auto-invite).
+- 338 regressions.
+
 ## 1.24.1
 - Price checks and tooltips said "none up in last scan, last seen 27m ago" for items with plenty listed. A synced price that doesn't change is only re-stamped every 30 minutes, and the bank's scan time can arrive before the item's row, so anything not re-stamped yet looked gone. Your own full scan still decides right away; the bank's scan now counts only once all its data has arrived, and only for prices more than 35 minutes older than it.
 - 337 regressions.

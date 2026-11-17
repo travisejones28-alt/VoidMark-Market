@@ -392,13 +392,15 @@ function M:PriceCheckFlush()
   else
    local other=PC.answered[r.key]
    local send=(C_ChatInfo and C_ChatInfo.SendChatMessage) or SendChatMessage
-   if other and other>=r.asked then
+   if self.priceCheckBlocked then
+    if PC.last then PC.last.reason='blocked by the game this session' end
+   elseif other and other>=r.asked then
     if PC.last then PC.last.reason='another client answered first' end
    elseif send then
     -- At most one reply a second.
     if PC.lastSend and t-PC.lastSend<1 then r.due=PC.lastSend+1;keep[#keep+1]=r
     else
-     PC.lastSend=t
+     PC.lastSend=t;self.lastAutoAction={what='price check reply to '..r.channel,at=GetTime()}
      local ok,err=pcall(send,r.text,r.channel,nil,r.target)
      if PC.last then PC.last.reason=ok and ('sent to '..r.channel..(r.target and (' '..r.target) or '')) or ('send failed: '..tostring(err)) end
      if not ok and not PC.errorShown then PC.errorShown=true;self:Print('Price check reply failed: '..tostring(err)) end
