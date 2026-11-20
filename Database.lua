@@ -1,4 +1,11 @@
 local _,M=...
+-- Realm name without spaces. WoW Forever can return an EMPTY normalized realm
+-- name while addons load; '' is not nil, so "a or b" kept it and all prices
+-- were looked up under realm "" (every tooltip: "No price yet").
+function M:RealmName()
+  local function given(f) if type(f)~='function' then return nil end local ok,v=pcall(f) if ok and type(v)=='string' and v~='' then return v end end
+  return (given(GetNormalizedRealmName) or given(GetRealmName) or ''):gsub('%s','')
+end
 M.defaults={debug=false,maxTransaction=100000,maxItemSpend=500000,maxQuantity=20,
  maxExposure=2000000,minProfit=100,minROI=0.20,minConfidence=42,minLiquidity=15,
  riskTolerance=0.35,ahCut=0.05,depositReserve=100,maxDataAge=7200,historyDays=90,filter='',sort='score',minGoldReserve=0,sellStrategy='competitive',sellMinMargin=0,sellUndercut=1,postDuration=3,dealPercent=60,flipMaxBuy=0,shopMinLevel=0,shopMaxLevel=0}
@@ -26,7 +33,7 @@ function M:InitializeDatabase()
   -- "CAMWOW US2 Realm 8 PvP" and sometimes "CAMWOWUS2Realm8PvP" (the
   -- normalized name isn't ready yet at some logins), and before 1.23.29 each
   -- spelling got its own copy of your data, so every login saw only half.
-  local realm=tostring((GetNormalizedRealmName and GetNormalizedRealmName()) or GetRealmName() or ''):gsub('%s','')
+  local realm=self:RealmName()
   local faction=UnitFactionGroup('player') or 'Unknown'
   self.economyID=realm..'|'..faction
   self.characterID=(UnitName('player') or 'Unknown')..'|'..realm
@@ -174,7 +181,8 @@ function M:MergeSplitEconomies(root,canonID)
   local merged=0
   for id,other in pairs(root.economies) do
     local r,f=tostring(id):match('^(.-)|([^|]+)$')
-    if id~=canonID and type(other)=='table' and f==faction and squash(r)==squash(realm) then
+    -- A copy saved under an empty realm name (see RealmName) is this realm too.
+    if id~=canonID and type(other)=='table' and f==faction and (squash(r)==squash(realm) or (r=='' and realm~='')) then
       local db=root.economies[canonID]
       if type(db)~='table' then
         root.economies[canonID]=other;root.economies[id]=nil;merged=merged+1

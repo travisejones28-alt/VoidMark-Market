@@ -66,7 +66,7 @@ local function unitCharacter(unit)
 end
 -- "First Surname" key for a character however the client writes it:
 -- "Voidmark Bank", "Voidmark-Bank" or "Voidmark Bank-Realm".
-local function realmKey() return tostring((GetNormalizedRealmName and GetNormalizedRealmName()) or (GetRealmName and GetRealmName()) or ''):gsub('%s',''):lower() end
+local function realmKey() return (M:RealmName():lower()) end
 local function nameKey(name)
  if secret(name) or type(name)~='string' or name=='' then return end
  local s=name:lower();local realm=realmKey()
@@ -288,7 +288,7 @@ local function fullAddress(name)
  if not validText(name,80) then return end
  local character,realm=name:match('^(.-)%-(.+)$')
  character=(character or name):match('^%s*(.-)%s*$'):gsub(' +',' ')
- realm=realm or (GetNormalizedRealmName and GetNormalizedRealmName()) or GetRealmName()
+ realm=realm or M:RealmName()
  if character=='' or not realm or realm=='' then return end
  return character..'-'..realm:gsub('%s','')
 end
@@ -306,7 +306,7 @@ function M:PairPeer(name)
   if base and not base:find(' ',1,true) and tail:gsub('%s',''):lower()~=realmKey() then name=base..' '..tail end end
  local peer=canonical(name)
  if not peer or peer==canonical(unitCharacter('player')) then return 'Enter the other character name (First Surname)' end
- local realm=GetNormalizedRealmName and GetNormalizedRealmName() or GetRealmName()
+ local realm=M:RealmName()
  if peer:match('%-(.+)$')~=realm:gsub('%s',''):lower() then return 'Peer must be on the same realm' end
  if self.db.syncPeer~=peer then
   self.db.syncLastSentAt=nil;self.db.syncLastReceivedAt=nil;self.db.syncLastReceivedCompleteAt=nil

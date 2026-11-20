@@ -1,3 +1,6 @@
+## 1.23.45 - prices found again when the realm name loads empty
+- WoW Forever can give addons an empty realm name while they load. Market then looked everything up under realm "" ("No price yet" on every tooltip). It now falls back to the realm's display name, and any copy already saved under the empty realm is merged back in.
+
 ## 1.23.44 - one price-check answer per guild/group
 - Players running Market send a hidden claim (their scan time) before answering in guild/party/raid. After about a second the freshest scan answers and everyone else stays quiet; ties go to the name that sorts first. Whispers unchanged. Older versions still fall back to "someone already answered".
 

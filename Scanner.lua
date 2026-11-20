@@ -126,7 +126,7 @@ function M:StartSnapshotProcessing(total,source,diagnostic)
   local pending,nextPending={},{}; local retryIndex=1; local retryAt,deadline,finalPass
   -- Looked up once per scan instead of once per auction row.
   local player=UnitName('player') or ''
-  local playerFull=player..'-'..((GetNormalizedRealmName and GetNormalizedRealmName()) or GetRealmName() or '')
+  local playerFull=player..'-'..self:RealmName()
   local requested={}; local requestLoad=C_Item and C_Item.RequestLoadItemDataByID
   -- Speed: most auctions are trade goods/consumables, which have no AH
   -- variants, so their market is just the itemID: skip the per-row link call
