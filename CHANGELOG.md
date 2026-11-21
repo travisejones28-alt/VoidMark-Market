@@ -1,3 +1,6 @@
+## 1.23.46 - bank sync and prices when the realm loads late
+- On some logins WoW Forever has no realm name at all while addons load, so Market opened an empty "|Horde" copy (no prices, bank sync "not paired"). Market now reopens your real data as soon as the realm name arrives (login / entering the world), and anything saved under the blank realm is merged back in.
+
 ## 1.23.45 - prices found again when the realm name loads empty
 - WoW Forever can give addons an empty realm name while they load. Market then looked everything up under realm "" ("No price yet" on every tooltip). It now falls back to the realm's display name, and any copy already saved under the empty realm is merged back in.
 

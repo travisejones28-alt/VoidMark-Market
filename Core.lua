@@ -1,6 +1,6 @@
 local addonName, M = ...
 _G.VoidMarkMarket = M
-M.name, M.version = addonName or 'VoidMarkMarket', '1.23.45'
+M.name, M.version = addonName or 'VoidMarkMarket', '1.23.46'
 M.eventHandlers, M.runtimeLog, M.jobs = {}, {}, {}
 M.ahOpen = false
 M.scanState = {running=false, phase='idle', status='No scan yet', progress=0}
@@ -165,14 +165,28 @@ function M:IsCommodity(key)
   return nil -- Unknown classification must never enable a purchase.
 end
 M.eventFrame=CreateFrame('Frame')
-M.eventFrame:RegisterEvent('ADDON_LOADED'); M.eventFrame:RegisterEvent('PLAYER_LOGIN')
+M.eventFrame:RegisterEvent('ADDON_LOADED'); M.eventFrame:RegisterEvent('PLAYER_LOGIN'); M.eventFrame:RegisterEvent('PLAYER_ENTERING_WORLD')
+-- 1.23.46: on some Forever logins BOTH realm functions are empty while addons
+-- load, so the data opened as "|Horde" (no prices, bank sync "not paired").
+-- Open it again as soon as the realm name is there.
+function M:RealmMissing() return type(self.economyID)~='string' or self.economyID:sub(1,1)=='|' end
+function M:ReopenIfRealmArrived()
+  if not self:RealmMissing() or self:RealmName()=='' then return false end
+  self:InitializeDatabase()
+  -- Bank sync was started on the empty copy: start it again on the real one.
+  if self.loginDone and self.StartSharing then pcall(self.StartSharing,self) end
+  if self.RefreshUI then pcall(self.RefreshUI,self) end
+  return true
+end
 M.eventFrame:SetScript('OnEvent',function(_,event,...)
   if event=='ADDON_LOADED' then
     if (...)~=M.name then return end; M:InitializeDatabase(); return
+  elseif event=='PLAYER_ENTERING_WORLD' then
+    M:ReopenIfRealmArrived()
   elseif event=='PLAYER_LOGIN' then
-    if not M.db then M:InitializeDatabase() end
+    if not M.db then M:InitializeDatabase() else M:ReopenIfRealmArrived() end
     M:RegisterHandler('AUCTION_HOUSE_DISABLED',function() end)
-    M:RunAPIProbe(); M:InitializeUI(); M:InitializeMinimapButton(); M:InitializePriceTooltips(); M:StartSharing()
+    M:RunAPIProbe(); M:InitializeUI(); M:InitializeMinimapButton(); M:InitializePriceTooltips(); M:StartSharing(); M.loginDone=true
   end
   if event=='AUCTION_HOUSE_DISABLED' then event='AUCTION_HOUSE_CLOSED' end
   local args={...}
