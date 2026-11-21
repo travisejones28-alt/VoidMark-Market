@@ -760,7 +760,21 @@ function M:AutomaticBankScan(now)
  self:RequestFreshScan()
 end
 function M:ReconnectSharing(force)
- if self.persistenceBlocked then return end
+ if self.persistenceBlocked then return self:Print('Bank sync: saved data is read-only this session.') end
+ -- 1.23.47: Reconnect did nothing when the data was opened before the realm
+ -- name loaded ("|Horde", not paired). Reopen the real data first.
+ if self.ReopenIfRealmArrived and self:ReopenIfRealmArrived() then self:Print('Bank sync: realm name arrived, reopened your saved data.') end
+ if self:RealmName()=='' then
+  return self:Print('Bank sync: WoW has not given Market the realm name yet. Log out to the character screen and back in.')
+ end
+ if not self.db.syncPeer then
+  self.db.syncAutoPairSeen=nil; self:InitializeSharing()
+ end
+ if not self.db.syncPeer then
+  self:RefreshUI()
+  return self:Print('Bank sync: not paired. Settings > Pair, or type /vmm peer First Surname (the other character).')
+ end
+ self:Print((force and 'Bank sync: full resend to ' or 'Bank sync: reconnecting to ')..tostring(self.db.syncPeer))
  -- Re-publish any locally available prices if a previous journal missed them.
  self.db.shareJournal.seeded=nil
  self.shareRun={};self.shareRegistered=nil

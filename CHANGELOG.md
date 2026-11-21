@@ -1,3 +1,6 @@
+## 1.23.47 - Reconnect does something and says what
+- Reconnect / Force Sync now reopen your real data if it was opened before the realm name loaded, and always print what happened (reconnecting, not paired, or realm name not ready yet) instead of silently doing nothing.
+
 ## 1.23.46 - bank sync and prices when the realm loads late
 - On some logins WoW Forever has no realm name at all while addons load, so Market opened an empty "|Horde" copy (no prices, bank sync "not paired"). Market now reopens your real data as soon as the realm name arrives (login / entering the world), and anything saved under the blank realm is merged back in.
 

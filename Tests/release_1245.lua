@@ -30,4 +30,19 @@ check('1.23.46 both realm names empty at load: real data reopened when the realm
  assert(VoidMarkMarketDB.economies['|Horde']==nil,'blank copy left')
  assert(M:ReopenIfRealmArrived()==false,'reopened twice')
 end)
+check('1.23.47 Reconnect reopens real data when the realm arrived, and always says what happened',function()
+ local g,r,pr=GetNormalizedRealmName,GetRealmName,M.Print
+ local said={}; M.Print=function(_,t) said[#said+1]=t end
+ GetNormalizedRealmName=function() return '' end; GetRealmName=function() return '' end
+ VoidMarkMarketDB={economies={['TestRealm|Horde']={market={},syncPeer='voidmark bank-testrealm'}}}
+ M.jobs={};M:InitializeDatabase();jobs()
+ M:ReconnectSharing(false)
+ assert(said[#said]:find('realm name yet',1,true),tostring(said[#said]))
+ GetNormalizedRealmName,GetRealmName=g,r; said={}
+ M:ReconnectSharing(false); jobs()
+ assert(M.economyID=='TestRealm|Horde',tostring(M.economyID))
+ assert(said[1]:find('reopened',1,true),tostring(said[1]))
+ assert(said[#said]:find('reconnecting to voidmark bank',1,true),tostring(said[#said]))
+ M.Print=pr
+end)
 end
