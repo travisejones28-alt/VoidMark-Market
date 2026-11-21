@@ -1,6 +1,6 @@
 local addonName, M = ...
 _G.VoidMarkMarket = M
-M.name, M.version = addonName or 'VoidMarkMarket', '1.23.48'
+M.name, M.version = addonName or 'VoidMarkMarket', '1.23.49'
 M.eventHandlers, M.runtimeLog, M.jobs = {}, {}, {}
 M.ahOpen = false
 M.scanState = {running=false, phase='idle', status='No scan yet', progress=0}
@@ -169,7 +169,7 @@ M.eventFrame:RegisterEvent('ADDON_LOADED'); M.eventFrame:RegisterEvent('PLAYER_L
 -- 1.23.46: on some Forever logins BOTH realm functions are empty while addons
 -- load, so the data opened as "|Horde" (no prices, bank sync "not paired").
 -- Open it again as soon as the realm name is there.
-function M:RealmMissing() return type(self.economyID)~='string' or self.economyID:sub(1,1)=='|' end
+function M:RealmMissing() return type(self.economyID)~='string' or self.economyID:sub(1,1)=='|' or self:IsSurnameRealm(self.economyID:match('^(.-)|')) end
 function M:ReopenIfRealmArrived()
   if not self:RealmMissing() or self:RealmName()=='' then return false end
   self:InitializeDatabase()
@@ -245,7 +245,7 @@ SlashCmdList.VOIDMARKMARKET=function(msg)
     _G.VoidMarkMarketHelp.Open(raw:match('^%S+%s+(.+)$'))
   elseif msg=='realm' then
     local src=M:RealmSources(); local r=M:RealmName()
-    M:Print(('Realm: %s (from %s) | game: normalized=%s display=%s unit=%s | data: %s'):format(r~='' and r or 'none',tostring(M.realmSource),tostring(src.normalized or 'empty'),tostring(src.display or 'empty'),tostring(src.unitFull or 'empty'),tostring(M.economyID)))
+    M:Print(('Realm: %s (from %s) | game: normalized=%s display=%s (UnitFullName=%s, ignored) | data: %s'):format(r~='' and r or 'none',tostring(M.realmSource),tostring(src.normalized or 'empty'),tostring(src.display or 'empty'),tostring(src.unitFull or 'empty'),tostring(M.economyID)))
   elseif msg=='peer' or msg:match('^peer%s') then M:Print(M:PairPeer(raw:match('^%S+%s+(.+)$')))
   elseif msg=='perf' then M:StartPerf(10)
   elseif msg=='scanspeed' or msg:match('^scanspeed%s') then

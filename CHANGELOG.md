@@ -1,3 +1,6 @@
+## 1.23.49 - surname was used as the realm
+- 1.23.48 used the second half of UnitFullName as a realm; on Forever that is your surname, so Market opened "Soulreaver|Horde". That source is gone, the wrongly learned realm is forgotten, and anything saved under your surname is merged back into your real realm.
+
 ## 1.23.48 - works when WoW never gives the realm name
 - WoW Forever can leave the realm name empty for the whole session. Market now falls back to the realm remembered for your server (GUID), then for this character, then your saved realm for this faction (paired one first), so prices and bank sync still open your real data.
 - `/vmm realm` shows which realm Market is using and what the game returned.

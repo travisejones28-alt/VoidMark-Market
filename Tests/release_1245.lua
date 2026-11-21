@@ -73,4 +73,18 @@ check('1.23.48 realm name empty all session: saved realm used (server, character
  assert(M.economyID=='TestRealm|Horde',tostring(M.economyID))
  GetNormalizedRealmName,GetRealmName,UnitGUID=g,r,gu
 end)
+check('1.23.49 surname is never a realm; data saved as Soulreaver|Horde merged back',function()
+ local g,r,un,uf=GetNormalizedRealmName,GetRealmName,UnitName,UnitFullName
+ GetNormalizedRealmName=function() return '' end; GetRealmName=function() return '' end
+ UnitName=function() return 'Voidmark','Soulreaver' end; UnitFullName=function() return 'Voidmark','Soulreaver' end
+ VoidMarkMarketDB={realmByServer={['5150']='Soulreaver'},realmByCharacter={Voidmark='Soulreaver'},
+  economies={['TestRealm|Horde']={market={[14047]={name='Runecloth',lastSeen=time()-100,latest={floor=577,at=time()-100}}},syncPeer='voidmark bank-testrealm'},
+  ['Soulreaver|Horde']={market={[2589]={name='Linen Cloth',lastSeen=time(),latest={floor=30,at=time()}}}}}}
+ M.jobs={};M:InitializeDatabase();jobs()
+ assert(M.economyID=='TestRealm|Horde',tostring(M.economyID))
+ assert(VoidMarkMarketDB.economies['Soulreaver|Horde']==nil,'surname copy left')
+ assert(M.db.market[2589] and M.db.market[14047],'prices lost')
+ assert(M.db.syncPeer=='voidmark bank-testrealm')
+ GetNormalizedRealmName,GetRealmName,UnitName,UnitFullName=g,r,un,uf
+end)
 end

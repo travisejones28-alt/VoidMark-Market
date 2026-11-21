@@ -176,7 +176,7 @@ PASS 1.9.6 Bank sync header updates on every view without a full redraw
 PASS 1.9.6 Unanswered probes retry within a minute and an offline notice waits only 1m
 PASS 1.9.12 scans get a larger frame budget only while scanning at the AH, out of combat
 PASS 1.9.12 player identity is read once per scan, missing items are requested, timing is reported
-BENCH scan: 76 frames (1.3s at 60fps, 2.5s at 30fps), worst frame 12.1ms, cpu 0.73s | after:share-scan=18 done=1 model=42 processing=15
+BENCH scan: 80 frames (1.3s at 60fps, 2.7s at 30fps), worst frame 12.3ms, cpu 0.78s | after:share-scan=17 done=1 model=46 processing=16
 PASS BENCH full scan frames (25k auctions, 5k items, 8k stored)
 PASS 1.9.13 history stores only the fields it needs; latest keeps the full snapshot
 PASS 1.9.13 history saved by older versions is shrunk once at login without losing prices
@@ -340,6 +340,7 @@ PASS 1.23.45 an empty realm name at load never sends prices to an empty "|Horde"
 PASS 1.23.46 both realm names empty at load: real data reopened when the realm arrives
 PASS 1.23.47 Reconnect reopens real data when the realm arrived, and always says what happened
 PASS 1.23.48 realm name empty all session: saved realm used (server, character, only realm)
+PASS 1.23.49 surname is never a realm; data saved as Soulreaver|Horde merged back
 PASS 1.23.39 mail subject fills from attachments, never overwrites typed text
 PASS Help lists every /vmm command and opens from /vmm help and Settings
-ALL 341 TESTS PASSED
+ALL 342 TESTS PASSED

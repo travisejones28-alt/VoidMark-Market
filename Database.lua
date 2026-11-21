@@ -2,11 +2,11 @@ local _,M=...
 -- Realm name without spaces. WoW Forever can return an EMPTY realm name, at
 -- load and (since 2026-11-20) for the whole session. In that order:
 --  1. the realm functions (GetNormalizedRealmName, GetRealmName)
---  2. the realm half of UnitFullName('player')
+--  (not UnitFullName: on Forever its second half is your SURNAME, not a realm)
 --  3. the realm last seen with this server (the number in your GUID)
 --  4. the realm this character last used
 --  5. the only realm your saved data has for this faction
--- Whatever is found from 1-2 is remembered for 3-4.
+-- Whatever the game gives is remembered for the fallbacks.
 local function realString(v)
   if type(v)~='string' or v=='' then return nil end
   if issecretvalue then local ok,secret=pcall(issecretvalue,v); if not ok or secret then return nil end end
@@ -22,11 +22,24 @@ local function serverID()
   return guid and guid:match('^Player%-(%d+)%-') or nil
 end
 local function charName() return realString((call(UnitName,'player'))) or '?' end
+-- Forever puts the surname where other clients put the realm, so a "realm"
+-- equal to your surname is not one (1.23.48 saved data as "Soulreaver|Horde").
+function M:SurnameKey()
+  local _,second=call(UnitName,'player')
+  second=realString(second)
+  return second and second:gsub('%s',''):lower() or nil
+end
+function M:IsSurnameRealm(r)
+  local s=self:SurnameKey()
+  return s~=nil and type(r)=='string' and r:gsub('%s',''):lower()==s
+end
 function M:RealmName()
   local src=self:RealmSources()
-  local realm=src.normalized or src.display or src.unitFull
+  local realm=src.normalized or src.display
   local root=type(VoidMarkMarketDB)=='table' and VoidMarkMarketDB or nil
   local sid=serverID()
+  -- 1.23.49: 1.23.48 learned the surname as a realm; forget what it learned.
+  if root and root.realmFix~=49 then root.realmByServer=nil; root.realmByCharacter=nil; root.realmFix=49 end
   if realm then
     realm=realm:gsub('%s','')
     if root and realm~='' then
@@ -49,7 +62,7 @@ function M:RealmName()
     local best,bestScore
     for id,e in pairs(type(root.economies)=='table' and root.economies or {}) do
       local rr,f=tostring(id):match('^(.*)|(.*)$')
-      if rr and rr~='' and (not faction or f==faction) and type(e)=='table' then
+      if rr and rr~='' and not self:IsSurnameRealm(rr) and (not faction or f==faction) and type(e)=='table' then
         local n=0; for _ in pairs(type(e.market)=='table' and e.market or {}) do n=n+1; if n>=1e6 then break end end
         local score=(e.syncPeer and 1e15 or 0)+(tonumber(e.lastOpenedAt) or 0)*1e6+n
         if not bestScore or score>bestScore then best,bestScore=rr,score end
@@ -237,7 +250,7 @@ function M:MergeSplitEconomies(root,canonID)
   for id,other in pairs(root.economies) do
     local r,f=tostring(id):match('^(.-)|([^|]+)$')
     -- A copy saved under an empty realm name (see RealmName) is this realm too.
-    if id~=canonID and type(other)=='table' and f==faction and (squash(r)==squash(realm) or (r=='' and realm~='')) then
+    if id~=canonID and type(other)=='table' and f==faction and (squash(r)==squash(realm) or (r=='' and realm~='') or (realm~='' and not self:IsSurnameRealm(realm) and self:IsSurnameRealm(r))) then
       local db=root.economies[canonID]
       if type(db)~='table' then
         root.economies[canonID]=other;root.economies[id]=nil;merged=merged+1
