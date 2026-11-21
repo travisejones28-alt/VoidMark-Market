@@ -1,6 +1,6 @@
 local addonName, M = ...
 _G.VoidMarkMarket = M
-M.name, M.version = addonName or 'VoidMarkMarket', '1.23.47'
+M.name, M.version = addonName or 'VoidMarkMarket', '1.23.48'
 M.eventHandlers, M.runtimeLog, M.jobs = {}, {}, {}
 M.ahOpen = false
 M.scanState = {running=false, phase='idle', status='No scan yet', progress=0}
@@ -243,6 +243,9 @@ SlashCmdList.VOIDMARKMARKET=function(msg)
   msg=raw:lower()
   if (msg=='help' or msg:match('^help%s') or msg=='faq' or msg=='commands') and _G.VoidMarkMarketHelp then
     _G.VoidMarkMarketHelp.Open(raw:match('^%S+%s+(.+)$'))
+  elseif msg=='realm' then
+    local src=M:RealmSources(); local r=M:RealmName()
+    M:Print(('Realm: %s (from %s) | game: normalized=%s display=%s unit=%s | data: %s'):format(r~='' and r or 'none',tostring(M.realmSource),tostring(src.normalized or 'empty'),tostring(src.display or 'empty'),tostring(src.unitFull or 'empty'),tostring(M.economyID)))
   elseif msg=='peer' or msg:match('^peer%s') then M:Print(M:PairPeer(raw:match('^%S+%s+(.+)$')))
   elseif msg=='perf' then M:StartPerf(10)
   elseif msg=='scanspeed' or msg:match('^scanspeed%s') then

@@ -1,3 +1,7 @@
+## 1.23.48 - works when WoW never gives the realm name
+- WoW Forever can leave the realm name empty for the whole session. Market now falls back to the realm remembered for your server (GUID), then for this character, then your saved realm for this faction (paired one first), so prices and bank sync still open your real data.
+- `/vmm realm` shows which realm Market is using and what the game returned.
+
 ## 1.23.47 - Reconnect does something and says what
 - Reconnect / Force Sync now reopen your real data if it was opened before the realm name loaded, and always print what happened (reconnecting, not paired, or realm name not ready yet) instead of silently doing nothing.
 

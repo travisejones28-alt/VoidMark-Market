@@ -1,10 +1,64 @@
 local _,M=...
--- Realm name without spaces. WoW Forever can return an EMPTY normalized realm
--- name while addons load; '' is not nil, so "a or b" kept it and all prices
--- were looked up under realm "" (every tooltip: "No price yet").
+-- Realm name without spaces. WoW Forever can return an EMPTY realm name, at
+-- load and (since 2026-11-20) for the whole session. In that order:
+--  1. the realm functions (GetNormalizedRealmName, GetRealmName)
+--  2. the realm half of UnitFullName('player')
+--  3. the realm last seen with this server (the number in your GUID)
+--  4. the realm this character last used
+--  5. the only realm your saved data has for this faction
+-- Whatever is found from 1-2 is remembered for 3-4.
+local function realString(v)
+  if type(v)~='string' or v=='' then return nil end
+  if issecretvalue then local ok,secret=pcall(issecretvalue,v); if not ok or secret then return nil end end
+  return v
+end
+local function call(f,...) if type(f)~='function' then return nil end local ok,a,b=pcall(f,...) if ok then return a,b end end
+function M:RealmSources()
+  local _,full=call(UnitFullName,'player')
+  return {normalized=realString((call(GetNormalizedRealmName))),display=realString((call(GetRealmName))),unitFull=realString(full)}
+end
+local function serverID()
+  local guid=realString((call(UnitGUID,'player')))
+  return guid and guid:match('^Player%-(%d+)%-') or nil
+end
+local function charName() return realString((call(UnitName,'player'))) or '?' end
 function M:RealmName()
-  local function given(f) if type(f)~='function' then return nil end local ok,v=pcall(f) if ok and type(v)=='string' and v~='' then return v end end
-  return (given(GetNormalizedRealmName) or given(GetRealmName) or ''):gsub('%s','')
+  local src=self:RealmSources()
+  local realm=src.normalized or src.display or src.unitFull
+  local root=type(VoidMarkMarketDB)=='table' and VoidMarkMarketDB or nil
+  local sid=serverID()
+  if realm then
+    realm=realm:gsub('%s','')
+    if root and realm~='' then
+      root.realmByServer=type(root.realmByServer)=='table' and root.realmByServer or {}
+      root.realmByCharacter=type(root.realmByCharacter)=='table' and root.realmByCharacter or {}
+      if sid then root.realmByServer[sid]=realm end
+      root.realmByCharacter[charName()]=realm
+    end
+    self.realmSource='game'
+    return realm
+  end
+  if root then
+    local r=sid and type(root.realmByServer)=='table' and realString(root.realmByServer[sid])
+    if r then self.realmSource='server '..sid; return r end
+    r=type(root.realmByCharacter)=='table' and realString(root.realmByCharacter[charName()])
+    if r then self.realmSource='last used'; return r end
+    -- Your saved realm for this faction: the paired one, then the one opened
+    -- most recently, then the one with the most prices.
+    local faction=realString((call(UnitFactionGroup,'player')))
+    local best,bestScore
+    for id,e in pairs(type(root.economies)=='table' and root.economies or {}) do
+      local rr,f=tostring(id):match('^(.*)|(.*)$')
+      if rr and rr~='' and (not faction or f==faction) and type(e)=='table' then
+        local n=0; for _ in pairs(type(e.market)=='table' and e.market or {}) do n=n+1; if n>=1e6 then break end end
+        local score=(e.syncPeer and 1e15 or 0)+(tonumber(e.lastOpenedAt) or 0)*1e6+n
+        if not bestScore or score>bestScore then best,bestScore=rr,score end
+      end
+    end
+    if best then self.realmSource='saved realm'; return best end
+  end
+  self.realmSource='none'
+  return ''
 end
 M.defaults={debug=false,maxTransaction=100000,maxItemSpend=500000,maxQuantity=20,
  maxExposure=2000000,minProfit=100,minROI=0.20,minConfidence=42,minLiquidity=15,
@@ -44,6 +98,7 @@ function M:InitializeDatabase()
   local db=root.economies[self.economyID]
   if type(db)~='table' then db={}; root.economies[self.economyID]=db end
   self.db=db; db.settings=root.settings
+  if not self:RealmMissing() then db.lastOpenedAt=time() end
   for _,k in ipairs({'market','scans','queries','ownedQueries','opportunities','ledger','inventory','mailSeen','pending','totals','watchlist','banker','sharedPrices','reviewQueue','sellFloors','postQueue','financialDays','wealthHistory','sellStacks','liveSeen','postHistory','sellFavourites','recentSearches','itemNames'}) do
     if type(db[k])~='table' then db[k]={} end
   end

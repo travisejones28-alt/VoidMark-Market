@@ -139,6 +139,7 @@ local HELP={title='VoidMark Market: Help & commands',
   {'/vmm de ah','Disenchant deals on the Auction House.'},
   {'/vmm de tooltip','Disenchant values in tooltips on or off.'}}},
  {title='Bank sync',commands={
+  {'/vmm realm','Which realm Market is using, and what the game reported.'},
   {'/vmm peer','Pairing status.'},
   {'/vmm peer Name-Realm','Pair with your other account\'s character (do it on both).'},
   {'/vmm peer off','Unpair.'}}},
