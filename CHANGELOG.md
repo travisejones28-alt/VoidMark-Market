@@ -1,3 +1,6 @@
+## 1.23.50 - Selling: CHEAP only on real mis-posts
+- Selling marked normal prices as "CHEAP - buy" (Wicked Claw: 7s 50c-45s next to a 5s 50c low) because a few huge listings further down set the comparison. A row is now CHEAP only when it is under 60% of the next price above it and under 60% of the typical price (middle unit by quantity).
+
 ## 1.23.49 - surname was used as the realm
 - 1.23.48 used the second half of UnitFullName as a realm; on Forever that is your surname, so Market opened "Soulreaver|Horde". That source is gone, the wrongly learned realm is forgotten, and anything saved under your surname is merged back into your real realm.
 

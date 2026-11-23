@@ -149,6 +149,15 @@ check('1.23.23 Selling: a mis-posted cheap listing is marked; double-click opens
   -- Wool Cloth: 1s 40c next to 1s 42c-1s 50c is normal even with pricey listings further down.
   local wool={{unit=140},{unit=142},{unit=143},{unit=148},{unit=149},{unit=150},{unit=163},{unit=400},{unit=500},{unit=600},{unit=700},{unit=800}}
   for i=1,3 do assert(not M:SellRowCheap(wool[i],wool),'Wool row '..i..' is not cheap') end
+  -- Wicked Claw (1.23.50): normal prices above the lowest, with a few huge listings far down, are not CHEAP.
+  local claw={{unit=550,quantity=84},{unit=750,quantity=68},{unit=799,quantity=69},{unit=800,quantity=52},{unit=4400,quantity=91},{unit=4500,quantity=13},{unit=700400,quantity=6},{unit=900500,quantity=1}}
+  for i=1,#claw do assert(not M:SellRowCheap(claw[i],claw),'Wicked Claw row '..i..' is not cheap') end
+  -- A real mis-post under that same market still shows.
+  local claw2={{unit=150,quantity=3}};for _,o in ipairs(claw) do claw2[#claw2+1]=o end
+  assert(M:SellRowCheap(claw2[1],claw2),'1s 50c under 5s 50c is cheap')
+  -- One cheap stack that is most of the market is the market, not a mis-post.
+  local bulk={{unit=100,quantity=300},{unit=1000,quantity=20},{unit=1010,quantity=20}}
+  assert(not M:SellRowCheap(bulk[1],bulk),'most of the market is not a mis-post')
   M:SellOpenBuy(list[1]);answer(true,key)
   assert(M.shopBuy and M.shopBuy.fromSelling==sel,'buy view from Selling')
   assert(M.shopBuy.quantity==2,'just the cheap ones: '..tostring(M.shopBuy.quantity))

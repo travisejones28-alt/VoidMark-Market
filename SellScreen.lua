@@ -208,19 +208,28 @@ function M:InitializeSellScreen(f)
 end
 
 local function money(self,v) return self:Coins(v) end
--- A listing well under the next ones up (someone mis-posted): under 60% of
--- the middle of the next 5 listings above it. Comparing with all listings
--- flagged normal prices when expensive ones sat further down the list.
+-- A listing someone mis-posted: under 60% of the very next price above it
+-- AND under 60% of the typical price (middle unit by quantity). The old check
+-- used the middle of the next 5 listings, so a few overpriced listings
+-- further down marked normal prices (7s 50c next to 7s 99c) as CHEAP.
 function M:SellRowCheap(e,list)
  if not e or e.own or not self:Finite(e.unit,1,1e12) then return false end
- local above={}
+ local others,total,nextUp={},0,nil
  for _,o in ipairs(list or {}) do
-  if o~=e and not o.own and self:Finite(o.unit,1,1e12) and o.unit>=e.unit then above[#above+1]=o.unit end
+  if o~=e and not o.own and self:Finite(o.unit,1,1e12) then
+   local q=math.max(1,math.floor(tonumber(o.quantity) or 1))
+   others[#others+1]={unit=o.unit,q=q};total=total+q
+   if o.unit>e.unit and (not nextUp or o.unit<nextUp) then nextUp=o.unit end
+  end
  end
- if #above<2 then return false end
- table.sort(above)
- local n=math.min(5,#above);local mid=above[math.floor((n+1)/2)]
- return e.unit<mid*0.6
+ if #others<2 or not nextUp then return false end
+ -- The typical price counts this row too: a cheap stack that is most of the market is the market.
+ local mine=math.max(1,math.floor(tonumber(e.quantity) or 1))
+ others[#others+1]={unit=e.unit,q=mine};total=total+mine
+ table.sort(others,function(a,b) return a.unit<b.unit end)
+ local half,seen,typical=total/2,0,others[#others].unit
+ for _,o in ipairs(others) do seen=seen+o.q;if seen>=half then typical=o.unit;break end end
+ return e.unit<nextUp*0.6 and e.unit<typical*0.6
 end
 -- Selling: open the buy view for this item (the Buy button, or double-click
 -- a listing to line that price up). Back returns to Selling.
