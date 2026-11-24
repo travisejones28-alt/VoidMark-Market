@@ -332,7 +332,11 @@ function M:QueueScanSharing(at)
    local m=d.market[key];if m and m.lastSeen==at then self:PublishPrice(m) end
    if debugprofilestop()-start>=3 then break end
   end
- end,function() self.shareRun.infoPending=true;self.shareRun.next=0 end)
+ end,function()
+  -- 1.23.51: remember which change ends this scan so the partner knows when it has all of it.
+  d.shareScanSeq=d.shareJournal.seq;d.shareScanSeqAt=d.lastDepthSnapshotAt
+  self.shareRun.infoPending=true;self.shareRun.next=0
+ end)
 end
 -- Restrict the filter to the exact character specified by /vmm peer.
 -- Filtering unrelated Blizzard system notices would hide useful errors.
@@ -557,7 +561,14 @@ function M:PumpSharing()
   end
  end
  if r.infoPending and r.lastContact then
-  if send(self,ch,table.concat({'I',j.epoch,j.seq,self.db.lastDepthSnapshotAt or 0},'\t')) then r.infoPending=nil;r.capPending=true else r.next=now+5 end
+  if send(self,ch,table.concat({'I',j.epoch,j.seq,self.db.lastDepthSnapshotAt or 0},'\t')) then
+   r.infoPending=nil;r.capPending=true
+   -- 1.23.51: where the latest scan ends (older partners ignore this message).
+   local d=self.db
+   if d.shareScanSeq and d.shareScanSeq<=j.seq and d.shareScanSeqAt and d.shareScanSeqAt==d.lastDepthSnapshotAt then
+    send(self,ch,table.concat({'S',j.epoch,d.shareScanSeq,d.shareScanSeqAt},'\t'))
+   end
+  else r.next=now+5 end
   return
  end
  if r.capPending and r.lastContact then
@@ -650,6 +661,12 @@ function M:ReceiveSharing(prefix,msg,ch,sender)
   rx.total=total;rx.scanAt=scan>0 and scan or nil
   if changed and total>0 and rx.seq==total then self.db.syncLastReceivedCompleteAt=time() end
   self:RefreshUI()
+ elseif f[2]=='S' and #f==5 and rx and f[3]==rx.epoch then
+  local n,at=tonumber(f[4]),tonumber(f[5])
+  if not whole(n,0,1e12) or not whole(at,1,time()+60) then return end
+  rx.scanSeq=n;rx.scanSeqAt=at
+  if self:PartnerScanReceived(rx) and rx.scanDoneAt~=rx.scanAt then rx.scanDoneAt=rx.scanAt;self.db.syncLastReceivedCompleteAt=time() end
+  self:RefreshUI()
  elseif f[2]=='Q' and f[3]==j.epoch and #f==4 then
   local n=tonumber(f[4]);if not whole(n,0,j.seq) then return end
   r.lastContact=GetTime();r.probeDelay=nil;r.offlineUntil=nil
@@ -701,6 +718,7 @@ function M:ReceiveSharing(prefix,msg,ch,sender)
   for k in pairs(r.buf) do if k<rx.seq then r.buf[k]=nil end end
   r.lastContact=GetTime();r.offlineUntil=nil;self.db.syncLastReceivedAt=time();ack()
   if rx.total and rx.seq>=rx.total then self.db.syncLastReceivedCompleteAt=time() end
+  if self:PartnerScanReceived(rx) and rx.scanDoneAt~=rx.scanAt then rx.scanDoneAt=rx.scanAt;self.db.syncLastReceivedCompleteAt=time() end
   if self.view=='browse' then self.browseNamesDirty=self.browseNamesDirty or GetTime()+1 end
   r.status='Received through change '..rx.seq..' (fast)';self:RefreshUI()
  elseif f[2]=='D' and #f==6 and rx and f[3]==rx.epoch then
@@ -715,6 +733,7 @@ function M:ReceiveSharing(prefix,msg,ch,sender)
   for _,p in ipairs(staged) do if not apply(self,p) then r.status='Shopping list limit reached; transfer paused';self:RefreshUI();return end end
   r.lastContact=GetTime();r.offlineUntil=nil;rx.seq=hi;self.db.syncLastReceivedAt=time();ack()
   if rx.total and hi>=rx.total then self.db.syncLastReceivedCompleteAt=time() end
+  if self:PartnerScanReceived(rx) and rx.scanDoneAt~=rx.scanAt then rx.scanDoneAt=rx.scanAt;self.db.syncLastReceivedCompleteAt=time() end
   if self.view=='browse' then self.browseNamesDirty=self.browseNamesDirty or GetTime()+1 end
   r.status='Received through change '..hi;self:RefreshUI()
  end
@@ -732,6 +751,14 @@ M:RegisterHandler('CHAT_MSG_SYSTEM',function(self,_,msg) self:HandlePeerOfflineN
 
 -- Our freshest prices: our own last scan or the last complete set from the partner.
 M.SYNC_STALE=3600
+-- 1.23.51: the partner's latest scan has fully arrived. The bank keeps adding
+-- 30-minute price refreshes, so its total almost never stops growing; the scan
+-- itself is complete once we are past the change where it ended.
+function M:PartnerScanReceived(rx)
+ if type(rx)~='table' or not tonumber(rx.seq) then return false end
+ if tonumber(rx.total) and rx.seq>=rx.total then return true end
+ return tonumber(rx.scanSeq)~=nil and rx.scanSeqAt~=nil and rx.scanSeqAt==rx.scanAt and rx.seq>=rx.scanSeq
+end
 function M:SyncShouldAsk(rx)
  if not rx or not rx.total or rx.seq>=rx.total then return false end
  local mine=math.max(tonumber(self.db.lastDepthSnapshotAt) or 0,tonumber(self.db.syncLastReceivedCompleteAt) or 0)

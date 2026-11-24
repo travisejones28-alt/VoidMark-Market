@@ -1,3 +1,6 @@
+## 1.23.51 - bank scan shows as received on your main
+- The bank keeps adding 30-minute price refreshes, so the main sat at "Bank sync: receiving 98%" and never counted the bank's scan, and the header kept showing the main's own old scan ("10 days ago"). The bank now says which change its latest scan ends at; once the main is past it, the scan counts: "Last scan: 6 min ago (from bank sync)" and "Bank sync: connected | bank scan 6 min ago". Progress shows "receiving bank scan N%" while it is still arriving. Update both accounts.
+
 ## 1.23.50 - Selling: CHEAP only on real mis-posts
 - Selling marked normal prices as "CHEAP - buy" (Wicked Claw: 7s 50c-45s next to a 5s 50c low) because a few huge listings further down set the comparison. A row is now CHEAP only when it is under 60% of the next price above it and under 60% of the typical price (middle unit by quantity).
 

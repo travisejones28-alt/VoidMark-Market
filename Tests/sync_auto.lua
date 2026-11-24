@@ -73,4 +73,41 @@ check('Sync diagnostics distinguish received pages and complete transfers; force
  assert(not d.market[77661] and #d.ledger==1)
  reset()
 end)
+check('1.23.51 bank scan counts as received at its end marker, not when the growing total is reached',function()
+ reset();M:PairPeer('Bank');M.shareRun={};local d=M.db
+ local epoch='123-777';local prefix=M.economyID..'\t';local T=time()-360
+ local function msg(...) M:ReceiveSharing('VMMkt2',prefix..table.concat({...},'\t'),'WHISPER','Bank-TestRealm') end
+ local function page(lo,hi,id) msg('D',epoch,lo,hi,'P,'..id..','..T..',100,0') end
+ msg('H',epoch);msg('I',epoch,'50',tostring(T));msg('S',epoch,'2',tostring(T))
+ local rx=d.shareReceived[d.syncPeer];assert(rx.scanSeq==2 and rx.scanSeqAt==T)
+ page(0,1,77671);jobs();M.shareRun.lastContact=GetTime()
+ assert(M:SimpleSyncStatus()=='Bank sync: receiving bank scan 50%',M:SimpleSyncStatus())
+ assert(not M:PartnerScanReceived(rx) and M:NewestFullScanAt()~=T)
+ page(1,2,77672);jobs();M.shareRun.lastContact=GetTime()
+ assert(M:PartnerScanReceived(rx) and rx.seq<rx.total,'scan done while refreshes still pending')
+ assert(M:NewestFullScanAt()==T and d.syncLastReceivedCompleteAt)
+ assert(M:SimpleSyncStatus():find('connected | bank scan 6 min ago',1,true),M:SimpleSyncStatus())
+ d.latestScan={completedAt=time()-86400*10,auctionsProcessed=204122}
+ assert(M:SimpleScanStatus():find('Last scan: 6 min ago (from bank sync)',1,true),M:SimpleScanStatus())
+ -- A newer scan announced without its end marker is not trusted early.
+ msg('I',epoch,'60',tostring(T+300));assert(not M:PartnerScanReceived(rx))
+ assert(M:SimpleSyncStatus():find('receiving',1,true))
+ msg('S',epoch,'55',tostring(T+300));assert(not M:PartnerScanReceived(rx))
+ -- Bad markers are ignored.
+ msg('S',epoch,'x',tostring(T));msg('S','9-9','3',tostring(T));assert(rx.scanSeq==55)
+ reset()
+end)
+check('1.23.51 bank sends where its scan ends right after the scan announcement',function()
+ reset();local oldChat,oldGroup=C_ChatInfo,GetNumGroupMembers;local sent={}
+ GetNumGroupMembers=function() return 0 end
+ C_ChatInfo={RegisterAddonMessagePrefix=function() return 0 end,SendAddonMessage=function(_,body) sent[#sent+1]=body;return 0 end}
+ M:PairPeer('Voidmark Bank');local d=M.db;local j=d.shareJournal
+ j.seq=40;d.lastDepthSnapshotAt=time()-60;d.shareScanSeq=37;d.shareScanSeqAt=d.lastDepthSnapshotAt
+ M.shareRun.lastContact=GetTime();M.shareRun.infoPending=true;M.shareRun.hello=GetTime()+20;M.shareRun.next=0
+ M:PumpSharing()
+ local info,marker
+ for _,b in ipairs(sent) do if b:find('\tI\t',1,true) then info=b end;if b:find('\tS\t',1,true) then marker=b end end
+ assert(info,'I sent');assert(marker and marker:find('\tS\t'..j.epoch..'\t37\t'..d.lastDepthSnapshotAt,1,true),tostring(marker))
+ C_ChatInfo,GetNumGroupMembers=oldChat,oldGroup;M:PairPeer('off');reset()
+end)
 end

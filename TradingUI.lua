@@ -26,6 +26,10 @@ function M:SimpleScanStatus()
  end
  if s.phase=='aborted' then return 'Scan stopped when the Auction House closed'..retry end
  local scan=self.db.latestScan
+ -- 1.23.51: the bank's scan, once all of it has arrived, when it is newer than ours.
+ local rx=self.db.syncPeer and self.db.shareReceived and self.db.shareReceived[self.db.syncPeer]
+ local peerAt=rx and self:PartnerScanReceived(rx) and tonumber(rx.scanAt)
+ if peerAt and (not scan or peerAt>(tonumber(scan.completedAt) or 0)) then return 'Last scan: '..self:PriceAge(peerAt)..' (from bank sync)'..retry end
  if scan then return 'Last scan: '..self:PriceAge(scan.completedAt)..' | '..tostring(scan.auctionsProcessed or 0)..' auctions'..retry end
  return (self.ahOpen and 'Ready to scan' or 'Open the Auction House to search or scan')..retry
 end
@@ -33,7 +37,12 @@ function M:SimpleSyncStatus()
  if not self.db.syncPeer then return 'Bank sync: not paired' end
  local r=self.shareRun or {};local rx=self.db.shareReceived[self.db.syncPeer] or {}
  if not r.lastContact or GetTime()-r.lastContact>65 then return 'Bank sync: waiting for partner' end
- if rx.total and rx.seq<rx.total then return 'Bank sync: receiving '..math.floor(rx.seq/rx.total*100)..'%' end
+ -- 1.23.51: progress counts toward the end of the bank's latest scan; the
+ -- refreshes it keeps adding after that no longer hold the bar at 98%.
+ local scanSeq=tonumber(rx.scanSeq) and rx.scanSeqAt==rx.scanAt and rx.scanSeq
+ if scanSeq and rx.seq<scanSeq then return 'Bank sync: receiving bank scan '..math.floor(rx.seq/math.max(1,scanSeq)*100)..'%' end
+ if not scanSeq and rx.total and rx.seq<rx.total then return 'Bank sync: receiving '..math.floor(rx.seq/rx.total*100)..'%' end
+ if rx.scanAt and self:PartnerScanReceived(rx) then return 'Bank sync: connected | bank scan '..self:PriceAge(rx.scanAt) end
  local j=self.db.shareJournal
  if r.peerAsks then
   if r.wantTarget and r.cursor and r.cursor<r.wantTarget then return 'Bank sync: sending '..math.floor(r.cursor/math.max(1,r.wantTarget)*100)..'%' end

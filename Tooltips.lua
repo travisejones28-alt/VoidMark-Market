@@ -67,7 +67,7 @@ function M:NewestFullScanAt()
  -- The partner's scan only counts once all of its prices have arrived here.
  -- Until then (sync still running or stalled), items from that scan would
  -- wrongly read "none listed now".
- local done=peer and tonumber(peer.total) and tonumber(peer.seq) and peer.seq>=peer.total
+ local done=peer and self:PartnerScanReceived(peer)
  local p=done and tonumber(peer.scanAt) or nil
  if p and (not t or p>t) then t=p end
  if t and t>time()+60 then return nil end
