@@ -1,3 +1,6 @@
+## 1.23.52 - recipe tooltips show the recipe's price
+- Recipes were priced as the item they make: "Pattern: Mooncloth Bag" showed "Auction (13 seen) 89g", the Mooncloth Bag's price, because the recipe's tooltip draws the crafted item inside it. The tooltip now uses the item the game says it is for, so the pattern shows its own price (4g 80s, 7 seen).
+
 ## 1.23.51 - bank scan shows as received on your main
 - The bank keeps adding 30-minute price refreshes, so the main sat at "Bank sync: receiving 98%" and never counted the bank's scan, and the header kept showing the main's own old scan ("10 days ago"). The bank now says which change its latest scan ends at; once the main is past it, the scan counts: "Last scan: 6 min ago (from bank sync)" and "Bank sync: connected | bank scan 6 min ago". Progress shows "receiving bank scan N%" while it is still arriving. Update both accounts.
 

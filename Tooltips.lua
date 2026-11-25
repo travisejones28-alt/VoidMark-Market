@@ -205,9 +205,21 @@ end
 function M:InitializePriceTooltips()
  if self.tooltipHooked then return end
  self.tooltipHooked=true
- local function append(tip)
+ -- data (modern clients) is the item this tooltip is really for. tip:GetItem()
+ -- can return the item drawn inside it instead: a recipe's tooltip embeds the
+ -- crafted item, so "Pattern: Mooncloth Bag" was priced as the Mooncloth Bag.
+ local function append(tip,data)
   if not tip or not tip.GetItem then return end
   local _,link=tip:GetItem()
+  local want=type(data)=='table' and tonumber(data.id) or nil
+  if want and linkItemID(link)~=want then
+   local hl=type(data.hyperlink)=='string' and data.hyperlink or nil
+   if linkItemID(hl)==want then link=hl
+   else
+    local ok,_,l=pcall(GetItemInfo,want)
+    link=(ok and type(l)=='string' and linkItemID(l)==want) and l or ('item:'..want)
+   end
+  end
   if link then
    local ok,count=pcall(self.TooltipStackCount,self,tip,link)
    self:AppendMarketTooltip(tip,link,ok and count or nil)
@@ -216,7 +228,7 @@ function M:InitializePriceTooltips()
   end
  end
  if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType and Enum.TooltipDataType.Item then
-  TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item,function(tip) pcall(append,tip) end)
+  TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item,function(tip,data) pcall(append,tip,data) end)
  else
   for _,tip in pairs({GameTooltip,ItemRefTooltip,ShoppingTooltip1,ShoppingTooltip2}) do
    if tip.HookScript then pcall(tip.HookScript,tip,'OnTooltipSetItem',function(t) pcall(append,t) end) end
