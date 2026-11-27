@@ -1,9 +1,13 @@
 local _,M=...
 M.sellingRows={}; M.ownedRows={}
 function M:RefreshInventory()
-  self.sellingRows={}
   if not C_Container or type(C_Container.GetContainerItemInfo)~='function'
-    or type(C_Container.GetContainerNumSlots)~='function' then return end
+    or type(C_Container.GetContainerNumSlots)~='function' then self.sellingRows={};return end
+  -- Your Items used to blank and restart on every bag/item-data event (the
+  -- list was cleared first, then rebuilt over a few frames), so it flashed or
+  -- stayed empty. Now the old list stays up until the new one is complete,
+  -- and a refresh asked for mid-build runs once after it finishes.
+  if self.jobs and self.jobs.bags then self.bagsAgain=true;return end
   local bag,slot=0,1; local rows={}
   self:AddJob('bags',function(start)
     for j=1,25 do
@@ -63,6 +67,7 @@ function M:RefreshInventory()
     end)
     self.sellingRows=rows
     if self.AfterPostRefresh then self:AfterPostRefresh(rows) end
+    if self.bagsAgain then self.bagsAgain=nil;self.bagsDirty=true end
     self:RefreshUI()
   end)
 end
@@ -162,7 +167,12 @@ M:RegisterHandler('GET_ITEM_INFO_RECEIVED',function(self,_,id)
   if self.view~='selling' or not (self.window and self.window:IsShown()) then return end
   id=tonumber(id)
   for _,r in ipairs(self.sellingRows or {}) do
-    if r.itemID==id and type(r.name)=='string' and r.name:match('^Item %d') then self.bagsDirty=true;return end
+    -- Once per item: an item that never loads its name kept rebuilding the list.
+    if r.itemID==id and type(r.name)=='string' and r.name:match('^Item %d') then
+      self.bagNameRetry=self.bagNameRetry or {}
+      if not self.bagNameRetry[id] then self.bagNameRetry[id]=true;self.bagsDirty=true end
+      return
+    end
   end
 end)
 M:RegisterHandler('AUCTION_CANCELED',function(self,_,id)

@@ -1,3 +1,6 @@
+## 1.23.53 - Selling: Your Items no longer flashes
+- Your Items cleared itself and rebuilt every time bags or item data changed, so the tiles flashed or the panel sat empty. The old list now stays up until the new one is ready, a rebuild already running is never restarted, and an item whose name never loads no longer keeps rebuilding the list.
+
 ## 1.23.52 - recipe tooltips show the recipe's price
 - Recipes were priced as the item they make: "Pattern: Mooncloth Bag" showed "Auction (13 seen) 89g", the Mooncloth Bag's price, because the recipe's tooltip draws the crafted item inside it. The tooltip now uses the item the game says it is for, so the pattern shows its own price (4g 80s, 7 seen).
 
